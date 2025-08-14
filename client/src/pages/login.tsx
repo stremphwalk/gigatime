@@ -2,30 +2,16 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { ClipboardList, User } from "lucide-react";
-import { useAuth } from "../hooks/useAuth";
+import { useSimpleAuth as useAuth } from "../hooks/useSimpleAuth";
 
 export function LoginPage() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const { refetch } = useAuth();
+  const { login } = useAuth();
 
   const handleLogin = async () => {
     setIsLoggingIn(true);
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include'
-      });
-
-      if (response.ok) {
-        // Refresh the user data
-        await refetch();
-        // The app will automatically navigate when user data is available
-      } else {
-        console.error('Login failed');
-      }
+      await login();
     } catch (error) {
       console.error('Login error:', error);
     } finally {

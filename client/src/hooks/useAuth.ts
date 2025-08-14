@@ -4,9 +4,13 @@ import type { User } from "@shared/schema";
 export function useAuth() {
   const queryClient = useQueryClient();
   
-  const { data: user, isLoading, refetch } = useQuery<User>({
+  const { data: user, isLoading, refetch, error } = useQuery<User | null>({
     queryKey: ["/api/auth/user"],
     retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    staleTime: 0, // Always check authentication status
+    gcTime: 0, // Don't cache auth results
   });
 
   const logoutMutation = useMutation({
@@ -15,7 +19,8 @@ export function useAuth() {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
-        }
+        },
+        credentials: 'include'
       });
       if (!response.ok) {
         throw new Error("Logout failed");
@@ -25,13 +30,14 @@ export function useAuth() {
     onSuccess: () => {
       // Clear all cached data
       queryClient.clear();
-      // Reload the page to ensure clean state
-      window.location.reload();
+      // Invalidate the user query to trigger re-fetch
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
     },
     onError: (error) => {
       console.error("Logout failed:", error);
-      // Still reload on error to ensure clean state
-      window.location.reload();
+      // Clear cache even on error
+      queryClient.clear();
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/user"] });
     }
   });
 
@@ -39,8 +45,9 @@ export function useAuth() {
     user,
     isLoading,
     refetch,
-    isAuthenticated: !!user,
+    isAuthenticated: !!user && !error,
     logout: () => logoutMutation.mutate(),
     isLoggingOut: logoutMutation.isPending,
+    error,
   };
 }

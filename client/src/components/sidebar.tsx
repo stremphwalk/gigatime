@@ -17,7 +17,7 @@ import {
 import { Link } from "wouter";
 import { useNoteTemplates } from "../hooks/use-notes";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
-import { useAuth } from "../hooks/useAuth";
+import { useSimpleAuth as useAuth } from "../hooks/useSimpleAuth";
 
 import { cn } from "@/lib/utils";
 import type { Note } from "@shared/schema";
@@ -39,7 +39,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
   
   const { templates } = useNoteTemplates();
   const { phrases } = useSmartPhrases();
-  const { user, logout, isLoggingOut } = useAuth();
+  const { user, logout } = useAuth();
 
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections(prev => ({
@@ -250,15 +250,11 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
             size="sm" 
             className="text-gray-400 hover:text-red-600 transition-colors"
             onClick={logout}
-            disabled={isLoggingOut}
+            disabled={false}
             title="Logout"
             data-testid="logout-button"
           >
-            {isLoggingOut ? (
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
-            ) : (
-              <Settings size={16} />
-            )}
+            <Settings size={16} />
           </Button>
         </div>
       </div>
