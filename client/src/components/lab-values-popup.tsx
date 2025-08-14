@@ -148,7 +148,7 @@ export function LabValuesPopup({ isOpen, onClose, onConfirm }: LabValuesPopupPro
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden">
+      <DialogContent className="max-w-5xl max-h-[85vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Beaker size={20} className="text-blue-600" />
@@ -156,7 +156,7 @@ export function LabValuesPopup({ isOpen, onClose, onConfirm }: LabValuesPopupPro
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex flex-col gap-4 max-h-[60vh] overflow-hidden">
+        <div className="flex flex-col gap-3 max-h-[70vh] overflow-hidden">
           {/* Search */}
           <div className="flex-shrink-0">
             <Input
@@ -168,8 +168,8 @@ export function LabValuesPopup({ isOpen, onClose, onConfirm }: LabValuesPopupPro
             />
           </div>
 
-          {/* Lab Panels */}
-          <div className="flex-1 overflow-y-auto space-y-1">
+          {/* Lab Panels - Improved Compact Layout */}
+          <div className="flex-1 overflow-y-auto space-y-2">
             {filteredPanels.map((panel) => (
               <Collapsible
                 key={panel.abbreviation}
@@ -179,26 +179,26 @@ export function LabValuesPopup({ isOpen, onClose, onConfirm }: LabValuesPopupPro
                 <CollapsibleTrigger asChild>
                   <Button
                     variant="outline"
-                    className="w-full justify-start p-3 h-auto"
+                    className="w-full justify-start p-2 h-auto hover:bg-gray-50"
                     data-testid={`panel-${panel.abbreviation}`}
                   >
                     <div className="flex items-center justify-between w-full">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
                         {openPanels.has(panel.abbreviation) ? (
-                          <ChevronDown size={16} />
+                          <ChevronDown size={14} />
                         ) : (
-                          <ChevronRight size={16} />
+                          <ChevronRight size={14} />
                         )}
                         <div className="text-left">
-                          <div className="font-medium">{panel.name}</div>
-                          <div className="text-sm text-gray-500">
-                            {panel.abbreviation} • {panel.category} • {panel.tests.length} tests
+                          <div className="font-medium text-sm">{panel.abbreviation}</div>
+                          <div className="text-xs text-gray-500">
+                            {panel.name} • {panel.tests.length} tests
                           </div>
                         </div>
                       </div>
                       {/* Show count of entered values for this panel */}
                       {panel.tests.some(test => labInputs[test.abbreviation]?.values?.length > 0) && (
-                        <Badge variant="secondary" className="ml-2">
+                        <Badge variant="secondary" className="text-xs">
                           {panel.tests.filter(test => labInputs[test.abbreviation]?.values?.length > 0).length} entered
                         </Badge>
                       )}
@@ -206,94 +206,94 @@ export function LabValuesPopup({ isOpen, onClose, onConfirm }: LabValuesPopupPro
                   </Button>
                 </CollapsibleTrigger>
 
-                <CollapsibleContent className="pt-2">
-                  <div className="ml-6 space-y-3 pb-2">
-                    {panel.tests.map((test) => {
-                      const testInputs = labInputs[test.abbreviation];
-                      const hasValues = testInputs && testInputs.values && testInputs.values.length > 0;
+                <CollapsibleContent className="pt-1">
+                  <div className="ml-4 space-y-2 pb-1">
+                    {/* Grid Layout for Tests */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {panel.tests.map((test) => {
+                        const testInputs = labInputs[test.abbreviation];
+                        const hasValues = testInputs && testInputs.values && testInputs.values.length > 0;
 
-                      return (
-                        <div key={test.abbreviation} className="border rounded-lg p-3">
-                          <div className="flex items-start gap-3">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
-                                <span className="font-medium text-sm">{test.abbreviation}</span>
-                                <span className="text-xs text-gray-500">({test.name})</span>
-                                {test.normalRange && (
-                                  <Badge variant="outline" className="text-xs">
-                                    Normal: {test.normalRange} {test.unit}
-                                  </Badge>
-                                )}
-                              </div>
-
-                              {/* Input for new value */}
-                              <div className="flex items-center gap-2 mb-2">
-                                <Input
-                                  ref={(el) => {
-                                    inputRefs.current[test.abbreviation] = el;
-                                  }}
-                                  type="number"
-                                  step="any"
-                                  placeholder={`Enter ${test.abbreviation} value`}
-                                  value={testInputs?.currentInput || ""}
-                                  onChange={(e) => handleLabValueChange(test.abbreviation, e.target.value)}
-                                  onKeyDown={(e) => handleKeyDown(e, test.abbreviation)}
-                                  className="flex-1 text-sm"
-                                  data-testid={`lab-input-${test.abbreviation}`}
-                                />
-                                <span className="text-xs text-gray-500 min-w-fit">{test.unit}</span>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  onClick={() => addLabValue(test.abbreviation)}
-                                  disabled={!testInputs?.currentInput?.trim() || isNaN(Number(testInputs.currentInput))}
-                                  data-testid={`add-value-${test.abbreviation}`}
-                                >
-                                  <Plus size={14} />
-                                </Button>
-                              </div>
-
-                              {/* Display entered values */}
-                              {hasValues && (
-                                <div className="space-y-1">
-                                  <div className="text-xs text-gray-600 font-medium">
-                                    Entered Values (most recent first):
-                                  </div>
-                                  <div className="flex flex-wrap gap-1">
-                                    {(testInputs.values || []).map((value, index) => (
-                                      <Badge
-                                        key={index}
-                                        variant={index === 0 ? "default" : "secondary"}
-                                        className="flex items-center gap-1"
-                                      >
-                                        {value} {test.unit}
-                                        {index === 0 && <CheckCircle size={12} />}
-                                        <Button
-                                          type="button"
-                                          size="sm"
-                                          variant="ghost"
-                                          className="h-4 w-4 p-0 hover:bg-red-100"
-                                          onClick={() => removeLabValue(test.abbreviation, index)}
-                                          data-testid={`remove-value-${test.abbreviation}-${index}`}
-                                        >
-                                          <Trash2 size={10} />
-                                        </Button>
-                                      </Badge>
-                                    ))}
-                                  </div>
-                                  
-                                  {/* Preview how it will appear */}
-                                  <div className="text-xs text-green-700 bg-green-50 p-2 rounded border-l-2 border-green-200">
-                                    <strong>Preview:</strong> {test.abbreviation} {(testInputs.values || [])[0]}
-                                    {(testInputs.values || []).length > 1 && ` (${(testInputs.values || []).slice(1).join(", ")})`}
-                                  </div>
-                                </div>
+                        return (
+                          <div key={test.abbreviation} className="border rounded p-2 bg-gray-50">
+                            {/* Compact Test Header */}
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-medium text-sm text-blue-700">{test.abbreviation}</span>
+                              {test.normalRange && (
+                                <Badge variant="outline" className="text-xs px-1 py-0">
+                                  {test.normalRange} {test.unit}
+                                </Badge>
                               )}
                             </div>
+                            <div className="text-xs text-gray-600 mb-2 truncate" title={test.name}>
+                              {test.name}
+                            </div>
+
+                            {/* Compact Input Row */}
+                            <div className="flex items-center gap-1 mb-1">
+                              <Input
+                                ref={(el) => {
+                                  inputRefs.current[test.abbreviation] = el;
+                                }}
+                                type="number"
+                                step="any"
+                                placeholder="Value"
+                                value={testInputs?.currentInput || ""}
+                                onChange={(e) => handleLabValueChange(test.abbreviation, e.target.value)}
+                                onKeyDown={(e) => handleKeyDown(e, test.abbreviation)}
+                                className="flex-1 text-xs h-8"
+                                data-testid={`lab-input-${test.abbreviation}`}
+                              />
+                              <span className="text-xs text-gray-500 min-w-fit">{test.unit}</span>
+                              <Button
+                                type="button"
+                                size="sm"
+                                onClick={() => addLabValue(test.abbreviation)}
+                                disabled={!testInputs?.currentInput?.trim() || isNaN(Number(testInputs.currentInput))}
+                                className="h-8 w-8 p-0"
+                                data-testid={`add-value-${test.abbreviation}`}
+                              >
+                                <Plus size={12} />
+                              </Button>
+                            </div>
+
+                            {/* Compact Values Display */}
+                            {hasValues && (
+                              <div className="space-y-1">
+                                <div className="flex flex-wrap gap-1">
+                                  {(testInputs.values || []).map((value, index) => (
+                                    <Badge
+                                      key={index}
+                                      variant={index === 0 ? "default" : "secondary"}
+                                      className="text-xs flex items-center gap-1 h-6"
+                                    >
+                                      {value}
+                                      {index === 0 && <CheckCircle size={10} />}
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-3 w-3 p-0 hover:bg-red-100"
+                                        onClick={() => removeLabValue(test.abbreviation, index)}
+                                        data-testid={`remove-value-${test.abbreviation}-${index}`}
+                                      >
+                                        <Trash2 size={8} />
+                                      </Button>
+                                    </Badge>
+                                  ))}
+                                </div>
+                                
+                                {/* Compact Preview */}
+                                <div className="text-xs text-green-700 bg-green-50 px-2 py-1 rounded text-center">
+                                  {test.abbreviation} {(testInputs.values || [])[0]}
+                                  {(testInputs.values || []).length > 1 && ` (${(testInputs.values || []).slice(1).join(", ")})`}
+                                </div>
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 </CollapsibleContent>
               </Collapsible>

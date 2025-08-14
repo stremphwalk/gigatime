@@ -1005,6 +1005,22 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                     {section.required && <span className="text-medical-red text-xs">*</span>}
                   </h3>
                   <div className="flex items-center space-x-2">
+                    {/* Lab Values Button - Show for lab sections in header */}
+                    {(section.type === 'labs' || 
+                      section.name.toLowerCase().includes('lab') ||
+                      section.name.toLowerCase().includes('laboratory')) && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setActiveLabValuesPopup(section.id)}
+                        className="flex items-center gap-2 text-xs"
+                        data-testid={`lab-entry-button-${section.id}`}
+                      >
+                        <Beaker size={14} />
+                        Lab Entry
+                      </Button>
+                    )}
                     {(section.type === 'historyOfPresentIllness' || 
                       section.name.toLowerCase().includes('history of present illness') ||
                       section.name.toLowerCase().includes('hpi')) && (
@@ -1175,25 +1191,6 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                       onClose={() => setActiveMedicationAutocomplete(null)}
                       sectionId={section.id}
                     />
-                  )}
-
-                  {/* Lab Values Button - Show for lab sections */}
-                  {(section.type === 'labs' || 
-                    section.name.toLowerCase().includes('lab') ||
-                    section.name.toLowerCase().includes('laboratory')) && (
-                    <div className="mt-2 pb-2">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setActiveLabValuesPopup(section.id)}
-                        className="flex items-center gap-2 text-xs"
-                        data-testid={`lab-entry-button-${section.id}`}
-                      >
-                        <Beaker size={14} />
-                        Lab Entry
-                      </Button>
-                    </div>
                   )}
                 </div>
               </CardContent>
