@@ -15,8 +15,8 @@ export function Teams() {
   useEffect(() => {
     const initializeDefaults = async () => {
       try {
-        await apiRequest("/api/init", "POST");
-        await apiRequest("/api/init-user", "POST");
+        await apiRequest("POST", "/api/init");
+        await apiRequest("POST", "/api/init-user");
       } catch (error) {
         console.log("Defaults already initialized or error occurred");
       }
