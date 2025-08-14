@@ -288,6 +288,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Deepgram API key endpoint
+  app.get("/api/deepgram-key", (req, res) => {
+    res.json({ apiKey: process.env.DEEPGRAM_API_KEY });
+  });
+
   // Smart phrase routes
   app.get("/api/smart-phrases", async (req, res) => {
     try {
