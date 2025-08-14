@@ -34,7 +34,10 @@ import { cn } from "@/lib/utils";
 interface PertinentNegativesPopupProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (negativeText: string) => void;
+  onConfirm: (negativeText: string, selectedSymptoms?: Record<string, string[]>) => void;
+  initialSelectedSymptoms?: Record<string, string[]>;
+  mode?: 'create' | 'edit';
+  presetName?: string;
 }
 
 const SYSTEM_ICONS: Record<string, React.ComponentType<any>> = {
@@ -51,9 +54,12 @@ const SYSTEM_ICONS: Record<string, React.ComponentType<any>> = {
 export function PertinentNegativesPopup({ 
   isOpen, 
   onClose, 
-  onConfirm 
+  onConfirm,
+  initialSelectedSymptoms,
+  mode = 'create',
+  presetName: existingPresetName 
 }: PertinentNegativesPopupProps) {
-  const [selectedSymptoms, setSelectedSymptoms] = useState<Record<string, string[]>>({});
+  const [selectedSymptoms, setSelectedSymptoms] = useState<Record<string, string[]>>(initialSelectedSymptoms || {});
   const [presetName, setPresetName] = useState("");
   const [showPresetSave, setShowPresetSave] = useState(false);
   
@@ -62,14 +68,14 @@ export function PertinentNegativesPopup({
   const createPresetMutation = useCreatePertinentNegativePreset();
   const { toast } = useToast();
 
-  // Reset selections when popup opens/closes
+  // Reset or set selections when popup opens/closes
   useEffect(() => {
     if (isOpen) {
-      setSelectedSymptoms({});
+      setSelectedSymptoms(initialSelectedSymptoms || {});
       setPresetName("");
       setShowPresetSave(false);
     }
-  }, [isOpen]);
+  }, [isOpen, initialSelectedSymptoms]);
 
   const handleSymptomToggle = (systemId: string, symptomId: string, checked: boolean) => {
     setSelectedSymptoms(prev => {
@@ -105,7 +111,7 @@ export function PertinentNegativesPopup({
 
   const handleConfirm = () => {
     const negativeText = formatPertinentNegatives(selectedSymptoms);
-    onConfirm(negativeText);
+    onConfirm(negativeText, selectedSymptoms);
     onClose();
   };
 
@@ -147,13 +153,16 @@ export function PertinentNegativesPopup({
       <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col" aria-describedby="pertinent-negatives-description">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center justify-between">
-            <span>Select Pertinent Negatives</span>
+            <span>{mode === 'edit' ? `Edit Preset: ${existingPresetName}` : 'Select Pertinent Negatives'}</span>
             <Badge variant="secondary">
               {getSelectedCount()} symptoms selected
             </Badge>
           </DialogTitle>
           <div id="pertinent-negatives-description" className="sr-only">
-            Select pertinent negative symptoms from medical systems to document in your clinical note
+            {mode === 'edit' 
+              ? 'Modify the symptom selections for this preset' 
+              : 'Select pertinent negative symptoms from medical systems to document in your clinical note'
+            }
           </div>
         </DialogHeader>
         
@@ -300,7 +309,7 @@ export function PertinentNegativesPopup({
             {/* Action Buttons */}
             <div className="flex justify-between items-center">
               <div className="flex space-x-2">
-                {getSelectedCount() > 0 && (
+                {getSelectedCount() > 0 && mode !== 'edit' && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -323,7 +332,7 @@ export function PertinentNegativesPopup({
                   className="bg-medical-teal hover:bg-medical-teal/90"
                 >
                   <Check size={16} className="mr-2" />
-                  Insert Pertinent Negatives
+                  {mode === 'edit' ? 'Update Preset' : 'Insert Pertinent Negatives'}
                 </Button>
               </div>
             </div>

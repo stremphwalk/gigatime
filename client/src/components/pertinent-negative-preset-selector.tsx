@@ -4,12 +4,14 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { usePertinentNegativePresets, useUpdatePertinentNegativePreset, useDeletePertinentNegativePreset } from "@/hooks/use-pertinent-negative-presets";
 import { useToast } from "@/hooks/use-toast";
 import { formatPertinentNegatives } from "@/lib/pertinent-negatives";
-import { ChevronDown, Zap, Edit, Trash2, MoreHorizontal } from "lucide-react";
+import { ChevronDown, Zap, Edit, Trash2 } from "lucide-react";
 import type { PertinentNegativePreset } from "@shared/schema";
+import { PertinentNegativesPopup } from "./pertinent-negatives-popup";
 
 interface PertinentNegativePresetSelectorProps {
   onSelectPreset: (negativeText: string) => void;
@@ -18,7 +20,8 @@ interface PertinentNegativePresetSelectorProps {
 export function PertinentNegativePresetSelector({ onSelectPreset }: PertinentNegativePresetSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [editingPreset, setEditingPreset] = useState<PertinentNegativePreset | null>(null);
-  const [editName, setEditName] = useState("");
+  const [showEditPopup, setShowEditPopup] = useState(false);
+  const [deleteConfirmPreset, setDeleteConfirmPreset] = useState<PertinentNegativePreset | null>(null);
   const { data: presets = [], isLoading } = usePertinentNegativePresets();
   const updatePresetMutation = useUpdatePertinentNegativePreset();
   const deletePresetMutation = useDeletePertinentNegativePreset();
@@ -32,25 +35,27 @@ export function PertinentNegativePresetSelector({ onSelectPreset }: PertinentNeg
 
   const handleEditPreset = (preset: PertinentNegativePreset) => {
     setEditingPreset(preset);
-    setEditName(preset.name);
+    setIsOpen(false); // Close the dropdown
+    setShowEditPopup(true); // Open the full pertinent negatives popup for editing
   };
 
-  const handleSaveEdit = async () => {
-    if (!editingPreset || !editName.trim()) return;
+  const handleEditConfirm = async (negativeText: string, selectedSymptoms: Record<string, string[]>) => {
+    if (!editingPreset) return;
 
     try {
       await updatePresetMutation.mutateAsync({
         id: editingPreset.id,
-        name: editName.trim()
+        name: editingPreset.name, // Keep same name
+        selectedSymptoms: selectedSymptoms
       });
       
       toast({
         title: "Preset updated",
-        description: `"${editName.trim()}" has been updated successfully.`,
+        description: `"${editingPreset.name}" selections have been updated.`,
       });
       
       setEditingPreset(null);
-      setEditName("");
+      setShowEditPopup(false);
     } catch (error) {
       toast({
         title: "Error",
@@ -60,14 +65,22 @@ export function PertinentNegativePresetSelector({ onSelectPreset }: PertinentNeg
     }
   };
 
-  const handleDeletePreset = async (preset: PertinentNegativePreset) => {
+  const handleDeletePreset = (preset: PertinentNegativePreset) => {
+    setDeleteConfirmPreset(preset);
+  };
+
+  const confirmDeletePreset = async () => {
+    if (!deleteConfirmPreset) return;
+
     try {
-      await deletePresetMutation.mutateAsync(preset.id);
+      await deletePresetMutation.mutateAsync(deleteConfirmPreset.id);
       
       toast({
         title: "Preset deleted",
-        description: `"${preset.name}" has been deleted.`,
+        description: `"${deleteConfirmPreset.name}" has been deleted.`,
       });
+      
+      setDeleteConfirmPreset(null);
     } catch (error) {
       toast({
         title: "Error",
@@ -174,41 +187,47 @@ export function PertinentNegativePresetSelector({ onSelectPreset }: PertinentNeg
         </>
       )}
 
-      {/* Edit Preset Dialog */}
-      <Dialog open={!!editingPreset} onOpenChange={() => setEditingPreset(null)}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit Preset</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="preset-name">Preset Name</Label>
-              <Input
-                id="preset-name"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                placeholder="Enter preset name"
-                className="mt-1"
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                onClick={() => setEditingPreset(null)}
-                disabled={updatePresetMutation.isPending}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSaveEdit}
-                disabled={!editName.trim() || updatePresetMutation.isPending}
-              >
-                {updatePresetMutation.isPending ? "Saving..." : "Save Changes"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Edit Preset Popup */}
+      <PertinentNegativesPopup
+        isOpen={showEditPopup}
+        onClose={() => {
+          setShowEditPopup(false);
+          setEditingPreset(null);
+        }}
+        onConfirm={(negativeText, selectedSymptoms) => {
+          if (selectedSymptoms) {
+            handleEditConfirm(negativeText, selectedSymptoms);
+          }
+        }}
+        initialSelectedSymptoms={editingPreset?.selectedSymptoms}
+        mode="edit"
+        presetName={editingPreset?.name}
+      />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={!!deleteConfirmPreset} onOpenChange={() => setDeleteConfirmPreset(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Preset</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the preset "{deleteConfirmPreset?.name}"? 
+              This action cannot be undone and will permanently remove all saved symptom selections.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteConfirmPreset(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeletePreset}
+              className="bg-red-600 hover:bg-red-700 text-white"
+              disabled={deletePresetMutation.isPending}
+            >
+              {deletePresetMutation.isPending ? "Deleting..." : "Delete Preset"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
