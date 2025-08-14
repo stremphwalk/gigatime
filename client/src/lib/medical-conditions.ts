@@ -141,9 +141,51 @@ export const searchMedicalConditions = (query: string, limit = 10): string[] => 
     !condition.toLowerCase().startsWith(normalizedQuery)
   );
   
+  // Add fuzzy matching for misspelled words
+  const fuzzyMatches = MEDICAL_CONDITIONS.filter(condition => {
+    const conditionLower = condition.toLowerCase();
+    // Skip if already matched exactly
+    if (conditionLower.includes(normalizedQuery)) return false;
+    
+    // Simple fuzzy matching: check for similar character sequences
+    return isFuzzyMatch(normalizedQuery, conditionLower);
+  });
+  
   // Combine and limit results
-  return [...exactMatches, ...partialMatches].slice(0, limit);
+  return [...exactMatches, ...partialMatches, ...fuzzyMatches].slice(0, limit);
 };
+
+// Simple fuzzy matching algorithm for spell tolerance
+function isFuzzyMatch(query: string, target: string): boolean {
+  if (query.length < 3) return false;
+  
+  // Calculate Levenshtein-like similarity
+  const maxDistance = Math.floor(query.length / 3); // Allow 1 error per 3 characters
+  
+  // Check if query is a subsequence of target with some tolerance
+  let queryIndex = 0;
+  let errors = 0;
+  
+  for (let i = 0; i < target.length && queryIndex < query.length; i++) {
+    if (target[i] === query[queryIndex]) {
+      queryIndex++;
+    } else if (errors < maxDistance) {
+      // Allow character substitution/insertion
+      if (i + 1 < target.length && target[i + 1] === query[queryIndex]) {
+        errors++;
+        queryIndex++;
+        i++; // Skip the mismatched character
+      } else if (queryIndex + 1 < query.length && target[i] === query[queryIndex + 1]) {
+        errors++;
+        queryIndex += 2;
+      } else {
+        errors++;
+      }
+    }
+  }
+  
+  return queryIndex >= query.length - 1 && errors <= maxDistance;
+}
 
 export const getMedicalConditionAbbreviations = (): Record<string, string> => {
   return {

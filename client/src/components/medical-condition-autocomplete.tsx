@@ -9,7 +9,8 @@ interface MedicalConditionAutocompleteProps {
   isVisible: boolean;
   query: string;
   position: { top: number; left: number };
-  onSelect: (condition: string) => void;
+  cursorPosition: number;
+  onSelect: (condition: string, cursorPosition: number) => void;
   onClose: () => void;
 }
 
@@ -18,6 +19,7 @@ export function MedicalConditionAutocomplete({
   isVisible,
   query,
   position,
+  cursorPosition,
   onSelect,
   onClose
 }: MedicalConditionAutocompleteProps) {
@@ -64,7 +66,7 @@ export function MedicalConditionAutocomplete({
       case 'Enter':
         e.preventDefault();
         if (suggestions[selectedIndex]) {
-          onSelect(suggestions[selectedIndex]);
+          onSelect(suggestions[selectedIndex], cursorPosition);
         }
         break;
       case 'Escape':
@@ -87,7 +89,7 @@ export function MedicalConditionAutocomplete({
   // Handle mouse selection
   const handleMouseSelect = (condition: string, index: number) => {
     setSelectedIndex(index);
-    onSelect(condition);
+    onSelect(condition, cursorPosition);
   };
 
   if (!isVisible || suggestions.length === 0) {
@@ -108,7 +110,7 @@ export function MedicalConditionAutocomplete({
       <Card className="border border-gray-200 shadow-lg max-h-64 overflow-y-auto bg-white">
         <div className="p-2">
           <div className="text-xs text-gray-500 mb-2 px-2">
-            Past Medical History Suggestions (Press Tab to select)
+            Medical Conditions (Press Tab to select)
           </div>
           {suggestions.map((condition, index) => (
             <div

@@ -75,6 +75,8 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     sectionId: string;
     position: { top: number; left: number };
     query: string;
+    cursorPosition: number;
+    wordStart: number;
   } | null>(null);
 
   const { createNote, updateNote, isCreating: isSaving } = useNotes();
@@ -169,17 +171,50 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                                 section?.name.toLowerCase().includes('pmh');
     
     if (isPastMedicalHistory) {
-      // Look for word being typed (space-separated words)
-      const words = content.split(/\s+/);
-      const currentWord = words[words.length - 1];
+      const cursorPosition = textarea.selectionStart;
       
-      if (currentWord && currentWord.length >= 2 && !currentWord.includes('/')) {
-        const rect = textarea.getBoundingClientRect();
-        setActiveMedicalAutocomplete({
-          sectionId,
-          position: { top: rect.bottom, left: rect.left },
-          query: currentWord
-        });
+      // Find the current word being typed at cursor position
+      const beforeCursor = content.slice(0, cursorPosition);
+      const afterCursor = content.slice(cursorPosition);
+      
+      // Find word boundaries
+      const wordStartMatch = beforeCursor.match(/\S+$/);
+      const wordEndMatch = afterCursor.match(/^\S*/);
+      
+      if (wordStartMatch) {
+        const wordStart = cursorPosition - wordStartMatch[0].length;
+        const currentWord = wordStartMatch[0] + (wordEndMatch ? wordEndMatch[0] : '');
+        
+        if (currentWord && currentWord.length >= 2 && !currentWord.includes('/')) {
+          // Calculate precise cursor position in the textarea
+          const textBeforeCursor = content.slice(0, cursorPosition);
+          const lines = textBeforeCursor.split('\n');
+          const currentLine = lines.length - 1;
+          const charInLine = lines[lines.length - 1].length;
+          
+          // Get textarea position and line height
+          const rect = textarea.getBoundingClientRect();
+          const style = window.getComputedStyle(textarea);
+          const lineHeight = parseInt(style.lineHeight) || 20;
+          const paddingTop = parseInt(style.paddingTop) || 8;
+          const paddingLeft = parseInt(style.paddingLeft) || 12;
+          
+          // Approximate character width (monospace assumption)
+          const charWidth = 8;
+          
+          setActiveMedicalAutocomplete({
+            sectionId,
+            position: { 
+              top: rect.top + paddingTop + (currentLine * lineHeight) + lineHeight + 5,
+              left: rect.left + paddingLeft + (charInLine * charWidth)
+            },
+            query: currentWord,
+            cursorPosition,
+            wordStart
+          });
+        } else {
+          setActiveMedicalAutocomplete(null);
+        }
       } else {
         setActiveMedicalAutocomplete(null);
       }
@@ -251,12 +286,24 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     }
   };
 
-  const handleMedicalConditionSelect = (condition: string) => {
+  const handleMedicalConditionSelect = (condition: string, cursorPosition: number) => {
     if (activeMedicalAutocomplete) {
       const currentContent = noteData.content[activeMedicalAutocomplete.sectionId] || '';
-      const words = currentContent.split(/\s+/);
-      words[words.length - 1] = condition;
-      const newContent = words.join(' ');
+      
+      // Find the word boundaries at the cursor position
+      const beforeCursor = currentContent.slice(0, cursorPosition);
+      const afterCursor = currentContent.slice(cursorPosition);
+      
+      // Find the start of the current word
+      const wordStartMatch = beforeCursor.match(/\S+$/);
+      const wordStart = wordStartMatch ? cursorPosition - wordStartMatch[0].length : cursorPosition;
+      
+      // Find the end of the current word
+      const wordEndMatch = afterCursor.match(/^\S*/);
+      const wordEnd = wordEndMatch ? cursorPosition + wordEndMatch[0].length : cursorPosition;
+      
+      // Replace the current word with the selected condition
+      const newContent = currentContent.slice(0, wordStart) + condition + currentContent.slice(wordEnd);
       
       setNoteData(prev => ({
         ...prev,
@@ -267,6 +314,16 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       }));
       
       setActiveMedicalAutocomplete(null);
+      
+      // Set focus back to the textarea and position cursor after the inserted condition
+      setTimeout(() => {
+        const textarea = document.querySelector(`[data-section-id="${activeMedicalAutocomplete.sectionId}"]`) as HTMLTextAreaElement;
+        if (textarea) {
+          textarea.focus();
+          const newCursorPosition = wordStart + condition.length;
+          textarea.setSelectionRange(newCursorPosition, newCursorPosition);
+        }
+      }, 0);
     }
   };
 
@@ -680,6 +737,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                       isVisible={true}
                       query={activeMedicalAutocomplete.query}
                       position={activeMedicalAutocomplete.position}
+                      cursorPosition={activeMedicalAutocomplete.cursorPosition}
                       onSelect={handleMedicalConditionSelect}
                       onClose={() => setActiveMedicalAutocomplete(null)}
                     />
