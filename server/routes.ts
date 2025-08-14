@@ -13,23 +13,43 @@ import {
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Temporarily skip auth setup for testing
-  // await setupAuth(app);
+  // Set up proper authentication
+  await setupAuth(app);
 
-  // Helper function to get current user ID (for now, use mock until auth is fully working)
+  // Helper function to get current user ID
   const getCurrentUserId = (req: any) => {
     if (req.user?.claims?.sub) {
       return req.user.claims.sub;
     }
-    return "123e4567-e89b-12d3-a456-426614174000"; // Mock user ID
+    // Fallback to mock user ID only in development for testing
+    if (process.env.NODE_ENV === 'development') {
+      return "123e4567-e89b-12d3-a456-426614174000";
+    }
+    throw new Error("User not authenticated");
   };
 
-  // Auth routes (temporarily without authentication for testing)
+  // Auth routes with proper authentication
   app.get('/api/auth/user', async (req: any, res) => {
     try {
+      if (!req.user && process.env.NODE_ENV !== 'development') {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
       const userId = getCurrentUserId(req);
       let user = await storage.getUser(userId);
-      if (!user) {
+      
+      // If user doesn't exist and we have claims from auth, create user from auth data
+      if (!user && req.user?.claims) {
+        const claims = req.user.claims;
+        user = await storage.createUser({
+          id: claims.sub,
+          email: claims.email,
+          firstName: claims.first_name || "User",
+          lastName: claims.last_name || "",
+          specialty: "General Practice"
+        });
+      } else if (!user) {
+        // Fallback for development mode
         user = await storage.createUser({
           id: userId,
           email: "doctor@hospital.com",
@@ -38,11 +58,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
           specialty: "Emergency Medicine"
         });
       }
+      
       res.json(user);
     } catch (error) {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
     }
+  });
+
+  // Logout route
+  app.post('/api/auth/logout', (req: any, res) => {
+    req.logout((err: any) => {
+      if (err) {
+        console.error('Logout error:', err);
+        return res.status(500).json({ message: 'Failed to logout' });
+      }
+      
+      req.session.destroy((err: any) => {
+        if (err) {
+          console.error('Session destroy error:', err);
+          return res.status(500).json({ message: 'Failed to destroy session' });
+        }
+        
+        res.clearCookie('connect.sid');
+        res.json({ message: 'Logged out successfully' });
+      });
+    });
   });
 
   // Initialize user endpoint
