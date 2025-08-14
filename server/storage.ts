@@ -243,7 +243,7 @@ export class DatabaseStorage implements IStorage {
 
     // Check if team is full
     const existingMembers = await this.getTeamMembers(team.id);
-    if (existingMembers.length >= team.maxMembers) {
+    if (existingMembers.length >= (team.maxMembers ?? 6)) {
       return { success: false, message: 'This team is full' };
     }
 
@@ -588,17 +588,22 @@ export class DatabaseStorage implements IStorage {
     const [created] = await db
       .insert(pertinentNegativePresets)
       .values({
-        ...preset,
-        userId: 'default-user', // Use default user for now
+        name: preset.name,
+        selectedSymptoms: preset.selectedSymptoms,
+        userId: 'default-user',
       })
       .returning();
     return created;
   }
 
   async updatePertinentNegativePreset(id: string, updates: Partial<Pick<InsertPertinentNegativePreset, 'name' | 'selectedSymptoms'>>): Promise<PertinentNegativePreset> {
+    const setValues: any = { updatedAt: new Date() };
+    if (updates.name !== undefined) setValues.name = updates.name;
+    if (updates.selectedSymptoms !== undefined) setValues.selectedSymptoms = updates.selectedSymptoms;
+    
     const [updated] = await db
       .update(pertinentNegativePresets)
-      .set({ ...updates, updatedAt: new Date() })
+      .set(setValues)
       .where(eq(pertinentNegativePresets.id, id))
       .returning();
     return updated;

@@ -228,7 +228,7 @@ export const insertTeamCalendarEventSchema = createInsertSchema(teamCalendarEven
 
 // Pertinent Negatives Presets table
 export const pertinentNegativePresets = pgTable("pertinent_negative_presets", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name").notNull(),
   selectedSymptoms: jsonb("selected_symptoms").$type<Record<string, string[]>>().notNull(),
   userId: varchar("user_id").default("default-user"),
