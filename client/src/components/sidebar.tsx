@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import { useNoteTemplates } from "../hooks/use-notes";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
-import { TemplateBuilderDialog } from "./template-builder-dialog";
+
 import { cn } from "@/lib/utils";
 import type { Note } from "@shared/schema";
 
@@ -26,8 +26,8 @@ interface SidebarProps {
   selectedNote: Note | null;
   isLoading: boolean;
   notes: Note[];
-  currentView: 'notes' | 'teams' | 'smart-phrases';
-  onViewChange: (view: 'notes' | 'teams' | 'smart-phrases') => void;
+  currentView: 'notes' | 'teams' | 'smart-phrases' | 'template-builder';
+  onViewChange: (view: 'notes' | 'teams' | 'smart-phrases' | 'template-builder') => void;
 }
 
 export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, notes, currentView, onViewChange }: SidebarProps) {
@@ -138,7 +138,22 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
                 </Badge>
               </Button>
               
-              <TemplateBuilderDialog />
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "w-full justify-start text-xs hover:bg-gray-100",
+                  currentView === 'template-builder' && "bg-blue-50 border border-professional-blue"
+                )}
+                onClick={() => onViewChange('template-builder')}
+                data-testid="button-template-builder"
+              >
+                <Settings size={12} className="mr-2" />
+                Template Builder
+                <Badge variant="secondary" className="ml-auto text-xs">
+                  {templates?.length || 0}
+                </Badge>
+              </Button>
             </div>
           )}
         </div>
