@@ -323,43 +323,53 @@ export function FlexibleSmartPhraseBuilder({
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="mb-6">
-              <p className="text-sm text-gray-600 mb-4">
+            <div className="mb-6 p-4 border-2 border-red-200 bg-red-50 rounded-lg">
+              <p className="text-sm text-gray-600 mb-4 font-semibold">
+                🔧 DEBUG: If you can see this red box, the component is rendering. 
                 Place your cursor in the content above, then click a button to insert an interactive element at that position
               </p>
-              <div className="flex space-x-3 flex-wrap gap-2">
+              <div className="flex space-x-3 flex-wrap gap-3">
                 <Button
                   type="button"
-                  onClick={() => addElement("date")}
-                  variant="outline"
-                  size="default"
-                  className="flex items-center gap-2 hover:bg-blue-50 hover:border-blue-300"
+                  onClick={() => {
+                    console.log("Date button clicked");
+                    addElement("date");
+                  }}
+                  variant="default"
+                  size="lg"
+                  className="flex items-center gap-2 bg-blue-100 hover:bg-blue-200 border-2 border-blue-400 text-blue-800 font-semibold"
                   data-testid="button-add-date"
                 >
-                  <Calendar size={16} />
-                  Insert Date
+                  <Calendar size={20} />
+                  🗓️ INSERT DATE
                 </Button>
                 <Button
                   type="button"
-                  onClick={() => addElement("multipicker")}
-                  variant="outline" 
-                  size="default"
-                  className="flex items-center gap-2 hover:bg-green-50 hover:border-green-300"
+                  onClick={() => {
+                    console.log("Selection button clicked");
+                    addElement("multipicker");
+                  }}
+                  variant="default"
+                  size="lg"
+                  className="flex items-center gap-2 bg-green-100 hover:bg-green-200 border-2 border-green-400 text-green-800 font-semibold"
                   data-testid="button-add-multipicker"
                 >
-                  <MousePointer size={16} />
-                  Insert Selection
+                  <MousePointer size={20} />
+                  📋 INSERT SELECTION
                 </Button>
                 <Button
                   type="button"
-                  onClick={() => addElement("nested_multipicker")}
-                  variant="outline"
-                  size="default"
-                  className="flex items-center gap-2 hover:bg-purple-50 hover:border-purple-300"
+                  onClick={() => {
+                    console.log("Nested button clicked");
+                    addElement("nested_multipicker");
+                  }}
+                  variant="default"
+                  size="lg"
+                  className="flex items-center gap-2 bg-purple-100 hover:bg-purple-200 border-2 border-purple-400 text-purple-800 font-semibold"
                   data-testid="button-add-nested"
                 >
-                  <ChevronRight size={16} />
-                  Insert Nested Selection
+                  <ChevronRight size={20} />
+                  🔗 INSERT NESTED SELECTION
                 </Button>
               </div>
             </div>
