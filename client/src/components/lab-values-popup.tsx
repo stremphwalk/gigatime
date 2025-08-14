@@ -88,7 +88,7 @@ export function LabValuesPopup({ isOpen, onClose, onConfirm }: LabValuesPopupPro
       ...prev,
       [testId]: {
         ...prev[testId],
-        values: prev[testId]?.values.filter((_, i) => i !== index) || []
+        values: (prev[testId]?.values || []).filter((_, i) => i !== index)
       }
     }));
   };
@@ -108,7 +108,7 @@ export function LabValuesPopup({ isOpen, onClose, onConfirm }: LabValuesPopupPro
 
       panel.tests.forEach(test => {
         const testInputs = labInputs[test.abbreviation];
-        if (testInputs && testInputs.values.length > 0) {
+        if (testInputs && testInputs.values && testInputs.values.length > 0) {
           panelLabs.push({
             testId: test.abbreviation,
             abbreviation: test.abbreviation,
@@ -144,7 +144,7 @@ export function LabValuesPopup({ isOpen, onClose, onConfirm }: LabValuesPopupPro
     onClose();
   };
 
-  const hasAnyValues = Object.values(labInputs).some(input => input.values && input.values.length > 0);
+  const hasAnyValues = Object.values(labInputs).some(input => input && input.values && input.values.length > 0);
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -210,7 +210,7 @@ export function LabValuesPopup({ isOpen, onClose, onConfirm }: LabValuesPopupPro
                   <div className="ml-6 space-y-3 pb-2">
                     {panel.tests.map((test) => {
                       const testInputs = labInputs[test.abbreviation];
-                      const hasValues = testInputs && testInputs.values.length > 0;
+                      const hasValues = testInputs && testInputs.values && testInputs.values.length > 0;
 
                       return (
                         <div key={test.abbreviation} className="border rounded-lg p-3">
@@ -260,7 +260,7 @@ export function LabValuesPopup({ isOpen, onClose, onConfirm }: LabValuesPopupPro
                                     Entered Values (most recent first):
                                   </div>
                                   <div className="flex flex-wrap gap-1">
-                                    {testInputs.values.map((value, index) => (
+                                    {(testInputs.values || []).map((value, index) => (
                                       <Badge
                                         key={index}
                                         variant={index === 0 ? "default" : "secondary"}
@@ -284,8 +284,8 @@ export function LabValuesPopup({ isOpen, onClose, onConfirm }: LabValuesPopupPro
                                   
                                   {/* Preview how it will appear */}
                                   <div className="text-xs text-green-700 bg-green-50 p-2 rounded border-l-2 border-green-200">
-                                    <strong>Preview:</strong> {test.abbreviation} {testInputs.values[0]}
-                                    {testInputs.values.length > 1 && ` (${testInputs.values.slice(1).join(", ")})`}
+                                    <strong>Preview:</strong> {test.abbreviation} {(testInputs.values || [])[0]}
+                                    {(testInputs.values || []).length > 1 && ` (${(testInputs.values || []).slice(1).join(", ")})`}
                                   </div>
                                 </div>
                               )}
