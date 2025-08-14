@@ -42,9 +42,7 @@ export function useSimpleAuth() {
       });
 
       if (response.ok) {
-        console.log('Login successful, checking auth...');
         await checkAuth(); // Refresh user data
-        console.log('Auth check completed');
       } else {
         console.error('Login response not ok:', response.status);
       }
@@ -75,7 +73,7 @@ export function useSimpleAuth() {
     checkAuth();
   }, []);
 
-  console.log('Auth hook state:', { user: !!user, isLoading, isAuthenticated });
+
   
   return {
     user,

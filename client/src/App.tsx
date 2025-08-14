@@ -11,7 +11,9 @@ import { LoginPage } from "./pages/login";
 import NotFound from "./pages/not-found";
 
 function Router() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
+
+
 
   // Show loading state while checking authentication
   if (isLoading) {
@@ -25,9 +27,12 @@ function Router() {
     );
   }
 
+  // Force authentication state based on user presence
+  const shouldShowApp = isAuthenticated && user;
+
   return (
     <Switch>
-      {isAuthenticated ? (
+      {shouldShowApp ? (
         <>
           <Route path="/" component={Home} />
           <Route path="/teams" component={Teams} />
