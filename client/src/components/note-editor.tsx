@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SmartPhraseAutocomplete } from "./smart-phrase-autocomplete";
 import { FlexibleSmartPhrasePicker } from "./flexible-smart-phrase-picker";
 import { MedicalConditionAutocomplete } from "./medical-condition-autocomplete";
+import { PertinentNegativesPopup } from "./pertinent-negatives-popup";
 import { useNotes, useNoteTemplates } from "../hooks/use-notes";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
 import { useToast } from "../hooks/use-toast";
@@ -29,7 +30,8 @@ import {
   Expand,
   ChevronUp,
   ChevronDown,
-  X
+  X,
+  UserCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { noteTemplates } from "../lib/note-templates";
@@ -78,6 +80,9 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     cursorPosition: number;
     wordStart: number;
   } | null>(null);
+
+  const [showPertinentNegatives, setShowPertinentNegatives] = useState(false);
+  const [pertinentNegativesSection, setPertinentNegativesSection] = useState<string | null>(null);
 
   const { createNote, updateNote, isCreating: isSaving } = useNotes();
   const { templates } = useNoteTemplates();
@@ -325,6 +330,28 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
         }
       }, 0);
     }
+  };
+
+  const handlePertinentNegativesClick = (sectionId: string) => {
+    setPertinentNegativesSection(sectionId);
+    setShowPertinentNegatives(true);
+  };
+
+  const handlePertinentNegativesConfirm = (negativeText: string) => {
+    if (pertinentNegativesSection) {
+      const currentContent = noteData.content[pertinentNegativesSection] || '';
+      const newContent = currentContent + (currentContent ? '\n\n' : '') + negativeText;
+      
+      setNoteData(prev => ({
+        ...prev,
+        content: {
+          ...prev.content,
+          [pertinentNegativesSection]: newContent
+        }
+      }));
+    }
+    setShowPertinentNegatives(false);
+    setPertinentNegativesSection(null);
   };
 
   const handlePickerCancel = () => {
@@ -664,6 +691,20 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                     {section.required && <span className="text-medical-red text-xs">*</span>}
                   </h3>
                   <div className="flex items-center space-x-2">
+                    {(section.type === 'historyOfPresentIllness' || 
+                      section.name.toLowerCase().includes('history of present illness') ||
+                      section.name.toLowerCase().includes('hpi')) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handlePertinentNegativesClick(section.id)}
+                        className="text-xs text-professional-blue hover:underline"
+                        data-testid={`button-pertinent-negatives-${section.id}`}
+                      >
+                        <UserCheck size={12} className="mr-1" />
+                        Pertinent Negatives
+                      </Button>
+                    )}
                     <Button 
                       variant="ghost" 
                       size="sm" 
@@ -777,6 +818,16 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
           </div>
         </div>
       </div>
+      
+      {/* Pertinent Negatives Popup */}
+      <PertinentNegativesPopup
+        isOpen={showPertinentNegatives}
+        onClose={() => {
+          setShowPertinentNegatives(false);
+          setPertinentNegativesSection(null);
+        }}
+        onConfirm={handlePertinentNegativesConfirm}
+      />
     </div>
   );
 }
