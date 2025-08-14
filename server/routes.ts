@@ -399,27 +399,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Create default smart phrases
       const defaultPhrases = [
+        // Traditional text phrases
         {
-          trigger: "chest-pain",
-          content: "Patient presents with chest pain described as [characterize pain]. Pain is [location] and [duration]. Associated symptoms include [symptoms]. No radiation to arms or jaw. No shortness of breath.",
-          description: "Standard chest pain assessment",
+          trigger: "normal-heart-sounds",
+          content: "Heart rate regular, no murmurs, gallops, or rubs appreciated.",
+          description: "Normal cardiac examination",
           category: "cardiology",
+          type: "text",
           isPublic: true,
           userId
         },
         {
-          trigger: "shortness-breath",
-          content: "Patient reports shortness of breath with [onset]. Difficulty breathing is [severity] and [triggers]. No chest pain. No cough or sputum production.",
-          description: "Shortness of breath template",
+          trigger: "clear-lungs",
+          content: "Lungs clear to auscultation bilaterally, no wheezes, rales, or rhonchi.",
+          description: "Normal pulmonary examination",
           category: "respiratory",
+          type: "text",
           isPublic: true,
           userId
         },
+        // Multipicker phrase for pain assessment
         {
-          trigger: "abdominal-pain",
-          content: "Patient presents with abdominal pain located in the [location]. Pain is described as [quality] and rated [scale]/10. [Associated symptoms]. No nausea or vomiting.",
-          description: "Abdominal pain assessment",
-          category: "gastroenterology",
+          trigger: "pain-level",
+          content: "Patient rates pain as {option} out of 10.",
+          description: "Pain scale assessment",
+          category: "general",
+          type: "multipicker",
+          options: {
+            choices: [
+              { label: "Mild (1-3)", value: "mild (1-3)" },
+              { label: "Moderate (4-6)", value: "moderate (4-6)" },
+              { label: "Severe (7-8)", value: "severe (7-8)" },
+              { label: "Excruciating (9-10)", value: "excruciating (9-10)" }
+            ]
+          },
+          isPublic: true,
+          userId
+        },
+        // Nested multipicker for admission type
+        {
+          trigger: "admission-type",
+          content: "{option1} admission to {option2}.",
+          description: "Patient admission details",
+          category: "general",
+          type: "nested_multipicker",
+          options: {
+            choices: [
+              {
+                label: "Emergency",
+                value: "Emergency",
+                children: [
+                  { label: "ICU", value: "ICU" },
+                  { label: "Emergency Department", value: "Emergency Department" },
+                  { label: "Cardiac Care Unit", value: "Cardiac Care Unit" }
+                ]
+              },
+              {
+                label: "Elective",
+                value: "Elective",
+                children: [
+                  { label: "General Ward", value: "General Ward" },
+                  { label: "Surgery Unit", value: "Surgery Unit" },
+                  { label: "Observation Unit", value: "Observation Unit" }
+                ]
+              }
+            ]
+          },
+          isPublic: true,
+          userId
+        },
+        // Date picker phrase for follow-up
+        {
+          trigger: "follow-up",
+          content: "Follow-up appointment scheduled for {date}.",
+          description: "Schedule follow-up appointment",
+          category: "general",
+          type: "date",
+          isPublic: true,
+          userId
+        },
+        // Another multipicker for symptoms
+        {
+          trigger: "deny-symptoms",
+          content: "Patient denies {option}.",
+          description: "Common symptom denial",
+          category: "general",
+          type: "multipicker",
+          options: {
+            choices: [
+              { label: "Chest pain", value: "chest pain" },
+              { label: "Shortness of breath", value: "shortness of breath" },
+              { label: "Nausea or vomiting", value: "nausea or vomiting" },
+              { label: "Dizziness", value: "dizziness" },
+              { label: "Palpitations", value: "palpitations" },
+              { label: "Syncope", value: "syncope" }
+            ]
+          },
           isPublic: true,
           userId
         }

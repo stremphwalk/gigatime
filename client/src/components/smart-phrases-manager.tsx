@@ -7,8 +7,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
-import { Plus, Edit2, Trash2, Search, Zap } from "lucide-react";
+import { useToast } from "../hooks/use-toast";
+import { Plus, Edit2, Trash2, Search, Zap, X, Calendar, MousePointer, ChevronRight, Save } from "lucide-react";
 import type { SmartPhrase } from "@shared/schema";
+
+interface MultipickerOption {
+  label: string;
+  value: string;
+  children?: MultipickerOption[];
+}
 
 export function SmartPhrasesManager() {
   const [activeTab, setActiveTab] = useState<'library' | 'create' | 'edit'>('library');
@@ -18,10 +25,96 @@ export function SmartPhrasesManager() {
     trigger: "",
     content: "",
     description: "",
-    category: "general"
+    category: "general",
+    type: "text" as "text" | "multipicker" | "nested_multipicker" | "date",
+    options: null as any
   });
 
   const { phrases, createPhrase, updatePhrase, deletePhrase, isCreating } = useSmartPhrases();
+  const { toast } = useToast();
+
+  // Option builder methods
+  const addOption = (parentPath?: string[]) => {
+    const newOption = { label: "", value: "", children: [] };
+    
+    if (!formData.options) {
+      setFormData(prev => ({
+        ...prev,
+        options: { choices: [newOption] }
+      }));
+    } else if (!parentPath || parentPath.length === 0) {
+      setFormData(prev => ({
+        ...prev,
+        options: {
+          ...prev.options,
+          choices: [...(prev.options.choices || []), newOption]
+        }
+      }));
+    } else {
+      // Add nested option
+      const updateNestedOptions = (options: MultipickerOption[], path: string[], depth = 0): MultipickerOption[] => {
+        if (depth === path.length - 1) {
+          return options.map(opt => 
+            opt.value === path[depth]
+              ? { ...opt, children: [...(opt.children || []), newOption] }
+              : opt
+          );
+        }
+        return options.map(opt =>
+          opt.value === path[depth]
+            ? { ...opt, children: updateNestedOptions(opt.children || [], path, depth + 1) }
+            : opt
+        );
+      };
+
+      setFormData(prev => ({
+        ...prev,
+        options: {
+          ...prev.options,
+          choices: updateNestedOptions(prev.options.choices || [], parentPath)
+        }
+      }));
+    }
+  };
+
+  const updateOption = (path: string[], field: 'label' | 'value', value: string) => {
+    const updateNestedOptions = (options: MultipickerOption[], currentPath: string[], depth = 0): MultipickerOption[] => {
+      if (depth === currentPath.length - 1) {
+        return options.map(opt => 
+          opt.value === currentPath[depth] || (opt.value === '' && depth === 0 && currentPath.length === 1)
+            ? { ...opt, [field]: value }
+            : opt
+        );
+      }
+      return options.map(opt =>
+        opt.value === currentPath[depth]
+          ? { ...opt, children: updateNestedOptions(opt.children || [], currentPath, depth + 1) }
+          : opt
+      );
+    };
+
+    setFormData(prev => ({
+      ...prev,
+      options: {
+        ...prev.options,
+        choices: updateNestedOptions(prev.options.choices || [], path)
+      }
+    }));
+  };
+
+  const removeOption = (path: string[]) => {
+    if (path.length === 1) {
+      setFormData(prev => ({
+        ...prev,
+        options: {
+          ...prev.options,
+          choices: (prev.options.choices || []).filter((_, index) => index !== parseInt(path[0]))
+        }
+      }));
+    } else {
+      // Remove nested option logic would go here
+    }
+  };
 
   const categories = [
     "general",
@@ -47,7 +140,9 @@ export function SmartPhrasesManager() {
       trigger: "",
       content: "",
       description: "",
-      category: "general"
+      category: "general",
+      type: "text",
+      options: null
     });
     setEditingPhrase(null);
     setActiveTab('create');
@@ -58,7 +153,9 @@ export function SmartPhrasesManager() {
       trigger: phrase.trigger,
       content: phrase.content,
       description: phrase.description || "",
-      category: phrase.category || "general"
+      category: phrase.category || "general",
+      type: (phrase.type as any) || "text",
+      options: phrase.options || null
     });
     setEditingPhrase(phrase);
     setActiveTab('edit');
@@ -78,7 +175,15 @@ export function SmartPhrasesManager() {
         trigger: "",
         content: "",
         description: "",
-        category: "general"
+        category: "general",
+        type: "text",
+        options: null
+      });
+
+      toast({
+        title: "✓ Smart Phrase Saved",
+        description: `Smart phrase "${formData.trigger}" has been ${editingPhrase ? 'updated' : 'created'} successfully`,
+        duration: 3000,
       });
       
       setActiveTab('library');
@@ -176,18 +281,195 @@ export function SmartPhrasesManager() {
                 />
               </div>
 
+              {/* Smart Phrase Type Selector */}
               <div className="space-y-2">
-                <Label htmlFor="content">Content</Label>
+                <Label htmlFor="type">Smart Phrase Type</Label>
+                <Select 
+                  value={formData.type} 
+                  onValueChange={(value: "text" | "multipicker" | "nested_multipicker" | "date") => {
+                    setFormData(prev => ({ 
+                      ...prev, 
+                      type: value,
+                      options: value === 'text' ? null : prev.options || { choices: [] }
+                    }));
+                  }}
+                >
+                  <SelectTrigger data-testid="select-phrase-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="text">
+                      <div className="flex items-center">
+                        <Zap size={16} className="mr-2" />
+                        Plain Text
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="multipicker">
+                      <div className="flex items-center">
+                        <MousePointer size={16} className="mr-2" />
+                        Multiple Choice
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="nested_multipicker">
+                      <div className="flex items-center">
+                        <ChevronRight size={16} className="mr-2" />
+                        Nested Choices
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="date">
+                      <div className="flex items-center">
+                        <Calendar size={16} className="mr-2" />
+                        Date Picker
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500">
+                  {formData.type === 'text' && "Simple text replacement"}
+                  {formData.type === 'multipicker' && "Users select from predefined options"}
+                  {formData.type === 'nested_multipicker' && "Users navigate through hierarchical choices"}
+                  {formData.type === 'date' && "Users select dates from a calendar"}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="content">Content Template</Label>
                 <Textarea
                   id="content"
                   value={formData.content}
                   onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
-                  placeholder="The text that will be inserted when this phrase is triggered..."
-                  className="min-h-40"
+                  placeholder={
+                    formData.type === 'text' ? "The text that will be inserted when this phrase is triggered..." :
+                    formData.type === 'multipicker' ? "Use {option} as placeholder for selected choice. Example: Patient denies {option}." :
+                    formData.type === 'nested_multipicker' ? "Use {option1}, {option2} etc. for nested selections. Example: {option1} admission to {option2}." :
+                    "Use {date} as placeholder for selected date. Example: Follow-up scheduled for {date}."
+                  }
+                  className="min-h-32"
                   required
                   data-testid="textarea-content"
                 />
+                <p className="text-xs text-gray-500">
+                  {formData.type === 'multipicker' && "Use {option} where the selected choice should appear"}
+                  {formData.type === 'nested_multipicker' && "Use {option1}, {option2} etc. for each level of selection"}
+                  {formData.type === 'date' && "Use {date} where the selected date should appear"}
+                </p>
               </div>
+
+              {/* Options Builder for Multipicker Types */}
+              {(formData.type === 'multipicker' || formData.type === 'nested_multipicker') && (
+                <div className="space-y-3 p-4 border border-medical-teal/20 rounded-lg bg-medical-teal/5">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-medical-teal font-semibold">Configure Options</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => addOption()}
+                      className="text-medical-teal border-medical-teal hover:bg-medical-teal hover:text-white"
+                      data-testid="button-add-option"
+                    >
+                      <Plus size={16} className="mr-1" />
+                      Add Option
+                    </Button>
+                  </div>
+                  
+                  {formData.options?.choices?.map((option: MultipickerOption, index: number) => (
+                    <div key={index} className="space-y-2 p-3 border border-gray-200 rounded bg-white">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <Label className="text-xs">Label (shown to user)</Label>
+                          <Input
+                            value={option.label}
+                            onChange={(e) => updateOption([index.toString()], 'label', e.target.value)}
+                            placeholder="e.g. Shortness of breath"
+                            className="h-8"
+                            data-testid={`input-option-label-${index}`}
+                          />
+                        </div>
+                        <div className="flex items-end space-x-2">
+                          <div className="flex-1">
+                            <Label className="text-xs">Value (used in text)</Label>
+                            <Input
+                              value={option.value}
+                              onChange={(e) => updateOption([index.toString()], 'value', e.target.value)}
+                              placeholder="e.g. dyspnea"
+                              className="h-8"
+                              data-testid={`input-option-value-${index}`}
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeOption([index.toString()])}
+                            className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                            data-testid={`button-remove-option-${index}`}
+                          >
+                            <X size={14} />
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      {formData.type === 'nested_multipicker' && (
+                        <div className="ml-4 pl-4 border-l-2 border-gray-200 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs text-gray-600">Sub-options</Label>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => addOption([option.value])}
+                              className="h-6 text-xs"
+                              data-testid={`button-add-suboption-${index}`}
+                            >
+                              <Plus size={12} className="mr-1" />
+                              Add Sub-option
+                            </Button>
+                          </div>
+                          
+                          {option.children?.map((childOption: MultipickerOption, childIndex: number) => (
+                            <div key={childIndex} className="grid grid-cols-2 gap-2">
+                              <Input
+                                value={childOption.label}
+                                onChange={(e) => updateOption([option.value, childIndex.toString()], 'label', e.target.value)}
+                                placeholder="Sub-option label"
+                                className="h-7 text-sm"
+                                data-testid={`input-suboption-label-${index}-${childIndex}`}
+                              />
+                              <div className="flex items-center space-x-2">
+                                <Input
+                                  value={childOption.value}
+                                  onChange={(e) => updateOption([option.value, childIndex.toString()], 'value', e.target.value)}
+                                  placeholder="Sub-option value"
+                                  className="h-7 text-sm"
+                                  data-testid={`input-suboption-value-${index}-${childIndex}`}
+                                />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {/* Remove suboption logic */}}
+                                  className="h-7 w-7 p-0 text-red-600"
+                                  data-testid={`button-remove-suboption-${index}-${childIndex}`}
+                                >
+                                  <X size={12} />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {(!formData.options?.choices || formData.options.choices.length === 0) && (
+                    <div className="text-center py-8 text-gray-500">
+                      <MousePointer size={24} className="mx-auto mb-2 text-gray-400" />
+                      <p className="text-sm">Click "Add Option" to create choices for this smart phrase</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="flex justify-between">
                 <Button
@@ -271,9 +553,36 @@ export function SmartPhrasesManager() {
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
-                      <CardTitle className="text-lg font-semibold">
-                        <span className="text-medical-teal">/{phrase.trigger}</span>
-                      </CardTitle>
+                      <div className="flex items-center space-x-2">
+                        <CardTitle className="text-lg font-semibold">
+                          <span className="text-medical-teal">/{phrase.trigger}</span>
+                        </CardTitle>
+                        {/* Type indicator */}
+                        {phrase.type === 'multipicker' && (
+                          <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                            <MousePointer size={10} className="mr-1" />
+                            Multi-choice
+                          </Badge>
+                        )}
+                        {phrase.type === 'nested_multipicker' && (
+                          <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                            <ChevronRight size={10} className="mr-1" />
+                            Nested
+                          </Badge>
+                        )}
+                        {phrase.type === 'date' && (
+                          <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                            <Calendar size={10} className="mr-1" />
+                            Date
+                          </Badge>
+                        )}
+                        {(!phrase.type || phrase.type === 'text') && (
+                          <Badge variant="outline" className="text-xs bg-gray-50 text-gray-600 border-gray-200">
+                            <Zap size={10} className="mr-1" />
+                            Text
+                          </Badge>
+                        )}
+                      </div>
                       {phrase.description && (
                         <CardDescription className="mt-1">
                           {phrase.description}

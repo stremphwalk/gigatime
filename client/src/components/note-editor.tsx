@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SmartPhraseAutocomplete } from "./smart-phrase-autocomplete";
+import { SmartPhrasePicker } from "./smart-phrase-picker";
 import { useNotes, useNoteTemplates } from "../hooks/use-notes";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
 import { useToast } from "../hooks/use-toast";
@@ -63,10 +64,15 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     position: { top: number; left: number };
     query: string;
   } | null>(null);
+  const [activePicker, setActivePicker] = useState<{
+    phrase: any;
+    sectionId: string;
+    position: { top: number; left: number };
+  } | null>(null);
 
   const { createNote, updateNote, isCreating: isSaving } = useNotes();
   const { templates } = useNoteTemplates();
-  const { searchPhrases } = useSmartPhrases();
+  const { phrases, searchPhrases } = useSmartPhrases();
   const { toast } = useToast();
 
   // Load note data when editing existing note
@@ -150,11 +156,39 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     }
   };
 
-  const handleSmartPhraseSelect = (phrase: string) => {
+  const handleSmartPhraseSelect = async (phraseOrContent: string | any) => {
     if (activeAutocomplete) {
+      let finalContent: string;
+      
+      if (typeof phraseOrContent === 'string') {
+        // Traditional text phrase
+        finalContent = phraseOrContent;
+      } else {
+        // Advanced phrase object - need to find the phrase from our phrases data
+        const phrase = phrases?.find(p => p.trigger === phraseOrContent.trigger);
+        
+        if (!phrase) return;
+        
+        if (phrase.type === 'text' || !phrase.type) {
+          finalContent = phrase.content;
+        } else {
+          // Show picker for interactive phrases
+          const rect = document.querySelector(`[data-section-id="${activeAutocomplete.sectionId}"]`)?.getBoundingClientRect();
+          if (rect) {
+            setActivePicker({
+              phrase,
+              sectionId: activeAutocomplete.sectionId,
+              position: { top: rect.bottom + 10, left: rect.left }
+            });
+          }
+          setActiveAutocomplete(null);
+          return;
+        }
+      }
+      
       const currentContent = noteData.content[activeAutocomplete.sectionId] || '';
       const lastSlashIndex = currentContent.lastIndexOf('/');
-      const newContent = currentContent.slice(0, lastSlashIndex) + phrase;
+      const newContent = currentContent.slice(0, lastSlashIndex) + finalContent;
       
       setNoteData(prev => ({
         ...prev,
@@ -166,6 +200,29 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       
       setActiveAutocomplete(null);
     }
+  };
+
+  const handlePickerSelect = (result: string) => {
+    if (activePicker) {
+      const currentContent = noteData.content[activePicker.sectionId] || '';
+      const lastSlashIndex = currentContent.lastIndexOf('/');
+      const beforeSlash = lastSlashIndex >= 0 ? currentContent.slice(0, lastSlashIndex) : currentContent;
+      const newContent = beforeSlash + result;
+      
+      setNoteData(prev => ({
+        ...prev,
+        content: {
+          ...prev.content,
+          [activePicker.sectionId]: newContent
+        }
+      }));
+      
+      setActivePicker(null);
+    }
+  };
+
+  const handlePickerCancel = () => {
+    setActivePicker(null);
   };
 
   const handleSave = async () => {
@@ -554,6 +611,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                     placeholder={`Document the ${section.name.toLowerCase()}... (Type '/' for smart phrases)`}
                     className="min-h-[100px] resize-none"
                     data-testid={`textarea-${section.id}`}
+                    data-section-id={section.id}
                   />
                   
                   {activeAutocomplete && activeAutocomplete.sectionId === section.id && (
@@ -562,6 +620,16 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                       position={activeAutocomplete.position}
                       onSelect={handleSmartPhraseSelect}
                       onClose={() => setActiveAutocomplete(null)}
+                    />
+                  )}
+                  
+                  {activePicker && activePicker.sectionId === section.id && (
+                    <SmartPhrasePicker
+                      phrase={activePicker.phrase}
+                      position={activePicker.position}
+                      onSelect={handlePickerSelect}
+                      onCancel={handlePickerCancel}
+                      autoShow={true}
                     />
                   )}
                 </div>

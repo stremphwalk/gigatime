@@ -82,6 +82,8 @@ export const smartPhrases = pgTable("smart_phrases", {
   content: text("content").notNull(),
   description: varchar("description", { length: 200 }),
   category: varchar("category", { length: 50 }),
+  type: varchar("type", { length: 20 }).default("text"), // text, multipicker, nested_multipicker, date
+  options: jsonb("options"), // for multipicker and nested multipicker options
   isPublic: boolean("is_public").default(false),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at").defaultNow(),

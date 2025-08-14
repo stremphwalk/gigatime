@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
+import { MousePointer, ChevronRight, Calendar, Zap } from "lucide-react";
 
 interface SmartPhraseAutocompleteProps {
   query: string;
   position: { top: number; left: number };
-  onSelect: (phrase: string) => void;
+  onSelect: (phraseOrContent: string | any) => void;
   onClose: () => void;
 }
 
@@ -50,7 +52,14 @@ export function SmartPhraseAutocomplete({
       } else if (e.key === 'Enter') {
         e.preventDefault();
         if (filteredPhrases[selectedIndex]) {
-          onSelect(filteredPhrases[selectedIndex].content);
+          const phrase = filteredPhrases[selectedIndex];
+          if (phrase.type && phrase.type !== 'text') {
+            // For advanced phrases, pass the phrase object
+            onSelect(phrase);
+          } else {
+            // For text phrases, pass just the content
+            onSelect(phrase.content);
+          }
         }
       } else if (e.key === 'Escape') {
         onClose();
@@ -85,18 +94,51 @@ export function SmartPhraseAutocomplete({
                 ? "bg-professional-blue text-white" 
                 : "hover:bg-gray-100"
             )}
-            onClick={() => onSelect(phrase.content)}
+            onClick={() => {
+              if (phrase.type && phrase.type !== 'text') {
+                onSelect(phrase);
+              } else {
+                onSelect(phrase.content);
+              }
+            }}
             data-testid={`phrase-option-${phrase.trigger}`}
           >
-            <div className="font-medium">/{phrase.trigger}</div>
-            {phrase.description && (
-              <div className={cn(
-                "text-xs mt-1",
-                index === selectedIndex ? "text-blue-100" : "text-gray-500"
-              )}>
-                {phrase.description}
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <div className="font-medium">/{phrase.trigger}</div>
+                {phrase.description && (
+                  <div className={cn(
+                    "text-xs mt-1",
+                    index === selectedIndex ? "text-blue-100" : "text-gray-500"
+                  )}>
+                    {phrase.description}
+                  </div>
+                )}
               </div>
-            )}
+              {/* Type indicator */}
+              <div className="ml-2">
+                {phrase.type === 'multipicker' && (
+                  <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                    <MousePointer size={8} />
+                  </Badge>
+                )}
+                {phrase.type === 'nested_multipicker' && (
+                  <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
+                    <ChevronRight size={8} />
+                  </Badge>
+                )}
+                {phrase.type === 'date' && (
+                  <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
+                    <Calendar size={8} />
+                  </Badge>
+                )}
+                {(!phrase.type || phrase.type === 'text') && (
+                  <Badge variant="outline" className="text-xs bg-gray-50 text-gray-600 border-gray-200">
+                    <Zap size={8} />
+                  </Badge>
+                )}
+              </div>
+            </div>
           </div>
         ))}
       </div>
