@@ -13,6 +13,7 @@ import { AllergyAutocomplete } from "./allergy-autocomplete";
 import { SocialHistoryAutocomplete } from "./social-history-autocomplete";
 import { MedicationAutocomplete } from "./medication-autocomplete";
 import { LabValuesPopup } from "./lab-values-popup";
+import { PhysicalExamAutocomplete } from "./physical-exam-autocomplete";
 import { PertinentNegativesPopup } from "./pertinent-negatives-popup";
 import { PertinentNegativePresetSelector } from "./pertinent-negative-preset-selector";
 import { useNotes, useNoteTemplates } from "../hooks/use-notes";
@@ -112,6 +113,13 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
   const [showPertinentNegatives, setShowPertinentNegatives] = useState(false);
   const [pertinentNegativesSection, setPertinentNegativesSection] = useState<string | null>(null);
   const [activeLabValuesPopup, setActiveLabValuesPopup] = useState<string | null>(null);
+  const [activePhysicalExamAutocomplete, setActivePhysicalExamAutocomplete] = useState<{
+    sectionId: string;
+    position: { top: number; left: number };
+    query: string;
+    cursorPosition: number;
+    wordStart: number;
+  } | null>(null);
 
   const { createNote, updateNote, isCreating: isSaving } = useNotes();
   const { templates } = useNoteTemplates();
@@ -422,6 +430,64 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     } else if (activeMedicationAutocomplete && activeMedicationAutocomplete.sectionId === sectionId) {
       setActiveMedicationAutocomplete(null);
     }
+
+    // Handle physical exam autocomplete
+    const isPhysicalExamSection = section.type === 'physicalExam' || 
+      section.name.toLowerCase().includes('physical') || 
+      section.name.toLowerCase().includes('exam') ||
+      section.name.toLowerCase().includes('pe');
+
+    if (isPhysicalExamSection) {
+      const cursorPosition = textarea.selectionStart;
+      
+      // Find the current word being typed at cursor position
+      const beforeCursor = content.slice(0, cursorPosition);
+      const afterCursor = content.slice(cursorPosition);
+      
+      // Find word boundaries for physical exam terms (more flexible)
+      const wordStartMatch = beforeCursor.match(/[A-Za-z][A-Za-z\s\-\,]*$/);
+      const wordEndMatch = afterCursor.match(/^[A-Za-z\s\-\,]*/);
+      
+      if (wordStartMatch) {
+        const wordStart = cursorPosition - wordStartMatch[0].length;
+        const currentWord = wordStartMatch[0] + (wordEndMatch ? wordEndMatch[0] : '');
+        
+        if (currentWord && currentWord.length >= 2) {
+          // Calculate precise cursor position in the textarea
+          const textBeforeCursor = content.slice(0, cursorPosition);
+          const lines = textBeforeCursor.split('\n');
+          const currentLine = lines.length - 1;
+          const charInLine = lines[lines.length - 1].length;
+          
+          // Get textarea position and line height
+          const rect = textarea.getBoundingClientRect();
+          const style = window.getComputedStyle(textarea);
+          const lineHeight = parseInt(style.lineHeight) || 20;
+          const paddingTop = parseInt(style.paddingTop) || 8;
+          const paddingLeft = parseInt(style.paddingLeft) || 12;
+          
+          // Approximate character width (monospace assumption)
+          const charWidth = 8;
+          
+          setActivePhysicalExamAutocomplete({
+            sectionId,
+            position: { 
+              top: rect.top + paddingTop + (currentLine * lineHeight) + lineHeight + 5,
+              left: rect.left + paddingLeft + (charInLine * charWidth)
+            },
+            query: currentWord.trim(),
+            cursorPosition,
+            wordStart
+          });
+        } else {
+          setActivePhysicalExamAutocomplete(null);
+        }
+      } else {
+        setActivePhysicalExamAutocomplete(null);
+      }
+    } else if (activePhysicalExamAutocomplete && activePhysicalExamAutocomplete.sectionId === sectionId) {
+      setActivePhysicalExamAutocomplete(null);
+    }
   };
 
   const handleSmartPhraseSelect = async (phraseOrContent: string | any) => {
@@ -635,6 +701,39 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       if (textarea) {
         textarea.focus();
         const newCursorPos = wordStart + medication.length;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 0);
+  };
+
+  const handlePhysicalExamSelect = (finding: string) => {
+    if (!activePhysicalExamAutocomplete) return;
+    
+    const { sectionId, cursorPosition, wordStart } = activePhysicalExamAutocomplete;
+    const currentContent = noteData.content[sectionId] || '';
+    
+    // Replace the current word with the selected finding
+    const newContent = 
+      currentContent.slice(0, wordStart) + 
+      finding + 
+      currentContent.slice(cursorPosition);
+    
+    setNoteData(prev => ({
+      ...prev,
+      content: {
+        ...prev.content,
+        [sectionId]: newContent
+      }
+    }));
+    
+    setActivePhysicalExamAutocomplete(null);
+    
+    // Focus back to the textarea
+    setTimeout(() => {
+      const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
+      if (textarea) {
+        textarea.focus();
+        const newCursorPos = wordStart + finding.length;
         textarea.setSelectionRange(newCursorPos, newCursorPos);
       }
     }, 0);
@@ -1125,6 +1224,10 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                           section.name.toLowerCase().includes('lab') ||
                           section.name.toLowerCase().includes('laboratory')
                         ? ', use Lab Entry button for structured lab value entry with trending'
+                        : section.type === 'physicalExam' ||
+                          section.name.toLowerCase().includes('physical') ||
+                          section.name.toLowerCase().includes('exam')
+                        ? ', start typing for physical exam findings autocomplete'
                         : ''
                     })`}
                     className="min-h-[100px] resize-none"
@@ -1189,6 +1292,16 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                       position={activeMedicationAutocomplete.position}
                       onSelect={handleMedicationSelect}
                       onClose={() => setActiveMedicationAutocomplete(null)}
+                      sectionId={section.id}
+                    />
+                  )}
+
+                  {activePhysicalExamAutocomplete && activePhysicalExamAutocomplete.sectionId === section.id && (
+                    <PhysicalExamAutocomplete
+                      query={activePhysicalExamAutocomplete.query}
+                      position={activePhysicalExamAutocomplete.position}
+                      onSelect={handlePhysicalExamSelect}
+                      onClose={() => setActivePhysicalExamAutocomplete(null)}
                       sectionId={section.id}
                     />
                   )}
