@@ -1,122 +1,130 @@
 import { useState, useRef, useEffect } from 'react';
-import { Command, CommandInput, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ChevronDown, Search } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { searchReasons } from '@/lib/consultation-reasons';
 import { cn } from '@/lib/utils';
 
 interface ConsultationReasonAutocompleteProps {
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
+  query: string;
+  position: { top: number; left: number };
+  onSelect: (reason: string) => void;
+  onClose: () => void;
   type?: 'consultation' | 'admission';
-  className?: string;
-  onFocus?: () => void;
-  onBlur?: () => void;
+  sectionId: string;
 }
 
-export function ConsultationReasonAutocomplete({ 
-  value, 
-  onChange, 
-  placeholder = "Search consultation reasons...",
+export function ConsultationReasonAutocomplete({
+  query,
+  position,
+  onSelect,
+  onClose,
   type = 'consultation',
-  className,
-  onFocus,
-  onBlur
+  sectionId
 }: ConsultationReasonAutocompleteProps) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState(value);
-  const [suggestions, setSuggestions] = useState(searchReasons('', type));
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setSearch(value);
-  }, [value]);
-
-  useEffect(() => {
-    const results = searchReasons(search, type);
+    const results = searchReasons(query, type);
     setSuggestions(results);
-  }, [search, type]);
+    setSelectedIndex(0);
+  }, [query, type]);
 
-  const handleInputChange = (newValue: string) => {
-    setSearch(newValue);
-    onChange(newValue);
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!suggestions.length) return;
+
+      switch (e.key) {
+        case "ArrowDown":
+          e.preventDefault();
+          setSelectedIndex(prev => (prev + 1) % suggestions.length);
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          setSelectedIndex(prev => (prev - 1 + suggestions.length) % suggestions.length);
+          break;
+        case "Enter":
+        case "Tab":
+          e.preventDefault();
+          if (suggestions[selectedIndex]) {
+            handleReasonSelect(suggestions[selectedIndex]);
+          }
+          break;
+        case "Escape":
+          e.preventDefault();
+          onClose();
+          break;
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [suggestions, selectedIndex, onClose]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        onClose();
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [onClose]);
+
+  const handleReasonSelect = (reason: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    onSelect(reason);
   };
 
-  const handleSelect = (selectedValue: string) => {
-    setSearch(selectedValue);
-    onChange(selectedValue);
-    setOpen(false);
-    inputRef.current?.blur();
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown' && !open) {
-      setOpen(true);
-    }
-  };
+  if (suggestions.length === 0) {
+    return null;
+  }
 
   return (
-    <div className={cn("relative", className)}>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <div className="relative">
-            <input
-              ref={inputRef}
-              type="text"
-              value={search}
-              onChange={(e) => handleInputChange(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onFocus={() => {
-                setOpen(true);
-                onFocus?.();
-              }}
-              onBlur={onBlur}
-              placeholder={placeholder}
-              className="w-full px-3 py-2 pr-8 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              data-testid={`input-${type}-reason`}
-            />
-            <ChevronDown 
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400 cursor-pointer"
-              onClick={() => setOpen(!open)}
-            />
+    <div
+      ref={containerRef}
+      className="fixed z-50"
+      style={{
+        top: `${position.top}px`,
+        left: `${position.left}px`,
+        maxWidth: "320px",
+        minWidth: "280px"
+      }}
+      data-testid={`consultation-reason-autocomplete-${sectionId}`}
+    >
+      <Card className="shadow-lg border border-gray-200">
+        <CardContent className="p-0">
+          <div className="max-h-64 overflow-y-auto">
+            <div className="p-2 bg-blue-50 border-b flex items-center gap-2">
+              <FileText size={14} className="text-blue-600" />
+              <span className="text-xs font-medium text-blue-700">
+                {type === 'admission' ? 'Admission' : 'Consultation'} Reasons
+              </span>
+            </div>
+            {suggestions.map((reason, index) => (
+              <Button
+                key={reason}
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "w-full justify-start text-left h-auto py-2 px-3 rounded-none border-b border-gray-50 last:border-b-0",
+                  index === selectedIndex && "bg-blue-50 text-blue-900"
+                )}
+                onClick={(e) => handleReasonSelect(reason, e)}
+                data-testid={`reason-suggestion-${index}`}
+              >
+                <div className="flex items-center gap-2 w-full">
+                  <FileText size={16} className="text-blue-600 flex-shrink-0" />
+                  <span className="font-medium text-sm">{reason}</span>
+                </div>
+              </Button>
+            ))}
           </div>
-        </PopoverTrigger>
-        <PopoverContent className="w-full p-0" side="bottom" align="start">
-          <Command>
-            <div className="flex items-center border-b px-3">
-              <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-              <input
-                className="flex h-10 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                placeholder={`Search ${type} reasons...`}
-                value={search}
-                onChange={(e) => handleInputChange(e.target.value)}
-                data-testid={`search-${type}-reasons`}
-              />
-            </div>
-            <div className="max-h-60 overflow-y-auto">
-              {suggestions.length === 0 ? (
-                <CommandEmpty>No reasons found.</CommandEmpty>
-              ) : (
-                <CommandGroup>
-                  {suggestions.map((reason) => (
-                    <CommandItem
-                      key={reason}
-                      value={reason}
-                      onSelect={() => handleSelect(reason)}
-                      className="cursor-pointer"
-                      data-testid={`option-${type}-${reason.toLowerCase().replace(/\s+/g, '-')}`}
-                    >
-                      {reason}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              )}
-            </div>
-          </Command>
-        </PopoverContent>
-      </Popover>
+        </CardContent>
+      </Card>
     </div>
   );
 }

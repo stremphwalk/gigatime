@@ -106,6 +106,14 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     cursorPosition: number;
     wordStart: number;
   } | null>(null);
+  const [activeConsultationReasonAutocomplete, setActiveConsultationReasonAutocomplete] = useState<{
+    sectionId: string;
+    position: { top: number; left: number };
+    query: string;
+    cursorPosition: number;
+    wordStart: number;
+    type: 'consultation' | 'admission';
+  } | null>(null);
   const [activeMedicationAutocomplete, setActiveMedicationAutocomplete] = useState<{
     sectionId: string;
     position: { top: number; left: number };
@@ -518,6 +526,67 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     } else if (activePhysicalExamAutocomplete && activePhysicalExamAutocomplete.sectionId === sectionId) {
       setActivePhysicalExamAutocomplete(null);
     }
+
+    // Handle consultation reason autocomplete
+    const isConsultationReasonSection = section.id === 'reason' || section.id === 'chief' ||
+      section.name.toLowerCase().includes('reason for consultation') ||
+      section.name.toLowerCase().includes('reason for admission') ||
+      section.name.toLowerCase().includes('chief complaint');
+
+    if (isConsultationReasonSection) {
+      const cursorPosition = textarea.selectionStart;
+      
+      // Find the current word being typed at cursor position
+      const beforeCursor = content.slice(0, cursorPosition);
+      const afterCursor = content.slice(cursorPosition);
+      
+      // Find word boundaries for reason terms (more flexible)
+      const wordStartMatch = beforeCursor.match(/[A-Za-z][A-Za-z\s\-\,]*$/);
+      const wordEndMatch = afterCursor.match(/^[A-Za-z\s\-\,]*/);
+      
+      if (wordStartMatch) {
+        const wordStart = cursorPosition - wordStartMatch[0].length;
+        const currentWord = wordStartMatch[0] + (wordEndMatch ? wordEndMatch[0] : '');
+        
+        if (currentWord && currentWord.length >= 2) {
+          // Calculate precise cursor position in the textarea
+          const textBeforeCursor = content.slice(0, cursorPosition);
+          const lines = textBeforeCursor.split('\n');
+          const currentLine = lines.length - 1;
+          const charInLine = lines[lines.length - 1].length;
+          
+          // Get textarea position and line height
+          const rect = textarea.getBoundingClientRect();
+          const style = window.getComputedStyle(textarea);
+          const lineHeight = parseInt(style.lineHeight) || 20;
+          const paddingTop = parseInt(style.paddingTop) || 8;
+          const paddingLeft = parseInt(style.paddingLeft) || 12;
+          
+          // Approximate character width (monospace assumption)
+          const charWidth = 8;
+          
+          const reasonType = section.name.toLowerCase().includes('admission') ? 'admission' : 'consultation';
+          
+          setActiveConsultationReasonAutocomplete({
+            sectionId,
+            position: { 
+              top: rect.top + paddingTop + (currentLine * lineHeight) + lineHeight + 5,
+              left: rect.left + paddingLeft + (charInLine * charWidth)
+            },
+            query: currentWord.trim(),
+            cursorPosition,
+            wordStart,
+            type: reasonType
+          });
+        } else {
+          setActiveConsultationReasonAutocomplete(null);
+        }
+      } else {
+        setActiveConsultationReasonAutocomplete(null);
+      }
+    } else if (activeConsultationReasonAutocomplete && activeConsultationReasonAutocomplete.sectionId === sectionId) {
+      setActiveConsultationReasonAutocomplete(null);
+    }
     
     // Handle imaging abbreviation detection for quick template insertion
     const isImagingSection = section.type === 'imaging' || 
@@ -816,6 +885,39 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       if (textarea) {
         textarea.focus();
         const newCursorPos = wordStart + finding.length;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 0);
+  };
+
+  const handleConsultationReasonSelect = (reason: string) => {
+    if (!activeConsultationReasonAutocomplete) return;
+    
+    const { sectionId, cursorPosition, wordStart } = activeConsultationReasonAutocomplete;
+    const currentContent = noteData.content[sectionId] || '';
+    
+    // Replace the current word with the selected reason
+    const newContent = 
+      currentContent.slice(0, wordStart) + 
+      reason + 
+      currentContent.slice(cursorPosition);
+    
+    setNoteData(prev => ({
+      ...prev,
+      content: {
+        ...prev.content,
+        [sectionId]: newContent
+      }
+    }));
+    
+    setActiveConsultationReasonAutocomplete(null);
+    
+    // Focus back to the textarea
+    setTimeout(() => {
+      const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
+      if (textarea) {
+        textarea.focus();
+        const newCursorPos = wordStart + reason.length;
         textarea.setSelectionRange(newCursorPos, newCursorPos);
       }
     }, 0);
@@ -1213,22 +1315,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                       />
                     )}
                     
-                    {/* Consultation/Admission Reason Autocomplete - Show for reason sections */}
-                    {(section.id === 'reason' || section.id === 'chief' ||
-                      section.name.toLowerCase().includes('reason for consultation') ||
-                      section.name.toLowerCase().includes('reason for admission') ||
-                      section.name.toLowerCase().includes('chief complaint')) && (
-                      <ConsultationReasonAutocomplete
-                        value={noteData.content[section.id] || ''}
-                        onChange={(value) => setNoteData(prev => ({
-                          ...prev,
-                          content: { ...prev.content, [section.id]: value }
-                        }))}
-                        type={section.name.toLowerCase().includes('admission') ? 'admission' : 'consultation'}
-                        placeholder={`Search ${section.name.toLowerCase().includes('admission') ? 'admission' : 'consultation'} reasons...`}
-                        className="w-48"
-                      />
-                    )}
+
                     
                     {/* Lab Values Button - Show for lab sections in header */}
                     {(section.type === 'labs' || 
@@ -1359,6 +1446,11 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                           section.name.toLowerCase().includes('physical') ||
                           section.name.toLowerCase().includes('exam')
                         ? ', start typing for physical exam findings autocomplete'
+                        : section.id === 'reason' || section.id === 'chief' ||
+                          section.name.toLowerCase().includes('reason for consultation') ||
+                          section.name.toLowerCase().includes('reason for admission') ||
+                          section.name.toLowerCase().includes('chief complaint')
+                        ? ', start typing consultation/admission reasons for autocomplete'
                         : ''
                     })`}
                     className="min-h-[100px] resize-none"
@@ -1433,6 +1525,17 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                       position={activePhysicalExamAutocomplete.position}
                       onSelect={handlePhysicalExamSelect}
                       onClose={() => setActivePhysicalExamAutocomplete(null)}
+                      sectionId={section.id}
+                    />
+                  )}
+
+                  {activeConsultationReasonAutocomplete && activeConsultationReasonAutocomplete.sectionId === section.id && (
+                    <ConsultationReasonAutocomplete
+                      query={activeConsultationReasonAutocomplete.query}
+                      position={activeConsultationReasonAutocomplete.position}
+                      onSelect={handleConsultationReasonSelect}
+                      onClose={() => setActiveConsultationReasonAutocomplete(null)}
+                      type={activeConsultationReasonAutocomplete.type}
                       sectionId={section.id}
                     />
                   )}
