@@ -38,6 +38,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Initialize user endpoint
+  app.post("/api/init-user", async (req, res) => {
+    try {
+      const userId = getMockUserId();
+      // Ensure user exists
+      let user = await storage.getUser(userId);
+      if (!user) {
+        user = await storage.createUser({
+          id: userId,
+          username: "mock-user",
+          email: "doctor@hospital.com",
+          firstName: "Dr. Sarah",
+          lastName: "Mitchell",
+          specialty: "Emergency Medicine"
+        });
+      }
+      res.json({ message: "User initialized", user });
+    } catch (error) {
+      console.error("Error initializing user:", error);
+      res.status(500).json({ message: "Failed to initialize user" });
+    }
+  });
+
   // Note template routes
   app.get("/api/note-templates", async (req, res) => {
     try {

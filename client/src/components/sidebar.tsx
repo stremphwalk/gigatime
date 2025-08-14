@@ -10,9 +10,7 @@ import {
   Settings, 
   Zap, 
   Users, 
-  ChevronDown, 
-  CheckSquare, 
-  Calendar,
+  ChevronDown,
   ClipboardList,
   User
 } from "lucide-react";
@@ -20,7 +18,6 @@ import { useNoteTemplates } from "../hooks/use-notes";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
 import { SmartPhraseDialog } from "./smart-phrase-dialog";
 import { TemplateBuilderDialog } from "./template-builder-dialog";
-import { TeamCollaboration } from "./team-collaboration";
 import { cn } from "@/lib/utils";
 import type { Note } from "@shared/schema";
 
@@ -30,13 +27,14 @@ interface SidebarProps {
   selectedNote: Note | null;
   isLoading: boolean;
   notes: Note[];
+  currentView: 'notes' | 'teams';
+  onViewChange: (view: 'notes' | 'teams') => void;
 }
 
-export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, notes }: SidebarProps) {
+export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, notes, currentView, onViewChange }: SidebarProps) {
   const [expandedSections, setExpandedSections] = useState({
     notes: true,
-    smartPhrases: true,
-    teams: true
+    smartPhrases: true
   });
   
   const { templates } = useNoteTemplates();
@@ -185,17 +183,16 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
                     <p className="text-xs text-gray-500 text-center py-2">No smart phrases yet</p>
                   ) : (
                     phrases?.map((phrase) => (
-                      <SmartPhraseDialog key={phrase.id} phrase={phrase}>
-                        <div 
-                          className="text-xs p-2 bg-gray-50 rounded border hover:bg-gray-100 cursor-pointer"
-                          data-testid={`phrase-item-${phrase.id}`}
-                        >
-                          <div className="font-medium">/{phrase.trigger}</div>
-                          {phrase.description && (
-                            <div className="text-gray-500 mt-1 truncate">{phrase.description}</div>
-                          )}
-                        </div>
-                      </SmartPhraseDialog>
+                      <div 
+                        key={phrase.id}
+                        className="text-xs p-2 bg-gray-50 rounded border hover:bg-gray-100 cursor-pointer"
+                        data-testid={`phrase-item-${phrase.id}`}
+                      >
+                        <div className="font-medium">/{phrase.trigger}</div>
+                        {phrase.description && (
+                          <div className="text-gray-500 mt-1 truncate">{phrase.description}</div>
+                        )}
+                      </div>
                     ))
                   )}
                 </div>
@@ -208,28 +205,17 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
         <div className="bg-white rounded-lg shadow-sm border border-gray-100">
           <Button
             variant="ghost"
-            className="w-full p-3 text-left flex items-center justify-between hover:bg-gray-50 rounded-t-lg"
-            onClick={() => toggleSection('teams')}
-            data-testid="toggle-teams-section"
+            className={cn(
+              "w-full p-3 text-left flex items-center space-x-3 hover:bg-gray-50 rounded-lg",
+              currentView === 'teams' && "bg-blue-50 border border-professional-blue"
+            )}
+            onClick={() => onViewChange('teams')}
+            data-testid="teams-menu-button"
           >
-            <div className="flex items-center space-x-3">
-              <Users className="text-medical-teal" size={16} />
-              <span className="font-medium">Teams</span>
-            </div>
-            <ChevronDown 
-              className={cn(
-                "text-gray-400 transition-transform",
-                expandedSections.teams ? "rotate-0" : "-rotate-90"
-              )} 
-              size={14} 
-            />
+            <Users className="text-medical-teal" size={16} />
+            <span className="font-medium">Teams</span>
+            <Badge className="ml-auto bg-success-green text-white text-xs">6</Badge>
           </Button>
-          
-          {expandedSections.teams && (
-            <div className="border-t border-gray-100 p-2">
-              <TeamCollaboration />
-            </div>
-          )}
         </div>
 
         {/* Recent Notes */}
