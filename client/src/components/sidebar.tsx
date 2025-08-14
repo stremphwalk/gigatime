@@ -75,10 +75,9 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
           <div className="w-8 h-8 bg-medical-teal rounded-lg flex items-center justify-center">
             <ClipboardList className="text-white" size={16} />
           </div>
-          <h1 className="text-xl font-semibold text-medical-teal">CharTNote</h1>
+          <h1 className="text-xl font-semibold text-medical-teal">Arinote</h1>
         </div>
       </div>
-
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {/* Notes Section */}
@@ -228,7 +227,6 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
           </div>
         </div>
       </div>
-
       {/* User Profile */}
       <div className="p-4 border-t border-gray-200 bg-white">
         <div className="flex items-center space-x-3">
