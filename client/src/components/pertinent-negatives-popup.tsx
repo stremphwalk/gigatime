@@ -24,17 +24,17 @@ import {
 } from "lucide-react";
 import { 
   PERTINENT_NEGATIVE_SYSTEMS, 
-  formatPertinentNegatives,
-  type PertinentNegativePreset 
+  formatPertinentNegatives
 } from "@/lib/pertinent-negatives";
+import { usePertinentNegativePresets, useCreatePertinentNegativePreset } from "@/hooks/use-pertinent-negative-presets";
+import { useToast } from "@/hooks/use-toast";
+import type { PertinentNegativePreset } from "@shared/schema";
 import { cn } from "@/lib/utils";
 
 interface PertinentNegativesPopupProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: (negativeText: string) => void;
-  presets?: PertinentNegativePreset[];
-  onSavePreset?: (preset: Omit<PertinentNegativePreset, 'id' | 'createdAt'>) => void;
 }
 
 const SYSTEM_ICONS: Record<string, React.ComponentType<any>> = {
@@ -51,13 +51,16 @@ const SYSTEM_ICONS: Record<string, React.ComponentType<any>> = {
 export function PertinentNegativesPopup({ 
   isOpen, 
   onClose, 
-  onConfirm, 
-  presets = [],
-  onSavePreset 
+  onConfirm 
 }: PertinentNegativesPopupProps) {
   const [selectedSymptoms, setSelectedSymptoms] = useState<Record<string, string[]>>({});
   const [presetName, setPresetName] = useState("");
   const [showPresetSave, setShowPresetSave] = useState(false);
+  
+  // Fetch presets and mutations
+  const { data: presets = [], isLoading: presetsLoading } = usePertinentNegativePresets();
+  const createPresetMutation = useCreatePertinentNegativePreset();
+  const { toast } = useToast();
 
   // Reset selections when popup opens/closes
   useEffect(() => {
@@ -106,21 +109,37 @@ export function PertinentNegativesPopup({
     onClose();
   };
 
-  const handleSavePreset = () => {
-    if (!presetName.trim()) return;
+  const handleSavePreset = async () => {
+    if (!presetName.trim() || getSelectedCount() === 0) return;
     
-    if (onSavePreset) {
-      onSavePreset({
-        name: presetName,
+    try {
+      await createPresetMutation.mutateAsync({
+        name: presetName.trim(),
         selectedSymptoms
       });
+      
+      toast({
+        title: "Preset saved",
+        description: `"${presetName.trim()}" has been saved successfully.`,
+      });
+      
+      setPresetName("");
+      setShowPresetSave(false);
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to save preset. Please try again.",
+        variant: "destructive",
+      });
     }
-    setShowPresetSave(false);
-    setPresetName("");
   };
 
   const loadPreset = (preset: PertinentNegativePreset) => {
     setSelectedSymptoms(preset.selectedSymptoms);
+    toast({
+      title: "Preset loaded",
+      description: `Loaded "${preset.name}" preset.`,
+    });
   };
 
   return (
@@ -137,11 +156,11 @@ export function PertinentNegativesPopup({
         
         <div className="flex flex-col flex-1 overflow-hidden">
           {/* Preset Section */}
-          {presets.length > 0 && (
+          {(presets as PertinentNegativePreset[]).length > 0 && (
             <div className="mb-4 flex-shrink-0">
               <Label className="text-sm font-medium mb-2 block">Load Preset:</Label>
               <div className="flex flex-wrap gap-2">
-                {presets.map(preset => (
+                {(presets as PertinentNegativePreset[]).map(preset => (
                   <Button
                     key={preset.id}
                     size="sm"
@@ -278,7 +297,7 @@ export function PertinentNegativesPopup({
             {/* Action Buttons */}
             <div className="flex justify-between items-center">
               <div className="flex space-x-2">
-                {onSavePreset && getSelectedCount() > 0 && (
+                {getSelectedCount() > 0 && (
                   <Button
                     variant="outline"
                     size="sm"

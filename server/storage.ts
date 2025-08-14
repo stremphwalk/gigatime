@@ -7,6 +7,7 @@ import {
   smartPhrases,
   teamTodos,
   teamCalendarEvents,
+  pertinentNegativePresets,
   type User,
   type InsertUser,
   type Team,
@@ -22,6 +23,8 @@ import {
   type TeamCalendarEvent,
   type InsertTeamCalendarEvent,
   type TeamMember,
+  type PertinentNegativePreset,
+  type InsertPertinentNegativePreset,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, like, or } from "drizzle-orm";
@@ -70,6 +73,11 @@ export interface IStorage {
   createTeamCalendarEvent(event: InsertTeamCalendarEvent): Promise<TeamCalendarEvent>;
   updateTeamCalendarEvent(id: string, event: Partial<InsertTeamCalendarEvent>): Promise<TeamCalendarEvent>;
   deleteTeamCalendarEvent(id: string): Promise<void>;
+
+  // Pertinent negative preset operations
+  getPertinentNegativePresets(userId: string): Promise<PertinentNegativePreset[]>;
+  createPertinentNegativePreset(preset: Omit<InsertPertinentNegativePreset, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<PertinentNegativePreset>;
+  deletePertinentNegativePreset(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -331,6 +339,30 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTeamCalendarEvent(id: string): Promise<void> {
     await db.delete(teamCalendarEvents).where(eq(teamCalendarEvents.id, id));
+  }
+
+  // Pertinent negative preset operations
+  async getPertinentNegativePresets(userId: string): Promise<PertinentNegativePreset[]> {
+    return db
+      .select()
+      .from(pertinentNegativePresets)
+      .where(eq(pertinentNegativePresets.userId, userId))
+      .orderBy(desc(pertinentNegativePresets.createdAt));
+  }
+
+  async createPertinentNegativePreset(preset: Omit<InsertPertinentNegativePreset, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<PertinentNegativePreset> {
+    const [created] = await db
+      .insert(pertinentNegativePresets)
+      .values({
+        ...preset,
+        userId: 'default-user', // Use default user for now
+      })
+      .returning();
+    return created;
+  }
+
+  async deletePertinentNegativePreset(id: string): Promise<void> {
+    await db.delete(pertinentNegativePresets).where(eq(pertinentNegativePresets.id, id));
   }
 }
 

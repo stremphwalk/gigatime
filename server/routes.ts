@@ -555,6 +555,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Pertinent negative presets routes
+  app.get("/api/pertinent-negative-presets", async (req, res) => {
+    try {
+      const userId = getMockUserId();
+      const presets = await storage.getPertinentNegativePresets(userId);
+      res.json(presets);
+    } catch (error) {
+      console.error("Error fetching pertinent negative presets:", error);
+      res.status(500).json({ message: "Failed to fetch presets" });
+    }
+  });
+
+  app.post("/api/pertinent-negative-presets", async (req, res) => {
+    try {
+      const preset = req.body;
+      const created = await storage.createPertinentNegativePreset(preset);
+      res.json(created);
+    } catch (error) {
+      console.error("Error creating pertinent negative preset:", error);
+      res.status(500).json({ message: "Failed to create preset" });
+    }
+  });
+
+  app.delete("/api/pertinent-negative-presets/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deletePertinentNegativePreset(id);
+      res.json({ message: "Preset deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting pertinent negative preset:", error);
+      res.status(500).json({ message: "Failed to delete preset" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

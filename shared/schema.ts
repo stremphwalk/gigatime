@@ -209,9 +209,28 @@ export const insertTeamCalendarEventSchema = createInsertSchema(teamCalendarEven
   updatedAt: true,
 });
 
+// Pertinent Negatives Presets table
+export const pertinentNegativePresets = pgTable("pertinent_negative_presets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name").notNull(),
+  selectedSymptoms: jsonb("selected_symptoms").$type<Record<string, string[]>>().notNull(),
+  userId: varchar("user_id").default("default-user"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertPertinentNegativePresetSchema = createInsertSchema(pertinentNegativePresets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+
+export type PertinentNegativePreset = typeof pertinentNegativePresets.$inferSelect;
+export type InsertPertinentNegativePreset = z.infer<typeof insertPertinentNegativePresetSchema>;
 
 export type Team = typeof teams.$inferSelect;
 export type InsertTeam = z.infer<typeof insertTeamSchema>;
