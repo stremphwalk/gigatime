@@ -55,19 +55,42 @@ export function FlexibleSmartPhraseBuilder({
 
   const addElement = (type: InteractiveElement['type']) => {
     const elementId = `element_${Date.now()}`;
+    const placeholder = `{{${elementId}}}`;
     const newElement: InteractiveElement = {
       id: elementId,
       type,
-      label: "",
-      placeholder: `{{${elementId}}}`,
+      label: type === 'date' ? 'Date' : type === 'multipicker' ? 'Selection' : 'Nested Selection',
+      placeholder,
       ...(type !== 'date' && { options: [] })
     };
 
-    setFormData(prev => ({
-      ...prev,
-      elements: [...prev.elements, newElement],
-      content: prev.content + ` {{${elementId}}}`
-    }));
+    // Insert placeholder at cursor position in content
+    const contentTextarea = document.getElementById('content') as HTMLTextAreaElement;
+    if (contentTextarea) {
+      const start = contentTextarea.selectionStart;
+      const end = contentTextarea.selectionEnd;
+      const currentContent = formData.content;
+      const newContent = currentContent.substring(0, start) + placeholder + currentContent.substring(end);
+      
+      setFormData(prev => ({
+        ...prev,
+        content: newContent,
+        elements: [...prev.elements, newElement]
+      }));
+
+      // Move cursor after the inserted placeholder and focus
+      setTimeout(() => {
+        contentTextarea.focus();
+        contentTextarea.setSelectionRange(start + placeholder.length, start + placeholder.length);
+      }, 10);
+    } else {
+      // Fallback: append to end if we can't find cursor position
+      setFormData(prev => ({
+        ...prev,
+        content: prev.content + ` ${placeholder}`,
+        elements: [...prev.elements, newElement]
+      }));
+    }
   };
 
   const updateElement = (elementId: string, updates: Partial<InteractiveElement>) => {
@@ -287,7 +310,7 @@ export function FlexibleSmartPhraseBuilder({
               required
             />
             <div className="mt-2 text-sm text-gray-600">
-              Use placeholders like {`{{element_123}}`} where you want interactive elements
+              Click "Insert Element" buttons below to add interactive elements to your text
             </div>
           </CardContent>
         </Card>
@@ -295,45 +318,54 @@ export function FlexibleSmartPhraseBuilder({
         {/* Interactive Elements */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              Interactive Elements
-              <div className="flex space-x-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => addElement("multipicker")}
-                  className="text-xs"
-                >
-                  <MousePointer size={14} className="mr-1" />
-                  Multi-choice
-                </Button>
-                <Button
-                  type="button"
-                  size="sm" 
-                  onClick={() => addElement("nested_multipicker")}
-                  className="text-xs"
-                >
-                  <ChevronRight size={14} className="mr-1" />
-                  Nested Choice
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => addElement("date")}
-                  className="text-xs"
-                >
-                  <Calendar size={14} className="mr-1" />
-                  Date Picker
-                </Button>
-              </div>
+            <CardTitle className="text-lg font-semibold text-medical-teal mb-2">
+              Insert Interactive Elements
             </CardTitle>
+            <p className="text-sm text-gray-600 mb-4">
+              Place your cursor in the content above, then click a button to insert an interactive element at that position
+            </p>
+            <div className="flex space-x-2 flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={() => addElement("date")}
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2 hover:bg-blue-50 hover:border-blue-300"
+                data-testid="button-add-date"
+              >
+                <Calendar size={16} />
+                Insert Date
+              </Button>
+              <Button
+                type="button"
+                onClick={() => addElement("multipicker")}
+                variant="outline" 
+                size="sm"
+                className="flex items-center gap-2 hover:bg-green-50 hover:border-green-300"
+                data-testid="button-add-multipicker"
+              >
+                <MousePointer size={16} />
+                Insert Selection
+              </Button>
+              <Button
+                type="button"
+                onClick={() => addElement("nested_multipicker")}
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-2 hover:bg-purple-50 hover:border-purple-300"
+                data-testid="button-add-nested"
+              >
+                <ChevronRight size={16} />
+                Insert Nested Selection
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4">
             {formData.elements.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <Zap size={48} className="mx-auto mb-2" />
                 <p>No interactive elements yet</p>
-                <p className="text-sm">Add elements using the buttons above</p>
+                <p className="text-sm">Use the buttons above to insert elements into your content</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -410,12 +442,30 @@ export function FlexibleSmartPhraseBuilder({
                           />
                         </div>
                         <div>
-                          <Label>Placeholder ID</Label>
-                          <Input
-                            value={element.placeholder}
-                            onChange={(e) => updateElement(element.id, { placeholder: e.target.value })}
-                placeholder="Placeholder ID like element_id"
-                          />
+                          <Label>Placeholder (appears in content)</Label>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-gray-500 font-mono">{`{{`}</span>
+                            <Input
+                              value={element.id}
+                              onChange={(e) => {
+                                const oldPlaceholder = element.placeholder;
+                                const newPlaceholder = `{{${e.target.value}}}`;
+                                updateElement(element.id, { 
+                                  id: e.target.value,
+                                  placeholder: newPlaceholder 
+                                });
+                                // Update content with new placeholder
+                                setFormData(prev => ({
+                                  ...prev,
+                                  content: prev.content.replace(oldPlaceholder, newPlaceholder)
+                                }));
+                              }}
+                              placeholder="element_name"
+                              className="text-sm font-mono"
+                            />
+                            <span className="text-sm text-gray-500 font-mono">{`}}`}</span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">This appears as {element.placeholder} in your content</p>
                         </div>
                       </div>
 
