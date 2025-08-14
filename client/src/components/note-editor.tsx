@@ -988,7 +988,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
           setShowPertinentNegatives(false);
           setPertinentNegativesSection(null);
         }}
-        onConfirm={handlePertinentNegativesConfirm}
+        onConfirm={(negativeText: string) => handlePertinentNegativesConfirm(negativeText)}
       />
     </div>
   );

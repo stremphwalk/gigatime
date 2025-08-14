@@ -44,6 +44,7 @@ export function AllergyAutocomplete({
           setSelectedIndex(prev => (prev - 1 + suggestions.length) % suggestions.length);
           break;
         case "Enter":
+        case "Tab":
           e.preventDefault();
           if (suggestions[selectedIndex]) {
             onSelect(suggestions[selectedIndex]);
