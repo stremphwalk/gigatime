@@ -12,12 +12,12 @@ export function GlobalDictation() {
   const [isPressed, setIsPressed] = useState(false);
   const [showIcon, setShowIcon] = useState(false);
   const [caretPosition, setCaretPosition] = useState<CaretPosition>({ x: 0, y: 0, element: null });
-  const [pressStartTime, setPressStartTime] = useState<number | null>(null);
   
-  const { isListening, transcript, error, startDictation, stopDictation } = useDictation();
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastTranscriptRef = useRef('');
   const isInsertingRef = useRef(false);
+  
+  const { isListening, transcript, error, startDictation, stopDictation } = useDictation();
 
   // Get caret position in any text input
   const getCaretPosition = useCallback((): CaretPosition => {
@@ -28,39 +28,13 @@ export function GlobalDictation() {
     }
 
     try {
-      let x = 0, y = 0;
-
-      if (activeElement.matches('input, textarea')) {
-        const input = activeElement as HTMLInputElement | HTMLTextAreaElement;
-        const selectionStart = input.selectionStart || 0;
-        
-        // Create a temporary element to measure text
-        const temp = document.createElement('span');
-        temp.style.font = window.getComputedStyle(input).font;
-        temp.style.whiteSpace = 'pre';
-        temp.style.position = 'absolute';
-        temp.style.visibility = 'hidden';
-        temp.textContent = input.value.substring(0, selectionStart) || '.';
-        document.body.appendChild(temp);
-        
-        const rect = input.getBoundingClientRect();
-        const tempRect = temp.getBoundingClientRect();
-        
-        x = rect.left + (tempRect.width % rect.width);
-        y = rect.top + Math.floor(tempRect.width / rect.width) * tempRect.height;
-        
-        document.body.removeChild(temp);
-      } else if (activeElement.matches('[contenteditable]')) {
-        const selection = window.getSelection();
-        if (selection && selection.rangeCount > 0) {
-          const range = selection.getRangeAt(0);
-          const rect = range.getBoundingClientRect();
-          x = rect.left;
-          y = rect.top;
-        }
-      }
-
-      return { x, y, element: activeElement };
+      const rect = activeElement.getBoundingClientRect();
+      // Position the icon slightly above and to the right of the input
+      return { 
+        x: rect.left + 10, 
+        y: rect.top - 5, 
+        element: activeElement 
+      };
     } catch (error) {
       console.error('Error getting caret position:', error);
       return { x: 0, y: 0, element: activeElement };
@@ -74,29 +48,20 @@ export function GlobalDictation() {
 
     const activeElement = document.activeElement as HTMLElement;
     
-    if (!activeElement) {
-      isInsertingRef.current = false;
-      return;
-    }
-
     try {
-      if (activeElement.matches('input, textarea')) {
+      if (activeElement && activeElement.matches('input, textarea')) {
         const input = activeElement as HTMLInputElement | HTMLTextAreaElement;
         const start = input.selectionStart || 0;
         const end = input.selectionEnd || 0;
         const value = input.value;
         
-        // Replace selected text or insert at cursor
-        const newValue = value.substring(0, start) + text + value.substring(end);
-        input.value = newValue;
+        input.value = value.slice(0, start) + text + value.slice(end);
+        input.setSelectionRange(start + text.length, start + text.length);
         
-        // Move cursor to end of inserted text
-        const newCursorPos = start + text.length;
-        input.setSelectionRange(newCursorPos, newCursorPos);
-        
-        // Trigger input event
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-      } else if (activeElement.matches('[contenteditable]')) {
+        // Trigger input event for React
+        const event = new Event('input', { bubbles: true });
+        input.dispatchEvent(event);
+      } else if (activeElement && activeElement.matches('[contenteditable]')) {
         const selection = window.getSelection();
         if (selection && selection.rangeCount > 0) {
           const range = selection.getRangeAt(0);
@@ -117,13 +82,10 @@ export function GlobalDictation() {
   // Handle transcript updates
   useEffect(() => {
     if (transcript && transcript !== lastTranscriptRef.current && transcript.trim()) {
-      // For final transcripts, insert the full text and add a space
-      if (!transcript.includes('...') && transcript.length > lastTranscriptRef.current.length) {
-        const newText = transcript.slice(lastTranscriptRef.current.length);
-        if (newText.trim()) {
-          insertTextAtCaret(newText + ' ');
-          lastTranscriptRef.current = transcript;
-        }
+      const newText = transcript.slice(lastTranscriptRef.current.length);
+      if (newText.trim()) {
+        insertTextAtCaret(newText + ' ');
+        lastTranscriptRef.current = transcript;
       }
     }
   }, [transcript, insertTextAtCaret]);
@@ -131,37 +93,34 @@ export function GlobalDictation() {
   // Handle Alt/Option key press
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.altKey && !isPressed) {
+      // Check for Alt/Option key and prevent repeat events
+      if (e.altKey && !isPressed && !e.repeat) {
+        console.log('🎤 Alt key pressed - starting dictation');
         e.preventDefault();
         setIsPressed(true);
-        setPressStartTime(Date.now());
         
-        // Update caret position when Alt is first pressed
+        // Get the current caret position
         const position = getCaretPosition();
-        setCaretPosition(position);
-        
-        // Show icon after brief delay
-        timeoutRef.current = setTimeout(() => {
-          if (Date.now() - (pressStartTime || 0) >= 200) {
-            setShowIcon(true);
-            startDictation();
-          }
-        }, 200);
+        if (position.element) {
+          setCaretPosition(position);
+          setShowIcon(true);
+          console.log('🎤 Starting dictation at position:', position);
+          startDictation();
+        } else {
+          console.log('🎤 No text field focused');
+        }
       }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
+      // Check for Alt key release
       if (!e.altKey && isPressed) {
+        console.log('🎤 Alt key released - stopping dictation');
+        e.preventDefault();
+        
         setIsPressed(false);
         setShowIcon(false);
-        setPressStartTime(null);
         lastTranscriptRef.current = '';
-        
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-          timeoutRef.current = null;
-        }
-        
         stopDictation();
       }
     };
@@ -169,34 +128,25 @@ export function GlobalDictation() {
     // Handle window blur to stop dictation if Alt is held when window loses focus
     const handleBlur = () => {
       if (isPressed) {
+        console.log('🎤 Window lost focus - stopping dictation');
         setIsPressed(false);
         setShowIcon(false);
-        setPressStartTime(null);
         lastTranscriptRef.current = '';
-        
-        if (timeoutRef.current) {
-          clearTimeout(timeoutRef.current);
-          timeoutRef.current = null;
-        }
-        
         stopDictation();
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    document.addEventListener('keyup', handleKeyUp);
+    // Use capture phase to catch events early
+    document.addEventListener('keydown', handleKeyDown, true);
+    document.addEventListener('keyup', handleKeyUp, true);
     window.addEventListener('blur', handleBlur);
 
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      document.removeEventListener('keyup', handleKeyUp);
+      document.removeEventListener('keydown', handleKeyDown, true);
+      document.removeEventListener('keyup', handleKeyUp, true);
       window.removeEventListener('blur', handleBlur);
-      
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
-      }
     };
-  }, [isPressed, pressStartTime, startDictation, stopDictation, getCaretPosition]);
+  }, [isPressed, startDictation, stopDictation, getCaretPosition]);
 
   if (!showIcon || !caretPosition.element) {
     return null;
@@ -207,30 +157,29 @@ export function GlobalDictation() {
       className="fixed z-[9999] pointer-events-none"
       style={{
         left: `${caretPosition.x}px`,
-        top: `${caretPosition.y - 30}px`,
+        top: `${caretPosition.y}px`,
       }}
     >
-      <div className="flex items-center space-x-2 bg-blue-500 text-white px-2 py-1 rounded-md shadow-lg">
+      <div className="flex items-center space-x-2 bg-blue-600 text-white px-3 py-2 rounded-lg shadow-lg border border-blue-400">
         {isListening ? (
-          <Mic className="w-4 h-4 animate-pulse" />
+          <Mic className="w-4 h-4 animate-pulse text-green-300" />
         ) : (
-          <MicOff className="w-4 h-4" />
+          <MicOff className="w-4 h-4 text-red-300" />
         )}
-        <span className="text-xs">
-          {error ? 'Error' : isListening ? 'Listening...' : 'Starting...'}
+        <span className="text-sm font-medium">
+          {error ? '❌ Error' : isListening ? '🎤 Listening...' : '⏳ Starting...'}
         </span>
       </div>
       
       {/* Live transcript preview */}
-      {transcript && !transcript.includes('...') && (
-        <div className="mt-1 bg-gray-800 text-white text-xs px-2 py-1 rounded max-w-xs">
-          {transcript}
+      {transcript && (
+        <div className="mt-2 bg-gray-900 text-white text-sm px-3 py-2 rounded-lg max-w-xs shadow-lg border border-gray-700">
+          <div className="font-mono">{transcript}</div>
         </div>
       )}
       
-      {/* Error display */}
       {error && (
-        <div className="mt-1 bg-red-500 text-white text-xs px-2 py-1 rounded max-w-xs">
+        <div className="mt-2 bg-red-900 text-red-100 text-sm px-3 py-2 rounded-lg max-w-xs shadow-lg border border-red-700">
           {error}
         </div>
       )}

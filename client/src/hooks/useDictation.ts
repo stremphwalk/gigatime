@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { createClient, LiveTranscriptionEvents } from '@deepgram/sdk';
+import { createClient, LiveTranscriptionEvents, type LiveSchema } from '@deepgram/sdk';
 
 interface DictationState {
   isListening: boolean;
@@ -16,7 +16,6 @@ export function useDictation() {
     error: null
   });
 
-  const deepgramRef = useRef<any>(null);
   const connectionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -29,44 +28,42 @@ export function useDictation() {
       isActiveRef.current = true;
       setState(prev => ({ ...prev, isListening: true, error: null, transcript: '' }));
 
-      // Initialize Deepgram client
-      if (!deepgramRef.current) {
-        // Get API key from backend
-        const keyResponse = await fetch('/api/deepgram-key');
-        const { apiKey } = await keyResponse.json();
-        deepgramRef.current = createClient(apiKey);
-      }
+      // Get API key from backend
+      const keyResponse = await fetch('/api/deepgram-key');
+      const { apiKey } = await keyResponse.json();
+      
+      // Create Deepgram client
+      const deepgram = createClient(apiKey);
 
       // Get microphone access
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: 16000
+          autoGainControl: true
         } 
       });
       streamRef.current = stream;
 
-      // Create Deepgram connection
-      const connection = deepgramRef.current.listen.live({
+      // Create live transcription connection
+      const connection = deepgram.listen.live({
         model: 'nova-2',
         language: 'en-US',
         smart_format: true,
         interim_results: true,
-        endpointing: 300,
+        filler_words: true,
         utterance_end_ms: 1000
-      });
+      } as LiveSchema);
 
       connectionRef.current = connection;
 
       // Set up event listeners
-      connection.on(LiveTranscriptionEvents.Open, () => {
+      connection.addListener(LiveTranscriptionEvents.Open, () => {
         console.log('Deepgram connection opened');
         setState(prev => ({ ...prev, isConnected: true }));
       });
 
-      connection.on(LiveTranscriptionEvents.Transcript, (data: any) => {
+      connection.addListener(LiveTranscriptionEvents.Transcript, (data: any) => {
         const transcript = data.channel?.alternatives?.[0]?.transcript;
         if (transcript && transcript.trim()) {
           setState(prev => ({ 
@@ -76,30 +73,28 @@ export function useDictation() {
         }
       });
 
-      connection.on(LiveTranscriptionEvents.Error, (error: any) => {
+      connection.addListener(LiveTranscriptionEvents.Error, (error: any) => {
         console.error('Deepgram error:', error);
         setState(prev => ({ ...prev, error: error.message || 'Connection error' }));
       });
 
-      connection.on(LiveTranscriptionEvents.Close, () => {
+      connection.addListener(LiveTranscriptionEvents.Close, () => {
         console.log('Deepgram connection closed');
         setState(prev => ({ ...prev, isConnected: false }));
       });
 
       // Set up MediaRecorder to send audio to Deepgram
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm;codecs=opus'
-      });
-      
+      const mediaRecorder = new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
 
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0 && connection.getReadyState() === 1) {
+      mediaRecorder.addEventListener('dataavailable', (event) => {
+        // iOS SAFARI FIX: Prevent packetZero from being sent
+        if (event.data.size > 0) {
           connection.send(event.data);
         }
-      };
+      });
 
-      mediaRecorder.start(100); // Send data every 100ms
+      mediaRecorder.start(250); // Send data every 250ms
 
     } catch (error) {
       console.error('Failed to start dictation:', error);
