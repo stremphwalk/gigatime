@@ -45,27 +45,7 @@ export const LAB_PANELS: LabPanel[] = [
       { name: "Estimated Glomerular Filtration Rate", abbreviation: "eGFR", normalRange: ">60", unit: "mL/min/1.73m²" }
     ]
   },
-  {
-    name: "Comprehensive Metabolic Panel",
-    abbreviation: "CMP",
-    category: "Chemistry",
-    tests: [
-      { name: "Sodium", abbreviation: "Na", normalRange: "136-145", unit: "mEq/L" },
-      { name: "Potassium", abbreviation: "K", normalRange: "3.5-5.0", unit: "mEq/L" },
-      { name: "Chloride", abbreviation: "Cl", normalRange: "98-107", unit: "mEq/L" },
-      { name: "Carbon Dioxide", abbreviation: "CO2", normalRange: "22-28", unit: "mEq/L" },
-      { name: "Blood Urea Nitrogen", abbreviation: "BUN", normalRange: "7-20", unit: "mg/dL" },
-      { name: "Creatinine", abbreviation: "Cr", normalRange: "0.6-1.2", unit: "mg/dL" },
-      { name: "Glucose", abbreviation: "Glu", normalRange: "70-99", unit: "mg/dL" },
-      { name: "Total Protein", abbreviation: "TP", normalRange: "6.0-8.3", unit: "g/dL" },
-      { name: "Albumin", abbreviation: "Alb", normalRange: "3.5-5.0", unit: "g/dL" },
-      { name: "Total Bilirubin", abbreviation: "T.Bili", normalRange: "0.3-1.2", unit: "mg/dL" },
-      { name: "Alkaline Phosphatase", abbreviation: "ALP", normalRange: "44-147", unit: "U/L" },
-      { name: "Alanine Aminotransferase", abbreviation: "ALT", normalRange: "7-56", unit: "U/L" },
-      { name: "Aspartate Aminotransferase", abbreviation: "AST", normalRange: "10-40", unit: "U/L" },
-      { name: "Estimated Glomerular Filtration Rate", abbreviation: "eGFR", normalRange: ">60", unit: "mL/min/1.73m²" }
-    ]
-  },
+
   {
     name: "Liver Function Tests",
     abbreviation: "LFTs",
