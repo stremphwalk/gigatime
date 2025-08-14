@@ -350,7 +350,7 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(pertinentNegativePresets.createdAt));
   }
 
-  async createPertinentNegativePreset(preset: Omit<InsertPertinentNegativePreset, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<PertinentNegativePreset> {
+  async createPertinentNegativePreset(preset: Omit<InsertPertinentNegativePreset, 'id' | 'createdAt' | 'updatedAt'>): Promise<PertinentNegativePreset> {
     const [created] = await db
       .insert(pertinentNegativePresets)
       .values({
@@ -359,6 +359,15 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return created;
+  }
+
+  async updatePertinentNegativePreset(id: string, updates: Partial<Pick<InsertPertinentNegativePreset, 'name' | 'selectedSymptoms'>>): Promise<PertinentNegativePreset> {
+    const [updated] = await db
+      .update(pertinentNegativePresets)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(pertinentNegativePresets.id, id))
+      .returning();
+    return updated;
   }
 
   async deletePertinentNegativePreset(id: string): Promise<void> {

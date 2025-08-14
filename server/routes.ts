@@ -578,6 +578,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/pertinent-negative-presets/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updated = await storage.updatePertinentNegativePreset(id, req.body);
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating pertinent negative preset:", error);
+      res.status(500).json({ message: "Failed to update preset" });
+    }
+  });
+
+  app.delete("/api/pertinent-negative-presets/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deletePertinentNegativePreset(id);
+      res.json({ message: "Preset deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting pertinent negative preset:", error);
+      res.status(500).json({ message: "Failed to delete preset" });
+    }
+  });
+
   app.delete("/api/pertinent-negative-presets/:id", async (req, res) => {
     try {
       const { id } = req.params;

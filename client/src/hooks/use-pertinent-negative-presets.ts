@@ -22,6 +22,19 @@ export const useCreatePertinentNegativePreset = () => {
   });
 };
 
+export const useUpdatePertinentNegativePreset = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async ({ id, ...updates }: { id: string } & Partial<InsertPertinentNegativePreset>) => {
+      return apiRequest("PUT", `/api/pertinent-negative-presets/${id}`, updates);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/pertinent-negative-presets"] });
+    },
+  });
+};
+
 export const useDeletePertinentNegativePreset = () => {
   const queryClient = useQueryClient();
 

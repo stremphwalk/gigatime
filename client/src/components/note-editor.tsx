@@ -338,18 +338,24 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     setShowPertinentNegatives(true);
   };
 
-  const handlePertinentNegativesConfirm = (negativeText: string) => {
-    if (pertinentNegativesSection) {
-      const currentContent = noteData.content[pertinentNegativesSection] || '';
+  const handlePertinentNegativesConfirm = (negativeText: string, targetSectionId?: string) => {
+    const sectionId = targetSectionId || pertinentNegativesSection;
+    if (sectionId && negativeText.trim()) {
+      const currentContent = noteData.content[sectionId] || '';
       const newContent = currentContent + (currentContent ? '\n\n' : '') + negativeText;
       
       setNoteData(prev => ({
         ...prev,
         content: {
           ...prev.content,
-          [pertinentNegativesSection]: newContent
+          [sectionId]: newContent
         }
       }));
+      
+      toast({
+        title: "Pertinent negatives added",
+        description: "The selected pertinent negatives have been added to your note.",
+      });
     }
     setShowPertinentNegatives(false);
     setPertinentNegativesSection(null);
