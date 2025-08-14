@@ -123,11 +123,13 @@ export function AllergyAutocomplete({
 
 function getAllergyCategory(allergy: string): string {
   const drugAllergies = ["Penicillin", "Sulfa drugs", "Codeine", "Morphine", "Aspirin", "NSAIDs", "Vancomycin", "Erythromycin"];
+  const medicalAllergies = ["Latex", "Iodine/Contrast dye", "Adhesive tape"];
   const foodAllergies = ["Shellfish", "Peanuts", "Tree nuts", "Eggs", "Milk/Dairy", "Soy", "Wheat/Gluten"];
-  const environmentalAllergies = ["Latex", "Dust mites", "Pollen", "Pet dander", "Mold", "Bee stings"];
-  const otherAllergies = ["Iodine/Contrast dye", "Adhesive tape", "Food dyes", "Preservatives"];
+  const environmentalAllergies = ["Dust mites", "Pollen", "Pet dander", "Mold", "Bee stings"];
+  const otherAllergies = ["Food dyes", "Preservatives"];
 
-  if (drugAllergies.includes(allergy)) return "Drug allergy";
+  if (drugAllergies.includes(allergy)) return "Medication";
+  if (medicalAllergies.includes(allergy)) return "Medical material";
   if (foodAllergies.includes(allergy)) return "Food allergy"; 
   if (environmentalAllergies.includes(allergy)) return "Environmental";
   if (otherAllergies.includes(allergy)) return "Other";

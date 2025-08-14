@@ -4,6 +4,13 @@ export const COMMON_ALLERGIES = [
   "Sulfa drugs", 
   "Latex",
   "Iodine/Contrast dye",
+  "Codeine",
+  "Morphine",
+  "Aspirin",
+  "NSAIDs",
+  "Adhesive tape",
+  "Vancomycin",
+  "Erythromycin",
   "Shellfish",
   "Peanuts",
   "Tree nuts",
@@ -11,20 +18,21 @@ export const COMMON_ALLERGIES = [
   "Milk/Dairy",
   "Soy",
   "Wheat/Gluten",
-  "Codeine",
-  "Morphine",
-  "Aspirin",
-  "NSAIDs",
-  "Adhesive tape",
   "Bee stings",
   "Dust mites",
   "Pollen",
   "Pet dander",
   "Mold",
   "Food dyes",
-  "Preservatives",
-  "Vancomycin",
-  "Erythromycin"
+  "Preservatives"
+];
+
+export const TOP_MEDICAL_ALLERGIES = [
+  "Penicillin",
+  "Sulfa drugs", 
+  "NSAIDs",
+  "Codeine",
+  "Latex"
 ];
 
 export const MEDICAL_CONDITIONS = [

@@ -37,7 +37,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { noteTemplates } from "../lib/note-templates";
-import { COMMON_ALLERGIES } from "@/lib/medical-conditions";
+import { COMMON_ALLERGIES, TOP_MEDICAL_ALLERGIES } from "@/lib/medical-conditions";
 import type { Note, NoteTemplate } from "@shared/schema";
 
 interface NoteEditorProps {
@@ -868,8 +868,8 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                   section.name.toLowerCase().includes('allergies') ||
                   section.name.toLowerCase().includes('allergy')) && (
                   <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-gray-100">
-                    <div className="text-xs text-gray-500 mr-2 mt-1">Quick add:</div>
-                    {COMMON_ALLERGIES.slice(0, 10).map((allergy) => (
+                    <div className="text-xs text-gray-500 mr-2 mt-1">Common medications:</div>
+                    {TOP_MEDICAL_ALLERGIES.map((allergy) => (
                       <Badge
                         key={allergy}
                         variant="outline"
