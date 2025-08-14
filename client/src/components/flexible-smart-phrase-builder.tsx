@@ -174,14 +174,21 @@ export function FlexibleSmartPhraseBuilder({
         const updateOptions = (options: any[]): any[] => {
           return options.map(opt => {
             if (!parentId && opt.id === optionId) {
-              return { ...opt, [field]: value };
+              // When updating label, automatically set value to match label for text generation
+              const update = field === 'label' ? { label: value, value: value } : { [field]: value };
+              return { ...opt, ...update };
             }
             if (parentId && opt.id === parentId && opt.children) {
               return {
                 ...opt,
-                children: opt.children.map((child: any) =>
-                  child.id === optionId ? { ...child, [field]: value } : child
-                )
+                children: opt.children.map((child: any) => {
+                  if (child.id === optionId) {
+                    // When updating label, automatically set value to match label for text generation
+                    const update = field === 'label' ? { label: value, value: value } : { [field]: value };
+                    return { ...child, ...update };
+                  }
+                  return child;
+                })
               };
             }
             return opt;
@@ -595,7 +602,6 @@ export function FlexibleSmartPhraseBuilder({
                                                 onChange={(e) => updateOption(element.id, child.id, 'label', e.target.value, option.id)}
                                                 placeholder="Enter sub-option text..."
                                                 className="flex-1 text-sm"
-                                                size="sm"
                                               />
                                               <Button
                                                 type="button"
