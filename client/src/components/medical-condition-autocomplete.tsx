@@ -63,7 +63,6 @@ export function MedicalConditionAutocomplete({
         setSelectedIndex(prev => prev === 0 ? suggestions.length - 1 : prev - 1);
         break;
       case 'Tab':
-      case 'Enter':
         e.preventDefault();
         if (suggestions[selectedIndex]) {
           onSelect(suggestions[selectedIndex], cursorPosition);
@@ -110,7 +109,7 @@ export function MedicalConditionAutocomplete({
       <Card className="border border-gray-200 shadow-lg max-h-64 overflow-y-auto bg-white">
         <div className="p-2">
           <div className="text-xs text-gray-500 mb-2 px-2">
-            Medical Conditions (Press Tab to select)
+            Medical Conditions (Press Tab to select, Enter for new line)
           </div>
           {suggestions.map((condition, index) => (
             <div
