@@ -1,4 +1,32 @@
 // Common medical conditions for past medical history autocomplete
+export const COMMON_ALLERGIES = [
+  "Penicillin",
+  "Sulfa drugs", 
+  "Latex",
+  "Iodine/Contrast dye",
+  "Shellfish",
+  "Peanuts",
+  "Tree nuts",
+  "Eggs", 
+  "Milk/Dairy",
+  "Soy",
+  "Wheat/Gluten",
+  "Codeine",
+  "Morphine",
+  "Aspirin",
+  "NSAIDs",
+  "Adhesive tape",
+  "Bee stings",
+  "Dust mites",
+  "Pollen",
+  "Pet dander",
+  "Mold",
+  "Food dyes",
+  "Preservatives",
+  "Vancomycin",
+  "Erythromycin"
+];
+
 export const MEDICAL_CONDITIONS = [
   // Cardiovascular
   "Hypertension",
@@ -186,6 +214,36 @@ function isFuzzyMatch(query: string, target: string): boolean {
   
   return queryIndex >= query.length - 1 && errors <= maxDistance;
 }
+
+export const searchAllergies = (query: string, limit = 10): string[] => {
+  if (!query || query.length < 1) return [];
+  
+  const normalizedQuery = query.toLowerCase().trim();
+  
+  // First, find exact matches at the beginning
+  const exactMatches = COMMON_ALLERGIES.filter(allergy =>
+    allergy.toLowerCase().startsWith(normalizedQuery)
+  );
+  
+  // Then, find matches anywhere in the string
+  const partialMatches = COMMON_ALLERGIES.filter(allergy =>
+    allergy.toLowerCase().includes(normalizedQuery) &&
+    !allergy.toLowerCase().startsWith(normalizedQuery)
+  );
+  
+  // Add fuzzy matching for misspelled words
+  const fuzzyMatches = COMMON_ALLERGIES.filter(allergy => {
+    const allergyLower = allergy.toLowerCase();
+    // Skip if already matched exactly
+    if (allergyLower.includes(normalizedQuery)) return false;
+    
+    // Simple fuzzy matching: check for similar character sequences
+    return isFuzzyMatch(normalizedQuery, allergyLower);
+  });
+  
+  // Combine and limit results
+  return [...exactMatches, ...partialMatches, ...fuzzyMatches].slice(0, limit);
+};
 
 export const getMedicalConditionAbbreviations = (): Record<string, string> => {
   return {

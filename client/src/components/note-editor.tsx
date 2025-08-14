@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SmartPhraseAutocomplete } from "./smart-phrase-autocomplete";
 import { FlexibleSmartPhrasePicker } from "./flexible-smart-phrase-picker";
 import { MedicalConditionAutocomplete } from "./medical-condition-autocomplete";
+import { AllergyAutocomplete } from "./allergy-autocomplete";
 import { PertinentNegativesPopup } from "./pertinent-negatives-popup";
 import { PertinentNegativePresetSelector } from "./pertinent-negative-preset-selector";
 import { useNotes, useNoteTemplates } from "../hooks/use-notes";
@@ -36,6 +37,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { noteTemplates } from "../lib/note-templates";
+import { COMMON_ALLERGIES } from "@/lib/medical-conditions";
 import type { Note, NoteTemplate } from "@shared/schema";
 
 interface NoteEditorProps {
@@ -75,6 +77,13 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
   } | null>(null);
   
   const [activeMedicalAutocomplete, setActiveMedicalAutocomplete] = useState<{
+    sectionId: string;
+    position: { top: number; left: number };
+    query: string;
+    cursorPosition: number;
+    wordStart: number;
+  } | null>(null);
+  const [activeAllergyAutocomplete, setActiveAllergyAutocomplete] = useState<{
     sectionId: string;
     position: { top: number; left: number };
     query: string;
@@ -170,11 +179,14 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       setActiveAutocomplete(null);
     }
 
-    // Check for medical condition autocomplete in past medical history sections
+    // Check for medical condition and allergy autocomplete
     const section = sections.find(s => s.id === sectionId);
     const isPastMedicalHistory = section?.type === 'pastMedicalHistory' || 
                                 section?.name.toLowerCase().includes('past medical history') ||
                                 section?.name.toLowerCase().includes('pmh');
+    const isAllergiesSection = section?.type === 'allergies' || 
+                               section?.name.toLowerCase().includes('allergies') ||
+                               section?.name.toLowerCase().includes('allergy');
     
     if (isPastMedicalHistory) {
       const cursorPosition = textarea.selectionStart;
@@ -224,6 +236,59 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       } else {
         setActiveMedicalAutocomplete(null);
       }
+    }
+
+    // Handle allergy autocomplete for allergies sections
+    if (isAllergiesSection) {
+      const cursorPosition = textarea.selectionStart;
+      
+      // Find the current word being typed at cursor position
+      const beforeCursor = content.slice(0, cursorPosition);
+      const afterCursor = content.slice(cursorPosition);
+      
+      // Find word boundaries
+      const wordStartMatch = beforeCursor.match(/\S+$/);
+      const wordEndMatch = afterCursor.match(/^\S*/);
+      
+      if (wordStartMatch) {
+        const wordStart = cursorPosition - wordStartMatch[0].length;
+        const currentWord = wordStartMatch[0] + (wordEndMatch ? wordEndMatch[0] : '');
+        
+        if (currentWord && currentWord.length >= 1 && !currentWord.includes('/')) {
+          // Calculate precise cursor position in the textarea
+          const textBeforeCursor = content.slice(0, cursorPosition);
+          const lines = textBeforeCursor.split('\n');
+          const currentLine = lines.length - 1;
+          const charInLine = lines[lines.length - 1].length;
+          
+          // Get textarea position and line height
+          const rect = textarea.getBoundingClientRect();
+          const style = window.getComputedStyle(textarea);
+          const lineHeight = parseInt(style.lineHeight) || 20;
+          const paddingTop = parseInt(style.paddingTop) || 8;
+          const paddingLeft = parseInt(style.paddingLeft) || 12;
+          
+          // Approximate character width (monospace assumption)
+          const charWidth = 8;
+          
+          setActiveAllergyAutocomplete({
+            sectionId,
+            position: { 
+              top: rect.top + paddingTop + (currentLine * lineHeight) + lineHeight + 5,
+              left: rect.left + paddingLeft + (charInLine * charWidth)
+            },
+            query: currentWord,
+            cursorPosition,
+            wordStart
+          });
+        } else {
+          setActiveAllergyAutocomplete(null);
+        }
+      } else {
+        setActiveAllergyAutocomplete(null);
+      }
+    } else if (activeAllergyAutocomplete && activeAllergyAutocomplete.sectionId === sectionId) {
+      setActiveAllergyAutocomplete(null);
     }
   };
 
@@ -292,45 +357,89 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     }
   };
 
-  const handleMedicalConditionSelect = (condition: string, cursorPosition: number) => {
-    if (activeMedicalAutocomplete) {
-      const currentContent = noteData.content[activeMedicalAutocomplete.sectionId] || '';
-      
-      // Find the word boundaries at the cursor position
-      const beforeCursor = currentContent.slice(0, cursorPosition);
-      const afterCursor = currentContent.slice(cursorPosition);
-      
-      // Find the start of the current word
-      const wordStartMatch = beforeCursor.match(/\S+$/);
-      const wordStart = wordStartMatch ? cursorPosition - wordStartMatch[0].length : cursorPosition;
-      
-      // Find the end of the current word
-      const wordEndMatch = afterCursor.match(/^\S*/);
-      const wordEnd = wordEndMatch ? cursorPosition + wordEndMatch[0].length : cursorPosition;
-      
-      // Replace the current word with the selected condition
-      const newContent = currentContent.slice(0, wordStart) + condition + currentContent.slice(wordEnd);
-      
-      setNoteData(prev => ({
-        ...prev,
-        content: {
-          ...prev.content,
-          [activeMedicalAutocomplete.sectionId]: newContent
-        }
-      }));
-      
-      setActiveMedicalAutocomplete(null);
-      
-      // Set focus back to the textarea and position cursor after the inserted condition
-      setTimeout(() => {
-        const textarea = document.querySelector(`[data-section-id="${activeMedicalAutocomplete.sectionId}"]`) as HTMLTextAreaElement;
-        if (textarea) {
-          textarea.focus();
-          const newCursorPosition = wordStart + condition.length;
-          textarea.setSelectionRange(newCursorPosition, newCursorPosition);
-        }
-      }, 0);
-    }
+  const handleMedicalConditionSelect = (condition: string, cursorPosition?: number) => {
+    if (!activeMedicalAutocomplete) return;
+    
+    const { sectionId, wordStart } = activeMedicalAutocomplete;
+    const currentContent = noteData.content[sectionId] || '';
+    const actualCursorPos = cursorPosition ?? activeMedicalAutocomplete.cursorPosition;
+    
+    // Replace the current word with the selected condition
+    const newContent = 
+      currentContent.slice(0, wordStart) + 
+      condition + 
+      currentContent.slice(actualCursorPos);
+    
+    setNoteData(prev => ({
+      ...prev,
+      content: {
+        ...prev.content,
+        [sectionId]: newContent
+      }
+    }));
+    
+    setActiveMedicalAutocomplete(null);
+    
+    // Focus back to the textarea
+    setTimeout(() => {
+      const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
+      if (textarea) {
+        textarea.focus();
+        const newCursorPos = wordStart + condition.length;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 0);
+  };
+
+  const handleAllergySelect = (allergy: string) => {
+    if (!activeAllergyAutocomplete) return;
+    
+    const { sectionId, cursorPosition, wordStart } = activeAllergyAutocomplete;
+    const currentContent = noteData.content[sectionId] || '';
+    
+    // Replace the current word with the selected allergy
+    const newContent = 
+      currentContent.slice(0, wordStart) + 
+      allergy + 
+      currentContent.slice(cursorPosition);
+    
+    setNoteData(prev => ({
+      ...prev,
+      content: {
+        ...prev.content,
+        [sectionId]: newContent
+      }
+    }));
+    
+    setActiveAllergyAutocomplete(null);
+    
+    // Focus back to the textarea
+    setTimeout(() => {
+      const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
+      if (textarea) {
+        textarea.focus();
+        const newCursorPos = wordStart + allergy.length;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 0);
+  };
+
+  const handleAllergyChipSelect = (allergy: string, sectionId: string) => {
+    const currentContent = noteData.content[sectionId] || '';
+    const newContent = currentContent ? `${currentContent}, ${allergy}` : allergy;
+    
+    setNoteData(prev => ({
+      ...prev,
+      content: {
+        ...prev.content,
+        [sectionId]: newContent
+      }
+    }));
+    
+    toast({
+      title: "Allergy added",
+      description: `${allergy} has been added to allergies.`,
+    });
   };
 
   const handlePertinentNegativesClick = (sectionId: string) => {
@@ -753,13 +862,44 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                     </Button>
                   </div>
                 </div>
+                
+                {/* Allergy chips for allergies section */}
+                {(section.type === 'allergies' || 
+                  section.name.toLowerCase().includes('allergies') ||
+                  section.name.toLowerCase().includes('allergy')) && (
+                  <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-gray-100">
+                    <div className="text-xs text-gray-500 mr-2 mt-1">Quick add:</div>
+                    {COMMON_ALLERGIES.slice(0, 10).map((allergy) => (
+                      <Badge
+                        key={allergy}
+                        variant="outline"
+                        className="text-xs cursor-pointer hover:bg-orange-50 hover:border-orange-300 transition-colors"
+                        onClick={() => handleAllergyChipSelect(allergy, section.id)}
+                        data-testid={`allergy-chip-${allergy.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
+                      >
+                        <AlertTriangle size={10} className="mr-1 text-orange-500" />
+                        {allergy}
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </CardHeader>
               <CardContent className="pt-0">
                 <div className="relative">
                   <Textarea
                     value={noteData.content[section.id] || ''}
                     onChange={(e) => handleSectionContentChange(section.id, e.target.value, e.target)}
-                    placeholder={`Document the ${section.name.toLowerCase()}... (Type '/' for smart phrases${section.type === 'pastMedicalHistory' || section.name.toLowerCase().includes('past medical history') || section.name.toLowerCase().includes('pmh') ? ', start typing medical conditions for autocomplete' : ''})`}
+                    placeholder={`Document the ${section.name.toLowerCase()}... (Type '/' for smart phrases${
+                      section.type === 'pastMedicalHistory' || 
+                      section.name.toLowerCase().includes('past medical history') || 
+                      section.name.toLowerCase().includes('pmh') 
+                        ? ', start typing medical conditions for autocomplete' 
+                        : section.type === 'allergies' || 
+                          section.name.toLowerCase().includes('allergies') ||
+                          section.name.toLowerCase().includes('allergy')
+                        ? ', start typing allergies for autocomplete'
+                        : ''
+                    })`}
                     className="min-h-[100px] resize-none"
                     data-testid={`textarea-${section.id}`}
                     data-section-id={section.id}
@@ -793,6 +933,16 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                       cursorPosition={activeMedicalAutocomplete.cursorPosition}
                       onSelect={handleMedicalConditionSelect}
                       onClose={() => setActiveMedicalAutocomplete(null)}
+                    />
+                  )}
+                  
+                  {activeAllergyAutocomplete && activeAllergyAutocomplete.sectionId === section.id && (
+                    <AllergyAutocomplete
+                      query={activeAllergyAutocomplete.query}
+                      position={activeAllergyAutocomplete.position}
+                      onSelect={handleAllergySelect}
+                      onClose={() => setActiveAllergyAutocomplete(null)}
+                      sectionId={section.id}
                     />
                   )}
                 </div>
