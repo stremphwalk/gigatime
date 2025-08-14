@@ -8,6 +8,7 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SmartPhraseAutocomplete } from "./smart-phrase-autocomplete";
 import { FlexibleSmartPhrasePicker } from "./flexible-smart-phrase-picker";
+import { MedicalConditionAutocomplete } from "./medical-condition-autocomplete";
 import { useNotes, useNoteTemplates } from "../hooks/use-notes";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
 import { useToast } from "../hooks/use-toast";
@@ -68,6 +69,12 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     phrase: any;
     sectionId: string;
     position: { top: number; left: number };
+  } | null>(null);
+  
+  const [activeMedicalAutocomplete, setActiveMedicalAutocomplete] = useState<{
+    sectionId: string;
+    position: { top: number; left: number };
+    query: string;
   } | null>(null);
 
   const { createNote, updateNote, isCreating: isSaving } = useNotes();
@@ -154,6 +161,29 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     } else if (activeAutocomplete && !content.includes('/')) {
       setActiveAutocomplete(null);
     }
+
+    // Check for medical condition autocomplete in past medical history sections
+    const section = sections.find(s => s.id === sectionId);
+    const isPastMedicalHistory = section?.type === 'pastMedicalHistory' || 
+                                section?.name.toLowerCase().includes('past medical history') ||
+                                section?.name.toLowerCase().includes('pmh');
+    
+    if (isPastMedicalHistory) {
+      // Look for word being typed (space-separated words)
+      const words = content.split(/\s+/);
+      const currentWord = words[words.length - 1];
+      
+      if (currentWord && currentWord.length >= 2 && !currentWord.includes('/')) {
+        const rect = textarea.getBoundingClientRect();
+        setActiveMedicalAutocomplete({
+          sectionId,
+          position: { top: rect.bottom, left: rect.left },
+          query: currentWord
+        });
+      } else {
+        setActiveMedicalAutocomplete(null);
+      }
+    }
   };
 
   const handleSmartPhraseSelect = async (phraseOrContent: string | any) => {
@@ -169,7 +199,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
         
         if (!phrase) return;
         
-        if (!phrase.elements || phrase.elements.length === 0) {
+        if (!phrase.elements || (Array.isArray(phrase.elements) && phrase.elements.length === 0)) {
           finalContent = phrase.content;
         } else {
           // Show picker for interactive phrases
@@ -218,6 +248,25 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       }));
       
       setActivePicker(null);
+    }
+  };
+
+  const handleMedicalConditionSelect = (condition: string) => {
+    if (activeMedicalAutocomplete) {
+      const currentContent = noteData.content[activeMedicalAutocomplete.sectionId] || '';
+      const words = currentContent.split(/\s+/);
+      words[words.length - 1] = condition;
+      const newContent = words.join(' ');
+      
+      setNoteData(prev => ({
+        ...prev,
+        content: {
+          ...prev.content,
+          [activeMedicalAutocomplete.sectionId]: newContent
+        }
+      }));
+      
+      setActiveMedicalAutocomplete(null);
     }
   };
 
@@ -600,7 +649,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                   <Textarea
                     value={noteData.content[section.id] || ''}
                     onChange={(e) => handleSectionContentChange(section.id, e.target.value, e.target)}
-                    placeholder={`Document the ${section.name.toLowerCase()}... (Type '/' for smart phrases)`}
+                    placeholder={`Document the ${section.name.toLowerCase()}... (Type '/' for smart phrases${section.type === 'pastMedicalHistory' || section.name.toLowerCase().includes('past medical history') || section.name.toLowerCase().includes('pmh') ? ', start typing medical conditions for autocomplete' : ''})`}
                     className="min-h-[100px] resize-none"
                     data-testid={`textarea-${section.id}`}
                     data-section-id={section.id}
@@ -622,6 +671,17 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                       onSelect={handlePickerSelect}
                       onCancel={handlePickerCancel}
                       autoShow={true}
+                    />
+                  )}
+                  
+                  {activeMedicalAutocomplete && activeMedicalAutocomplete.sectionId === section.id && (
+                    <MedicalConditionAutocomplete
+                      textareaRef={{ current: document.querySelector(`[data-section-id="${section.id}"]`) as HTMLTextAreaElement }}
+                      isVisible={true}
+                      query={activeMedicalAutocomplete.query}
+                      position={activeMedicalAutocomplete.position}
+                      onSelect={handleMedicalConditionSelect}
+                      onClose={() => setActiveMedicalAutocomplete(null)}
                     />
                   )}
                 </div>
