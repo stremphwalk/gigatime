@@ -325,65 +325,76 @@ export function FlexibleSmartPhraseBuilder({
         <Card>
           <CardHeader>
             <CardTitle className="text-lg font-semibold text-medical-teal">
-              Insert Interactive Elements
+              Add Interactive Elements
             </CardTitle>
+            <p className="text-sm text-gray-600">
+              Place your cursor in the content above, then click to add interactive parts to your phrase
+            </p>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="mb-6 p-4 border-2 border-red-200 bg-red-50 rounded-lg">
-              <p className="text-sm text-gray-600 mb-4 font-semibold">
-                🔧 DEBUG: If you can see this red box, the component is rendering. 
-                Place your cursor in the content above, then click a button to insert an interactive element at that position
-              </p>
-              <div className="flex space-x-3 flex-wrap gap-3">
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Date Picker Card */}
+              <div className="p-4 border rounded-lg hover:bg-blue-50 cursor-pointer" onClick={() => addElement("date")}>
+                <div className="flex items-center gap-3 mb-2">
+                  <Calendar size={20} className="text-blue-600" />
+                  <h3 className="font-medium">Date Picker</h3>
+                </div>
+                <p className="text-sm text-gray-600 mb-3">
+                  Let users select dates (admission date, discharge date, etc.)
+                </p>
                 <Button
                   type="button"
-                  onClick={() => {
-                    console.log("Date button clicked");
-                    addElement("date");
-                  }}
-                  variant="default"
-                  size="lg"
-                  className="flex items-center gap-2 bg-blue-100 hover:bg-blue-200 border-2 border-blue-400 text-blue-800 font-semibold"
+                  size="sm"
+                  className="w-full bg-blue-600 hover:bg-blue-700"
                   data-testid="button-add-date"
                 >
-                  <Calendar size={20} />
-                  🗓️ INSERT DATE
+                  Add Date Picker
                 </Button>
+              </div>
+
+              {/* Simple Selection Card */}
+              <div className="p-4 border rounded-lg hover:bg-green-50 cursor-pointer" onClick={() => addElement("multipicker")}>
+                <div className="flex items-center gap-3 mb-2">
+                  <MousePointer size={20} className="text-green-600" />
+                  <h3 className="font-medium">Selection List</h3>
+                </div>
+                <p className="text-sm text-gray-600 mb-3">
+                  Create dropdown or checkbox options (medications, symptoms, etc.)
+                </p>
                 <Button
                   type="button"
-                  onClick={() => {
-                    console.log("Selection button clicked");
-                    addElement("multipicker");
-                  }}
-                  variant="default"
-                  size="lg"
-                  className="flex items-center gap-2 bg-green-100 hover:bg-green-200 border-2 border-green-400 text-green-800 font-semibold"
+                  size="sm"
+                  className="w-full bg-green-600 hover:bg-green-700"
                   data-testid="button-add-multipicker"
                 >
-                  <MousePointer size={20} />
-                  📋 INSERT SELECTION
+                  Add Selection List
                 </Button>
+              </div>
+
+              {/* Advanced Selection Card */}
+              <div className="p-4 border rounded-lg hover:bg-purple-50 cursor-pointer" onClick={() => addElement("nested_multipicker")}>
+                <div className="flex items-center gap-3 mb-2">
+                  <ChevronRight size={20} className="text-purple-600" />
+                  <h3 className="font-medium">Grouped Selection</h3>
+                </div>
+                <p className="text-sm text-gray-600 mb-3">
+                  Create organized options with sub-categories (body systems, procedures)
+                </p>
                 <Button
                   type="button"
-                  onClick={() => {
-                    console.log("Nested button clicked");
-                    addElement("nested_multipicker");
-                  }}
-                  variant="default"
-                  size="lg"
-                  className="flex items-center gap-2 bg-purple-100 hover:bg-purple-200 border-2 border-purple-400 text-purple-800 font-semibold"
+                  size="sm"
+                  className="w-full bg-purple-600 hover:bg-purple-700"
                   data-testid="button-add-nested"
                 >
-                  <ChevronRight size={20} />
-                  🔗 INSERT NESTED SELECTION
+                  Add Grouped Selection
                 </Button>
               </div>
             </div>
             {formData.elements.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
+              <div className="text-center py-8 text-gray-500 mt-6">
                 <Zap size={48} className="mx-auto mb-2" />
-                <p>No interactive elements yet</p>
-                <p className="text-sm">Use the buttons above to insert elements into your content</p>
+                <p>No interactive elements added yet</p>
+                <p className="text-sm">Click the cards above to add interactive parts to your phrase</p>
               </div>
             ) : (
               <div className="space-y-4">
