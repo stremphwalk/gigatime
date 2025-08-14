@@ -155,7 +155,15 @@ export function TeamManagement() {
               <div className="text-center py-8 text-gray-500">
                 <Calendar className="h-12 w-12 mx-auto mb-3 text-gray-300" />
                 <p className="text-sm">No upcoming events</p>
-                <Button variant="outline" size="sm" className="mt-3">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="mt-3"
+                  onClick={() => {
+                    // Placeholder for future calendar functionality
+                    alert('Calendar feature coming soon! This will allow you to add team events and appointments.');
+                  }}
+                >
                   Add Event
                 </Button>
               </div>
@@ -177,7 +185,15 @@ export function TeamManagement() {
               <div className="text-center py-8 text-gray-500">
                 <CheckSquare className="h-12 w-12 mx-auto mb-3 text-gray-300" />
                 <p className="text-sm">No active tasks</p>
-                <Button variant="outline" size="sm" className="mt-3">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="mt-3"
+                  onClick={() => {
+                    // Placeholder for future task functionality
+                    alert('Task management feature coming soon! This will allow you to create and assign team tasks.');
+                  }}
+                >
                   Add Task
                 </Button>
               </div>
@@ -185,47 +201,28 @@ export function TeamManagement() {
           </Card>
         </div>
 
-        {/* Team Info Section */}
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users className="text-purple-500" size={20} />
-              Team Information
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="text-center p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600">Members</p>
-                <p className="text-2xl font-bold text-gray-900">1/{team.maxMembers}</p>
-              </div>
-              <div className="text-center p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600">Expires In</p>
-                <p className="text-2xl font-bold text-orange-600">
-                  {formatDistanceToNow(new Date(team.expiresAt))}
-                </p>
-              </div>
-              <div className="text-center p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600">Group Code</p>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={() => copyGroupCode(team.groupCode)}
-                  className="mt-1"
-                >
-                  {team.groupCode} <Copy className="ml-1" size={12} />
-                </Button>
-              </div>
+        {/* Compact Team Info Bar */}
+        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg mb-6">
+          <div className="flex items-center gap-6 text-sm">
+            <div className="flex items-center gap-2">
+              <Users className="text-purple-500" size={16} />
+              <span className="text-gray-600">1/{team.maxMembers} members</span>
             </div>
-            
-            {team.description && (
-              <div className="mt-4 p-4 bg-blue-50 rounded-lg">
-                <p className="text-sm text-gray-600 mb-1">Description</p>
-                <p className="text-gray-800">{team.description}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+            <div className="flex items-center gap-2">
+              <Clock className="text-orange-500" size={16} />
+              <span className="text-gray-600">Expires {formatDistanceToNow(new Date(team.expiresAt))}</span>
+            </div>
+          </div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => copyGroupCode(team.groupCode)}
+            className="flex items-center gap-2"
+          >
+            <span className="font-mono">{team.groupCode}</span>
+            <Copy size={14} />
+          </Button>
+        </div>
       </div>
     );
   }
