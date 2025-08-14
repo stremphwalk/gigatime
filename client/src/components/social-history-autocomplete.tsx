@@ -51,25 +51,11 @@ export function SocialHistoryAutocomplete({
 
   const nilOptions: SocialHistoryOption[] = [
     {
-      id: "tobacco-nil",
-      label: "Tobacco: nil",
-      icon: Cigarette,
-      format: () => "Tobacco: nil",
-      category: "Denies use"
-    },
-    {
-      id: "alcohol-nil", 
-      label: "Alcohol: nil",
-      icon: Wine,
-      format: () => "Alcohol: nil",
-      category: "Denies use"
-    },
-    {
-      id: "drugs-nil",
-      label: "Drugs: nil", 
+      id: "all-nil",
+      label: "All substances: nil",
       icon: Pill,
-      format: () => "Drugs: nil",
-      category: "Denies use"
+      format: () => "Tobacco: nil\nAlcohol: nil\nDrugs: nil",
+      category: "Denies all use"
     }
   ];
 
