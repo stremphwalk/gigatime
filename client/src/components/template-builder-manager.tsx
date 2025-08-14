@@ -30,6 +30,7 @@ interface TemplateSection {
   content: string;
   placeholder?: string;
   required?: boolean;
+  sectionType?: string; // Associates with medical section types for custom tools
 }
 
 export function TemplateBuilderManager() {
@@ -55,28 +56,51 @@ export function TemplateBuilderManager() {
     { value: "custom", label: "Custom Template" }
   ];
 
+  const medicalSectionTypes = [
+    { value: "chief-complaint", label: "Chief Complaint", description: "Patient's primary concern" },
+    { value: "history-present-illness", label: "History of Present Illness (HPI)", description: "Detailed description of current illness" },
+    { value: "past-medical-history", label: "Past Medical History (PMH)", description: "Previous medical conditions and surgeries" },
+    { value: "medications", label: "Medications", description: "Current medications, dosages, and allergies" },
+    { value: "allergies", label: "Allergies", description: "Known allergies and adverse reactions" },
+    { value: "social-history", label: "Social History", description: "Smoking, alcohol, occupation, lifestyle" },
+    { value: "family-history", label: "Family History", description: "Relevant family medical history" },
+    { value: "review-of-systems", label: "Review of Systems (ROS)", description: "Systematic review of body systems" },
+    { value: "physical-exam", label: "Physical Examination", description: "Vital signs and physical findings" },
+    { value: "assessment", label: "Assessment", description: "Clinical interpretation and diagnosis" },
+    { value: "plan", label: "Plan", description: "Treatment plan and next steps" },
+    { value: "assessment-plan", label: "Assessment & Plan", description: "Combined assessment and plan" },
+    { value: "subjective", label: "Subjective", description: "Patient's reported symptoms (SOAP)" },
+    { value: "objective", label: "Objective", description: "Observable findings (SOAP)" },
+    { value: "procedures", label: "Procedures", description: "Procedures performed or planned" },
+    { value: "labs", label: "Laboratory Results", description: "Lab values and interpretations" },
+    { value: "imaging", label: "Imaging", description: "Radiology and imaging results" },
+    { value: "discharge-instructions", label: "Discharge Instructions", description: "Patient discharge guidance" },
+    { value: "follow-up", label: "Follow-up", description: "Follow-up appointments and instructions" },
+    { value: "custom", label: "Custom Section", description: "User-defined section type" }
+  ];
+
   const defaultSections = {
     admission: [
-      { id: "chief-complaint", title: "Chief Complaint", content: "", placeholder: "Patient's primary concern...", required: true },
-      { id: "history-present-illness", title: "History of Present Illness", content: "", placeholder: "Detailed description of current illness...", required: true },
-      { id: "past-medical-history", title: "Past Medical History", content: "", placeholder: "Previous medical conditions...", required: false },
-      { id: "medications", title: "Medications", content: "", placeholder: "Current medications and dosages...", required: false },
-      { id: "allergies", title: "Allergies", content: "", placeholder: "Known allergies and reactions...", required: true },
-      { id: "social-history", title: "Social History", content: "", placeholder: "Smoking, alcohol, occupation...", required: false },
-      { id: "physical-exam", title: "Physical Examination", content: "", placeholder: "Vital signs and physical findings...", required: true },
-      { id: "assessment-plan", title: "Assessment & Plan", content: "", placeholder: "Clinical assessment and treatment plan...", required: true }
+      { id: "chief-complaint", title: "Chief Complaint", content: "", placeholder: "Patient's primary concern...", required: true, sectionType: "chief-complaint" },
+      { id: "history-present-illness", title: "History of Present Illness", content: "", placeholder: "Detailed description of current illness...", required: true, sectionType: "history-present-illness" },
+      { id: "past-medical-history", title: "Past Medical History", content: "", placeholder: "Previous medical conditions...", required: false, sectionType: "past-medical-history" },
+      { id: "medications", title: "Medications", content: "", placeholder: "Current medications and dosages...", required: false, sectionType: "medications" },
+      { id: "allergies", title: "Allergies", content: "", placeholder: "Known allergies and reactions...", required: true, sectionType: "allergies" },
+      { id: "social-history", title: "Social History", content: "", placeholder: "Smoking, alcohol, occupation...", required: false, sectionType: "social-history" },
+      { id: "physical-exam", title: "Physical Examination", content: "", placeholder: "Vital signs and physical findings...", required: true, sectionType: "physical-exam" },
+      { id: "assessment-plan", title: "Assessment & Plan", content: "", placeholder: "Clinical assessment and treatment plan...", required: true, sectionType: "assessment-plan" }
     ],
     progress: [
-      { id: "subjective", title: "Subjective", content: "", placeholder: "Patient's reported symptoms and concerns...", required: true },
-      { id: "objective", title: "Objective", content: "", placeholder: "Vital signs, physical exam findings...", required: true },
-      { id: "assessment", title: "Assessment", content: "", placeholder: "Clinical interpretation...", required: true },
-      { id: "plan", title: "Plan", content: "", placeholder: "Treatment plan and next steps...", required: true }
+      { id: "subjective", title: "Subjective", content: "", placeholder: "Patient's reported symptoms and concerns...", required: true, sectionType: "subjective" },
+      { id: "objective", title: "Objective", content: "", placeholder: "Vital signs, physical exam findings...", required: true, sectionType: "objective" },
+      { id: "assessment", title: "Assessment", content: "", placeholder: "Clinical interpretation...", required: true, sectionType: "assessment" },
+      { id: "plan", title: "Plan", content: "", placeholder: "Treatment plan and next steps...", required: true, sectionType: "plan" }
     ],
     consult: [
-      { id: "reason-for-consult", title: "Reason for Consult", content: "", placeholder: "Why consultation was requested...", required: true },
-      { id: "history", title: "History", content: "", placeholder: "Relevant history for consultation...", required: true },
-      { id: "examination", title: "Examination", content: "", placeholder: "Focused examination findings...", required: true },
-      { id: "recommendations", title: "Recommendations", content: "", placeholder: "Specific recommendations...", required: true }
+      { id: "reason-for-consult", title: "Reason for Consult", content: "", placeholder: "Why consultation was requested...", required: true, sectionType: "custom" },
+      { id: "history", title: "History", content: "", placeholder: "Relevant history for consultation...", required: true, sectionType: "history-present-illness" },
+      { id: "examination", title: "Examination", content: "", placeholder: "Focused examination findings...", required: true, sectionType: "physical-exam" },
+      { id: "recommendations", title: "Recommendations", content: "", placeholder: "Specific recommendations...", required: true, sectionType: "plan" }
     ]
   };
 
@@ -136,11 +160,12 @@ export function TemplateBuilderManager() {
 
   const handleAddSection = () => {
     const newSection: TemplateSection = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: Math.random().toString(36).substring(2, 11),
       title: "New Section",
       content: "",
       placeholder: "Enter content for this section...",
-      required: false
+      required: false,
+      sectionType: "custom"
     };
     setFormData(prev => ({
       ...prev,
@@ -326,7 +351,9 @@ export function TemplateBuilderManager() {
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle>Template Sections</CardTitle>
-                  <CardDescription>Customize the sections that will appear in your notes</CardDescription>
+                  <CardDescription>
+                    Customize the sections that will appear in your notes. Associate sections with medical types to enable specialized tools and features.
+                  </CardDescription>
                 </div>
                 <Button
                   type="button"
@@ -375,7 +402,15 @@ export function TemplateBuilderManager() {
                             </div>
 
                             <div className="flex-1 space-y-3">
-                              <div className="grid grid-cols-2 gap-4">
+                              {/* Section Header with Title and Type Badge */}
+                              <div className="flex items-center justify-between mb-2">
+                                <h4 className="font-medium text-gray-900">{section.title}</h4>
+                                <Badge variant={section.sectionType === 'custom' ? 'secondary' : 'default'} className="text-xs">
+                                  {medicalSectionTypes.find(t => t.value === section.sectionType)?.label || 'Custom'}
+                                </Badge>
+                              </div>
+                              
+                              <div className="grid grid-cols-3 gap-4">
                                 <div>
                                   <Label htmlFor={`section-title-${section.id}`}>Section Title</Label>
                                   <Input
@@ -385,6 +420,27 @@ export function TemplateBuilderManager() {
                                     placeholder="Section Title"
                                     data-testid={`input-section-title-${section.id}`}
                                   />
+                                </div>
+                                <div>
+                                  <Label htmlFor={`section-type-${section.id}`}>Medical Section Type</Label>
+                                  <Select
+                                    value={section.sectionType || "custom"}
+                                    onValueChange={(value) => handleUpdateSection(section.id, { sectionType: value })}
+                                  >
+                                    <SelectTrigger id={`section-type-${section.id}`} data-testid={`select-section-type-${section.id}`}>
+                                      <SelectValue placeholder="Select section type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {medicalSectionTypes.map((type) => (
+                                        <SelectItem key={type.value} value={type.value}>
+                                          <div>
+                                            <div className="font-medium">{type.label}</div>
+                                            <div className="text-xs text-gray-500">{type.description}</div>
+                                          </div>
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
                                 </div>
                                 <div>
                                   <Label htmlFor={`section-placeholder-${section.id}`}>Placeholder Text</Label>

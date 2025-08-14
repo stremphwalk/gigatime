@@ -25,10 +25,17 @@ Preferred communication style: Simple, everyday language.
 ## Database Schema
 - **Users**: Healthcare professionals with specialty information
 - **Teams**: Collaborative groups with member management and role-based access
-- **Note Templates**: Structured templates for different clinical note types with customizable sections
+- **Note Templates**: Structured templates for different clinical note types with customizable sections and medical section type associations
 - **Notes**: Clinical documentation linked to patients with rich content support
 - **Smart Phrases**: Reusable text snippets with trigger-based autocomplete
 - **Team Features**: Shared todos and calendar events for team coordination
+
+## Medical Section Types System
+Template sections can be associated with predefined medical section types (Chief Complaint, HPI, Past Medical History, Medications, etc.). This enables:
+- Specialized tools and features for each medical section type
+- Consistent structure across different templates
+- Future extensibility for section-specific functionality
+- Custom section types for unique use cases
 
 ## Authentication & Authorization
 - Currently implements mock authentication for development
