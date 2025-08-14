@@ -11,6 +11,7 @@ import { FlexibleSmartPhrasePicker } from "./flexible-smart-phrase-picker";
 import { MedicalConditionAutocomplete } from "./medical-condition-autocomplete";
 import { AllergyAutocomplete } from "./allergy-autocomplete";
 import { SocialHistoryAutocomplete } from "./social-history-autocomplete";
+import { MedicationAutocomplete } from "./medication-autocomplete";
 import { PertinentNegativesPopup } from "./pertinent-negatives-popup";
 import { PertinentNegativePresetSelector } from "./pertinent-negative-preset-selector";
 import { useNotes, useNoteTemplates } from "../hooks/use-notes";
@@ -92,6 +93,13 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     wordStart: number;
   } | null>(null);
   const [activeSocialHistoryAutocomplete, setActiveSocialHistoryAutocomplete] = useState<{
+    sectionId: string;
+    position: { top: number; left: number };
+    query: string;
+    cursorPosition: number;
+    wordStart: number;
+  } | null>(null);
+  const [activeMedicationAutocomplete, setActiveMedicationAutocomplete] = useState<{
     sectionId: string;
     position: { top: number; left: number };
     query: string;
@@ -198,6 +206,10 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     const isSocialHistorySection = section?.type === 'socialHistory' || 
                                    section?.name.toLowerCase().includes('social history') ||
                                    section?.name.toLowerCase().includes('social hx');
+    const isMedicationsSection = section?.type === 'medications' || 
+                                 section?.name.toLowerCase().includes('medications') ||
+                                 section?.name.toLowerCase().includes('current medications') ||
+                                 section?.name.toLowerCase().includes('meds');
     
     if (isPastMedicalHistory) {
       const cursorPosition = textarea.selectionStart;
@@ -353,6 +365,59 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       }
     } else if (activeSocialHistoryAutocomplete && activeSocialHistoryAutocomplete.sectionId === sectionId) {
       setActiveSocialHistoryAutocomplete(null);
+    }
+
+    // Handle medication autocomplete
+    if (isMedicationsSection) {
+      const cursorPosition = textarea.selectionStart;
+      
+      // Find the current word being typed at cursor position
+      const beforeCursor = content.slice(0, cursorPosition);
+      const afterCursor = content.slice(cursorPosition);
+      
+      // Find word boundaries for medication names
+      const wordStartMatch = beforeCursor.match(/[A-Za-z][A-Za-z\-]*$/);
+      const wordEndMatch = afterCursor.match(/^[A-Za-z\-]*/);
+      
+      if (wordStartMatch) {
+        const wordStart = cursorPosition - wordStartMatch[0].length;
+        const currentWord = wordStartMatch[0] + (wordEndMatch ? wordEndMatch[0] : '');
+        
+        if (currentWord && currentWord.length >= 2) {
+          // Calculate precise cursor position in the textarea
+          const textBeforeCursor = content.slice(0, cursorPosition);
+          const lines = textBeforeCursor.split('\n');
+          const currentLine = lines.length - 1;
+          const charInLine = lines[lines.length - 1].length;
+          
+          // Get textarea position and line height
+          const rect = textarea.getBoundingClientRect();
+          const style = window.getComputedStyle(textarea);
+          const lineHeight = parseInt(style.lineHeight) || 20;
+          const paddingTop = parseInt(style.paddingTop) || 8;
+          const paddingLeft = parseInt(style.paddingLeft) || 12;
+          
+          // Approximate character width (monospace assumption)
+          const charWidth = 8;
+          
+          setActiveMedicationAutocomplete({
+            sectionId,
+            position: { 
+              top: rect.top + paddingTop + (currentLine * lineHeight) + lineHeight + 5,
+              left: rect.left + paddingLeft + (charInLine * charWidth)
+            },
+            query: currentWord,
+            cursorPosition,
+            wordStart
+          });
+        } else {
+          setActiveMedicationAutocomplete(null);
+        }
+      } else {
+        setActiveMedicationAutocomplete(null);
+      }
+    } else if (activeMedicationAutocomplete && activeMedicationAutocomplete.sectionId === sectionId) {
+      setActiveMedicationAutocomplete(null);
     }
   };
 
@@ -534,6 +599,39 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       if (textarea) {
         textarea.focus();
         const newCursorPos = wordStart + formatted.length;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 0);
+  };
+
+  const handleMedicationSelect = (medication: string) => {
+    if (!activeMedicationAutocomplete) return;
+    
+    const { sectionId, cursorPosition, wordStart } = activeMedicationAutocomplete;
+    const currentContent = noteData.content[sectionId] || '';
+    
+    // Replace the current word with the formatted medication
+    const newContent = 
+      currentContent.slice(0, wordStart) + 
+      medication + 
+      currentContent.slice(cursorPosition);
+    
+    setNoteData(prev => ({
+      ...prev,
+      content: {
+        ...prev.content,
+        [sectionId]: newContent
+      }
+    }));
+    
+    setActiveMedicationAutocomplete(null);
+    
+    // Focus back to the textarea
+    setTimeout(() => {
+      const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
+      if (textarea) {
+        textarea.focus();
+        const newCursorPos = wordStart + medication.length;
         textarea.setSelectionRange(newCursorPos, newCursorPos);
       }
     }, 0);
@@ -999,6 +1097,11 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                           section.name.toLowerCase().includes('social history') ||
                           section.name.toLowerCase().includes('social hx')
                         ? ', type numbers for pack-years/standard drinks or "nil" for negatives'
+                        : section.type === 'medications' ||
+                          section.name.toLowerCase().includes('medications') ||
+                          section.name.toLowerCase().includes('current medications') ||
+                          section.name.toLowerCase().includes('meds')
+                        ? ', start typing medication names for autocomplete with dosages'
                         : ''
                     })`}
                     className="min-h-[100px] resize-none"
@@ -1053,6 +1156,16 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                       position={activeSocialHistoryAutocomplete.position}
                       onSelect={handleSocialHistorySelect}
                       onClose={() => setActiveSocialHistoryAutocomplete(null)}
+                      sectionId={section.id}
+                    />
+                  )}
+                  
+                  {activeMedicationAutocomplete && activeMedicationAutocomplete.sectionId === section.id && (
+                    <MedicationAutocomplete
+                      query={activeMedicationAutocomplete.query}
+                      position={activeMedicationAutocomplete.position}
+                      onSelect={handleMedicationSelect}
+                      onClose={() => setActiveMedicationAutocomplete(null)}
                       sectionId={section.id}
                     />
                   )}
