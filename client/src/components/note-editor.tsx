@@ -17,6 +17,7 @@ import { PhysicalExamAutocomplete } from "./physical-exam-autocomplete";
 import { PertinentNegativesPopup } from "./pertinent-negatives-popup";
 import { PertinentNegativePresetSelector } from "./pertinent-negative-preset-selector";
 import { ImagingAutocomplete } from "./imaging-autocomplete";
+import { ConsultationReasonAutocomplete } from "./consultation-reason-autocomplete";
 import { useNotes, useNoteTemplates } from "../hooks/use-notes";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
 import { useToast } from "../hooks/use-toast";
@@ -1211,6 +1212,24 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                         }
                       />
                     )}
+                    
+                    {/* Consultation/Admission Reason Autocomplete - Show for reason sections */}
+                    {(section.id === 'reason' || section.id === 'chief' ||
+                      section.name.toLowerCase().includes('reason for consultation') ||
+                      section.name.toLowerCase().includes('reason for admission') ||
+                      section.name.toLowerCase().includes('chief complaint')) && (
+                      <ConsultationReasonAutocomplete
+                        value={noteData.content[section.id] || ''}
+                        onChange={(value) => setNoteData(prev => ({
+                          ...prev,
+                          content: { ...prev.content, [section.id]: value }
+                        }))}
+                        type={section.name.toLowerCase().includes('admission') ? 'admission' : 'consultation'}
+                        placeholder={`Search ${section.name.toLowerCase().includes('admission') ? 'admission' : 'consultation'} reasons...`}
+                        className="w-48"
+                      />
+                    )}
+                    
                     {/* Lab Values Button - Show for lab sections in header */}
                     {(section.type === 'labs' || 
                       section.name.toLowerCase().includes('lab') ||
@@ -1310,9 +1329,14 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                     value={noteData.content[section.id] || ''}
                     onChange={(e) => handleSectionContentChange(section.id, e.target.value, e.target)}
                     placeholder={`Document the ${section.name.toLowerCase()}... (Type '/' for smart phrases${
-                      section.type === 'pastMedicalHistory' || 
-                      section.name.toLowerCase().includes('past medical history') || 
-                      section.name.toLowerCase().includes('pmh') 
+                      section.id === 'reason' || section.id === 'chief' ||
+                      section.name.toLowerCase().includes('reason for consultation') ||
+                      section.name.toLowerCase().includes('reason for admission') ||
+                      section.name.toLowerCase().includes('chief complaint')
+                        ? ', click dropdown for common consultation/admission reasons'
+                        : section.type === 'pastMedicalHistory' || 
+                          section.name.toLowerCase().includes('past medical history') || 
+                          section.name.toLowerCase().includes('pmh') 
                         ? ', start typing medical conditions for autocomplete' 
                         : section.type === 'allergies' || 
                           section.name.toLowerCase().includes('allergies') ||
