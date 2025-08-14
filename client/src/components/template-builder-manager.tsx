@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNoteTemplates } from "../hooks/use-notes";
+import { useSmartPhrases } from "../hooks/use-smart-phrases";
 import { 
   Plus, 
   Edit2, 
@@ -28,9 +29,9 @@ interface TemplateSection {
   id: string;
   title: string;
   content: string;
-  placeholder?: string;
   required?: boolean;
   sectionType?: string; // Associates with medical section types for custom tools
+  smartPhrases?: string[]; // Smart phrases to auto-include in this section
 }
 
 export function TemplateBuilderManager() {
@@ -45,6 +46,7 @@ export function TemplateBuilderManager() {
   });
 
   const { templates, createTemplate, updateTemplate, deleteTemplate, isCreating } = useNoteTemplates();
+  const { phrases } = useSmartPhrases();
 
   const templateTypes = [
     { value: "admission", label: "Admission Note" },
@@ -81,26 +83,26 @@ export function TemplateBuilderManager() {
 
   const defaultSections = {
     admission: [
-      { id: "chief-complaint", title: "Chief Complaint", content: "", placeholder: "Patient's primary concern...", required: true, sectionType: "chief-complaint" },
-      { id: "history-present-illness", title: "History of Present Illness", content: "", placeholder: "Detailed description of current illness...", required: true, sectionType: "history-present-illness" },
-      { id: "past-medical-history", title: "Past Medical History", content: "", placeholder: "Previous medical conditions...", required: false, sectionType: "past-medical-history" },
-      { id: "medications", title: "Medications", content: "", placeholder: "Current medications and dosages...", required: false, sectionType: "medications" },
-      { id: "allergies", title: "Allergies", content: "", placeholder: "Known allergies and reactions...", required: true, sectionType: "allergies" },
-      { id: "social-history", title: "Social History", content: "", placeholder: "Smoking, alcohol, occupation...", required: false, sectionType: "social-history" },
-      { id: "physical-exam", title: "Physical Examination", content: "", placeholder: "Vital signs and physical findings...", required: true, sectionType: "physical-exam" },
-      { id: "assessment-plan", title: "Assessment & Plan", content: "", placeholder: "Clinical assessment and treatment plan...", required: true, sectionType: "assessment-plan" }
+      { id: "chief-complaint", title: "Chief Complaint", content: "", required: true, sectionType: "chief-complaint", smartPhrases: [] },
+      { id: "history-present-illness", title: "History of Present Illness", content: "", required: true, sectionType: "history-present-illness", smartPhrases: [] },
+      { id: "past-medical-history", title: "Past Medical History", content: "", required: false, sectionType: "past-medical-history", smartPhrases: [] },
+      { id: "medications", title: "Medications", content: "", required: false, sectionType: "medications", smartPhrases: [] },
+      { id: "allergies", title: "Allergies", content: "", required: true, sectionType: "allergies", smartPhrases: [] },
+      { id: "social-history", title: "Social History", content: "", required: false, sectionType: "social-history", smartPhrases: [] },
+      { id: "physical-exam", title: "Physical Examination", content: "", required: true, sectionType: "physical-exam", smartPhrases: [] },
+      { id: "assessment-plan", title: "Assessment & Plan", content: "", required: true, sectionType: "assessment-plan", smartPhrases: [] }
     ],
     progress: [
-      { id: "subjective", title: "Subjective", content: "", placeholder: "Patient's reported symptoms and concerns...", required: true, sectionType: "subjective" },
-      { id: "objective", title: "Objective", content: "", placeholder: "Vital signs, physical exam findings...", required: true, sectionType: "objective" },
-      { id: "assessment", title: "Assessment", content: "", placeholder: "Clinical interpretation...", required: true, sectionType: "assessment" },
-      { id: "plan", title: "Plan", content: "", placeholder: "Treatment plan and next steps...", required: true, sectionType: "plan" }
+      { id: "subjective", title: "Subjective", content: "", required: true, sectionType: "subjective", smartPhrases: [] },
+      { id: "objective", title: "Objective", content: "", required: true, sectionType: "objective", smartPhrases: [] },
+      { id: "assessment", title: "Assessment", content: "", required: true, sectionType: "assessment", smartPhrases: [] },
+      { id: "plan", title: "Plan", content: "", required: true, sectionType: "plan", smartPhrases: [] }
     ],
     consult: [
-      { id: "reason-for-consult", title: "Reason for Consult", content: "", placeholder: "Why consultation was requested...", required: true, sectionType: "custom" },
-      { id: "history", title: "History", content: "", placeholder: "Relevant history for consultation...", required: true, sectionType: "history-present-illness" },
-      { id: "examination", title: "Examination", content: "", placeholder: "Focused examination findings...", required: true, sectionType: "physical-exam" },
-      { id: "recommendations", title: "Recommendations", content: "", placeholder: "Specific recommendations...", required: true, sectionType: "plan" }
+      { id: "reason-for-consult", title: "Reason for Consult", content: "", required: true, sectionType: "custom", smartPhrases: [] },
+      { id: "history", title: "History", content: "", required: true, sectionType: "history-present-illness", smartPhrases: [] },
+      { id: "examination", title: "Examination", content: "", required: true, sectionType: "physical-exam", smartPhrases: [] },
+      { id: "recommendations", title: "Recommendations", content: "", required: true, sectionType: "plan", smartPhrases: [] }
     ]
   };
 
@@ -163,9 +165,9 @@ export function TemplateBuilderManager() {
       id: Math.random().toString(36).substring(2, 11),
       title: "New Section",
       content: "",
-      placeholder: "Enter content for this section...",
       required: false,
-      sectionType: "custom"
+      sectionType: "custom",
+      smartPhrases: []
     };
     setFormData(prev => ({
       ...prev,
@@ -267,22 +269,28 @@ export function TemplateBuilderManager() {
   if (activeTab === 'create' || activeTab === 'edit') {
     return (
       <div className="h-full flex flex-col">
-        <div className="border-b border-gray-200 p-6 bg-white">
+        <div className="border-b-2 border-medical-teal/20 p-8 bg-gradient-to-br from-medical-teal/10 via-professional-blue/5 to-white">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-text-primary">
-                {activeTab === 'create' ? 'Create Template' : 'Edit Template'}
-              </h1>
-              <p className="text-gray-600 mt-1">
-                {activeTab === 'create' 
-                  ? 'Build a custom note template with draggable sections' 
-                  : 'Modify the selected template'
-                }
-              </p>
+            <div className="flex items-center space-x-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-medical-teal via-professional-blue to-medical-teal rounded-xl flex items-center justify-center shadow-md">
+                {activeTab === 'create' ? <Plus className="text-white" size={24} /> : <Edit2 className="text-white" size={24} />}
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-medical-teal to-professional-blue bg-clip-text text-transparent">
+                  {activeTab === 'create' ? 'Create Template' : 'Edit Template'}
+                </h1>
+                <p className="text-gray-700 font-medium mt-1">
+                  {activeTab === 'create' 
+                    ? 'Build a custom note template with smart phrases and medical sections' 
+                    : 'Modify the selected template with enhanced features'
+                  }
+                </p>
+              </div>
             </div>
             <Button
               variant="outline"
               onClick={() => setActiveTab('library')}
+              className="border-medical-teal text-medical-teal hover:bg-medical-teal hover:text-white"
               data-testid="button-back-to-library"
             >
               Back to Library
@@ -372,62 +380,82 @@ export function TemplateBuilderManager() {
                     <p>No sections yet. Add sections to build your template.</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-6">
                     {formData.sections.map((section, index) => (
-                      <Card key={section.id} className="relative">
-                        <CardContent className="p-4">
-                          <div className="flex items-start space-x-4">
-                            <div className="flex flex-col space-y-1 mt-2">
+                      <Card key={section.id} className="relative border-l-4 border-l-medical-teal shadow-sm hover:shadow-md transition-shadow duration-200">
+                        <CardContent className="p-6">
+                          <div className="flex items-start space-x-6">
+                            <div className="flex flex-col space-y-2 mt-2">
                               <Button
                                 type="button"
-                                variant="ghost"
+                                variant="outline"
                                 size="sm"
                                 onClick={() => handleMoveSectionUp(section.id)}
                                 disabled={index === 0}
+                                className="w-8 h-8 p-0 border-medical-teal/30 text-medical-teal hover:bg-medical-teal hover:text-white disabled:opacity-30"
                                 data-testid={`button-move-up-${section.id}`}
                               >
                                 <ArrowUp size={14} />
                               </Button>
-                              <GripVertical size={16} className="text-gray-400 cursor-move" />
+                              <div className="flex justify-center">
+                                <GripVertical size={16} className="text-medical-teal/60 cursor-move" />
+                              </div>
                               <Button
                                 type="button"
-                                variant="ghost"
+                                variant="outline"
                                 size="sm"
                                 onClick={() => handleMoveSectionDown(section.id)}
                                 disabled={index === formData.sections.length - 1}
+                                className="w-8 h-8 p-0 border-medical-teal/30 text-medical-teal hover:bg-medical-teal hover:text-white disabled:opacity-30"
                                 data-testid={`button-move-down-${section.id}`}
                               >
                                 <ArrowDown size={14} />
                               </Button>
                             </div>
 
-                            <div className="flex-1 space-y-3">
+                            <div className="flex-1 space-y-4">
                               {/* Section Header with Title and Type Badge */}
-                              <div className="flex items-center justify-between mb-2">
-                                <h4 className="font-medium text-gray-900">{section.title}</h4>
-                                <Badge variant={section.sectionType === 'custom' ? 'secondary' : 'default'} className="text-xs">
+                              <div className="flex items-center justify-between p-3 bg-gradient-to-r from-medical-teal/10 to-professional-blue/10 rounded-lg border border-medical-teal/20">
+                                <div className="flex items-center space-x-3">
+                                  <div className="w-3 h-3 rounded-full bg-medical-teal"></div>
+                                  <h4 className="font-semibold text-gray-900">{section.title}</h4>
+                                </div>
+                                <Badge 
+                                  variant={section.sectionType === 'custom' ? 'secondary' : 'default'} 
+                                  className={cn(
+                                    "text-xs font-medium",
+                                    section.sectionType === 'custom' 
+                                      ? 'bg-gray-100 text-gray-700' 
+                                      : 'bg-medical-teal text-white'
+                                  )}
+                                >
                                   {medicalSectionTypes.find(t => t.value === section.sectionType)?.label || 'Custom'}
                                 </Badge>
                               </div>
                               
-                              <div className="grid grid-cols-3 gap-4">
+                              <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                  <Label htmlFor={`section-title-${section.id}`}>Section Title</Label>
+                                  <Label htmlFor={`section-title-${section.id}`} className="text-sm font-medium text-gray-700">
+                                    Section Title
+                                  </Label>
                                   <Input
                                     id={`section-title-${section.id}`}
                                     value={section.title}
                                     onChange={(e) => handleUpdateSection(section.id, { title: e.target.value })}
                                     placeholder="Section Title"
+                                    className="mt-1"
                                     data-testid={`input-section-title-${section.id}`}
                                   />
                                 </div>
                                 <div>
-                                  <Label htmlFor={`section-type-${section.id}`}>Medical Section Type</Label>
+                                  <Label htmlFor={`section-type-${section.id}`} className="text-sm font-medium text-gray-700">
+                                    Medical Section Type
+                                  </Label>
                                   <Select
                                     value={section.sectionType || "custom"}
                                     onValueChange={(value) => handleUpdateSection(section.id, { sectionType: value })}
                                   >
-                                    <SelectTrigger id={`section-type-${section.id}`} data-testid={`select-section-type-${section.id}`}>
+                                    <SelectTrigger id={`section-type-${section.id}`} className="mt-1" data-testid={`select-section-type-${section.id}`}>
                                       <SelectValue placeholder="Select section type" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -442,50 +470,102 @@ export function TemplateBuilderManager() {
                                     </SelectContent>
                                   </Select>
                                 </div>
-                                <div>
-                                  <Label htmlFor={`section-placeholder-${section.id}`}>Placeholder Text</Label>
-                                  <Input
-                                    id={`section-placeholder-${section.id}`}
-                                    value={section.placeholder || ""}
-                                    onChange={(e) => handleUpdateSection(section.id, { placeholder: e.target.value })}
-                                    placeholder="Enter placeholder text..."
-                                    data-testid={`input-section-placeholder-${section.id}`}
-                                  />
-                                </div>
                               </div>
 
                               <div>
-                                <Label htmlFor={`section-content-${section.id}`}>Default Content</Label>
+                                <Label htmlFor={`section-content-${section.id}`} className="text-sm font-medium text-gray-700">
+                                  Default Content
+                                </Label>
                                 <Textarea
                                   id={`section-content-${section.id}`}
                                   value={section.content}
                                   onChange={(e) => handleUpdateSection(section.id, { content: e.target.value })}
                                   placeholder="Default content for this section..."
-                                  className="h-24"
+                                  className="h-24 mt-1"
                                   data-testid={`textarea-section-content-${section.id}`}
                                 />
                               </div>
 
-                              <div className="flex items-center justify-between">
+                              {/* Smart Phrases Integration */}
+                              <div>
+                                <Label className="text-sm font-medium text-gray-700 mb-2 block">
+                                  Auto-Include Smart Phrases
+                                </Label>
+                                <div className="space-y-2">
+                                  <Select
+                                    onValueChange={(phraseId) => {
+                                      const currentPhrases = section.smartPhrases || [];
+                                      if (!currentPhrases.includes(phraseId)) {
+                                        handleUpdateSection(section.id, { 
+                                          smartPhrases: [...currentPhrases, phraseId] 
+                                        });
+                                      }
+                                    }}
+                                  >
+                                    <SelectTrigger className="border-dashed border-medical-teal/50 text-medical-teal hover:border-medical-teal">
+                                      <SelectValue placeholder="+ Add smart phrase to this section" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {phrases?.filter(phrase => !(section.smartPhrases || []).includes(phrase.id)).map((phrase) => (
+                                        <SelectItem key={phrase.id} value={phrase.id}>
+                                          <div className="flex items-center space-x-2">
+                                            <Badge variant="outline" className="text-xs">/{phrase.trigger}</Badge>
+                                            <span>{phrase.content.substring(0, 50)}...</span>
+                                          </div>
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  
+                                  {(section.smartPhrases || []).length > 0 && (
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                      {(section.smartPhrases || []).map((phraseId) => {
+                                        const phrase = phrases?.find(p => p.id === phraseId);
+                                        return phrase ? (
+                                          <div key={phraseId} className="flex items-center space-x-1 bg-professional-blue/10 border border-professional-blue/20 rounded-md px-2 py-1">
+                                            <Badge variant="outline" className="text-xs bg-white">/{phrase.trigger}</Badge>
+                                            <span className="text-xs text-gray-700">{phrase.content.substring(0, 30)}...</span>
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="sm"
+                                              onClick={() => {
+                                                const updatedPhrases = (section.smartPhrases || []).filter(id => id !== phraseId);
+                                                handleUpdateSection(section.id, { smartPhrases: updatedPhrases });
+                                              }}
+                                              className="h-4 w-4 p-0 text-gray-500 hover:text-red-600"
+                                            >
+                                              <X size={12} />
+                                            </Button>
+                                          </div>
+                                        ) : null;
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center justify-between pt-2 border-t border-gray-200">
                                 <label className="flex items-center space-x-2">
                                   <input
                                     type="checkbox"
                                     checked={section.required || false}
                                     onChange={(e) => handleUpdateSection(section.id, { required: e.target.checked })}
+                                    className="w-4 h-4 text-medical-teal border-gray-300 rounded focus:ring-medical-teal"
                                     data-testid={`checkbox-section-required-${section.id}`}
                                   />
-                                  <span className="text-sm">Required section</span>
+                                  <span className="text-sm font-medium text-gray-700">Required section</span>
                                 </label>
                                 <Button
                                   type="button"
                                   variant="ghost"
                                   size="sm"
                                   onClick={() => handleRemoveSection(section.id)}
-                                  className="text-red-600 hover:text-red-700"
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
                                   data-testid={`button-remove-section-${section.id}`}
                                 >
-                                  <X size={14} className="mr-1" />
-                                  Remove
+                                  <Trash2 size={14} className="mr-1" />
+                                  Remove Section
                                 </Button>
                               </div>
                             </div>
@@ -499,11 +579,12 @@ export function TemplateBuilderManager() {
             </Card>
 
             {/* Submit Buttons */}
-            <div className="flex justify-between">
+            <div className="flex justify-between pt-6 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-white rounded-lg p-4">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setActiveTab('library')}
+                className="border-gray-300 text-gray-700 hover:bg-gray-50"
                 data-testid="button-cancel"
               >
                 Cancel
@@ -511,6 +592,7 @@ export function TemplateBuilderManager() {
               <Button
                 type="submit"
                 disabled={isCreating || !formData.name.trim()}
+                className="bg-gradient-to-r from-medical-teal to-professional-blue hover:from-medical-teal/90 hover:to-professional-blue/90 text-white shadow-md disabled:opacity-50"
                 data-testid="button-save-template"
               >
                 <Save size={16} className="mr-2" />
@@ -525,13 +607,24 @@ export function TemplateBuilderManager() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="border-b border-gray-200 p-6 bg-white">
+      <div className="border-b-2 border-medical-teal/20 p-8 bg-gradient-to-br from-professional-blue/5 via-medical-teal/5 to-white">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-text-primary">Template Library</h1>
-            <p className="text-gray-600 mt-1">Manage your note templates and create new ones</p>
+          <div className="flex items-center space-x-4">
+            <div className="w-12 h-12 bg-gradient-to-br from-professional-blue via-medical-teal to-professional-blue rounded-xl flex items-center justify-center shadow-md">
+              <FileText className="text-white" size={24} />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-professional-blue to-medical-teal bg-clip-text text-transparent">
+                Template Library
+              </h1>
+              <p className="text-gray-700 font-medium mt-1">Manage your note templates with smart phrases and medical sections</p>
+            </div>
           </div>
-          <Button onClick={handleCreateNew} data-testid="button-create-template">
+          <Button 
+            onClick={handleCreateNew} 
+            className="bg-gradient-to-r from-medical-teal to-professional-blue hover:from-medical-teal/90 hover:to-professional-blue/90 text-white shadow-lg"
+            data-testid="button-create-template"
+          >
             <Plus size={16} className="mr-2" />
             Create New Template
           </Button>
