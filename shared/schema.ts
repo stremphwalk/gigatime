@@ -13,15 +13,25 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// Users table
+// Session storage table (required for Replit Auth)
+export const sessions = pgTable(
+  "sessions",
+  {
+    sid: varchar("sid").primaryKey(),
+    sess: jsonb("sess").notNull(),
+    expire: timestamp("expire").notNull(),
+  },
+  (table) => [index("IDX_session_expire").on(table.expire)],
+);
+
+// Users table (modified for Replit Auth)
 export const users = pgTable("users", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: varchar("username", { length: 50 }).notNull().unique(),
+  id: varchar("id").primaryKey(), // Replit user ID from claims.sub
   email: varchar("email", { length: 100 }),
   firstName: varchar("first_name", { length: 50 }),
   lastName: varchar("last_name", { length: 50 }),
-  specialty: varchar("specialty", { length: 100 }),
   profileImageUrl: varchar("profile_image_url", { length: 500 }),
+  specialty: varchar("specialty", { length: 100 }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -232,6 +242,7 @@ export const insertPertinentNegativePresetSchema = createInsertSchema(pertinentN
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type UpsertUser = typeof users.$inferInsert;
 
 export type PertinentNegativePreset = typeof pertinentNegativePresets.$inferSelect;
 export type InsertPertinentNegativePreset = z.infer<typeof insertPertinentNegativePresetSchema>;

@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
+import { setupAuth, isAuthenticated } from "./replitAuth";
 import { 
   insertNoteSchema, 
   insertNoteTemplateSchema, 
@@ -12,25 +13,14 @@ import {
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Helper function to get mock user ID (replace with real auth later)
-  const getMockUserId = () => "123e4567-e89b-12d3-a456-426614174000"; // Valid UUID
+  // Set up Replit authentication
+  await setupAuth(app);
 
-  // User routes
-  app.get("/api/users/me", async (req, res) => {
+  // Auth routes
+  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = getMockUserId();
-      // For now, create/return a mock user with proper UUID
-      let user = await storage.getUser(userId);
-      if (!user) {
-        user = await storage.createUser({
-          id: userId,
-          username: "mock-user",
-          email: "doctor@hospital.com",
-          firstName: "Dr. Sarah",
-          lastName: "Mitchell",
-          specialty: "Emergency Medicine"
-        });
-      }
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
       res.json(user);
     } catch (error) {
       console.error("Error fetching user:", error);
