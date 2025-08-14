@@ -3,6 +3,7 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ThemeProvider } from "@/components/theme-provider";
 import { useSimpleAuth as useAuth } from "@/hooks/useSimpleAuth";
 import { GlobalDictation } from "@/components/global-dictation";
 import Home from "./pages/home";
@@ -48,11 +49,13 @@ function Router() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Router />
-        <GlobalDictation />
-      </TooltipProvider>
+      <ThemeProvider defaultTheme="system" storageKey="medical-app-theme">
+        <TooltipProvider>
+          <Toaster />
+          <Router />
+          <GlobalDictation />
+        </TooltipProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

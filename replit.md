@@ -56,6 +56,15 @@ Template sections can be associated with predefined medical section types (Chief
 - **Category Filtering**: Functions to browse medications by therapeutic class for systematic prescribing
 - **Medical Context**: Over 50 common medications with proper therapeutic classification for clinical accuracy
 
+## Dark Mode System (Completed August 14, 2025)
+- **Theme Provider**: Comprehensive ThemeProvider component with system/light/dark theme support
+- **Theme Toggle**: Dropdown-based theme switcher in sidebar with sun/moon icons
+- **CSS Variables**: Complete dark mode color palette with medical theme color adaptations
+- **Component Support**: Dark mode styling for sidebar, navigation, cards, and autocomplete components
+- **Persistent Storage**: Theme preference saved to localStorage with "medical-app-theme" key
+- **System Integration**: Automatically detects and follows system dark mode preference
+- **Accessibility**: Proper color contrast ratios maintained in both light and dark modes
+
 ## Authentication & Authorization
 - Currently implements mock authentication for development
 - Designed for future integration with healthcare-grade authentication systems

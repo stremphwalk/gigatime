@@ -53,7 +53,7 @@ export default function Home() {
   };
 
   return (
-    <div className="flex h-screen bg-clinical-white text-text-primary overflow-hidden">
+    <div className="flex h-screen bg-clinical-white dark:bg-gray-900 text-text-primary dark:text-gray-100 overflow-hidden">
       <Sidebar 
         onCreateNote={handleCreateNote}
         onNoteSelect={handleNoteSelect}
@@ -63,7 +63,7 @@ export default function Home() {
         currentView={currentView}
         onViewChange={handleViewChange}
       />
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-gray-900">
         {currentView === 'notes' ? (
           <NoteEditor 
             note={selectedNote}
@@ -71,7 +71,7 @@ export default function Home() {
             onNoteSaved={handleNoteSaved}
           />
         ) : currentView === 'teams' ? (
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 overflow-y-auto p-6 bg-white dark:bg-gray-900">
             <div className="max-w-6xl mx-auto">
               <h1 className="text-2xl font-bold text-text-primary mb-6">Team Collaboration</h1>
               <TeamCollaboration />
