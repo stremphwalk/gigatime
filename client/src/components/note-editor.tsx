@@ -558,14 +558,6 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                     {section.required && <span className="text-medical-red text-xs">*</span>}
                   </h3>
                   <div className="flex items-center space-x-2">
-                    <Button variant="ghost" size="sm" className="text-xs text-professional-blue hover:underline">
-                      <Zap size={12} className="mr-1" />
-                      Smart Phrase
-                    </Button>
-                    <Button variant="ghost" size="sm" className="text-xs text-professional-blue hover:underline">
-                      <Mic size={12} className="mr-1" />
-                      Dictation
-                    </Button>
                     <Button 
                       variant="ghost" 
                       size="sm" 
