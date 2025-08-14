@@ -45,22 +45,17 @@ export function useDictation() {
       });
       streamRef.current = stream;
 
-      // Create live transcription connection with medical optimization
+      // Create live transcription connection with nova-3-medical
       const connection = deepgram.listen.live({
-        model: 'nova-2',
+        model: 'nova-3-medical',
         language: 'en-US',
         smart_format: true,
         interim_results: true,
         filler_words: false,
-        utterance_end_ms: 1500,
+        utterance_end_ms: 1000,
         punctuate: true,
         numerals: true,
-        keywords: [
-          // Essential medical terms for better recognition
-          'hypertension:5', 'diabetes:5', 'pneumonia:5', 'medication:5',
-          'patient:5', 'symptoms:5', 'diagnosis:5', 'treatment:5',
-          'mg:3', 'ml:3', 'bid:3', 'tid:3', 'prn:3'
-        ]
+        endpointing: 300
       } as LiveSchema);
 
       connectionRef.current = connection;
@@ -72,8 +67,11 @@ export function useDictation() {
       });
 
       connection.addListener(LiveTranscriptionEvents.Transcript, (data: any) => {
+        console.log('🎤 Transcript received:', data);
         const transcript = data.channel?.alternatives?.[0]?.transcript;
         if (transcript && transcript.trim()) {
+          console.log('🎤 Raw transcript:', transcript);
+          
           // Apply medical formatting improvements
           let formattedTranscript = transcript
             // Fix common medical abbreviations
@@ -94,6 +92,7 @@ export function useDictation() {
             .replace(/\bdiabetes\b/gi, 'diabetes')
             .replace(/\bchest pain\b/gi, 'chest pain');
 
+          console.log('🎤 Formatted transcript:', formattedTranscript);
           setState(prev => ({ 
             ...prev, 
             transcript: data.is_final ? formattedTranscript : formattedTranscript
@@ -102,7 +101,13 @@ export function useDictation() {
       });
 
       connection.addListener(LiveTranscriptionEvents.Error, (error: any) => {
-        console.error('Deepgram error:', error);
+        console.error('🎤 Deepgram error:', error);
+        
+        // If nova-3-medical fails, try falling back to nova-2
+        if (error.message && error.message.includes('model')) {
+          console.log('🎤 Nova-3-medical not available, will try nova-2 on next attempt');
+        }
+        
         setState(prev => ({ ...prev, error: error.message || 'Connection error' }));
       });
 
@@ -112,14 +117,33 @@ export function useDictation() {
       });
 
       // Set up MediaRecorder to send audio to Deepgram
-      const mediaRecorder = new MediaRecorder(stream);
+      let mimeType = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/webm';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = 'audio/mp4';
+        }
+      }
+      
+      console.log('🎤 Using MIME type:', mimeType);
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
       mediaRecorderRef.current = mediaRecorder;
 
       mediaRecorder.addEventListener('dataavailable', (event) => {
+        console.log('🎤 Audio data available, size:', event.data.size);
         // iOS SAFARI FIX: Prevent packetZero from being sent
         if (event.data.size > 0) {
           connection.send(event.data);
+          console.log('🎤 Audio data sent to Deepgram');
         }
+      });
+
+      mediaRecorder.addEventListener('start', () => {
+        console.log('🎤 MediaRecorder started');
+      });
+
+      mediaRecorder.addEventListener('error', (event) => {
+        console.error('🎤 MediaRecorder error:', event);
       });
 
       mediaRecorder.start(250); // Send data every 250ms
