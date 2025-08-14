@@ -4,7 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Pill, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { searchMedications, type MedicationInfo } from "@/lib/medications";
+import { 
+  searchMedications, 
+  getMedicationCategories,
+  searchMedicationsByCategory,
+  type MedicationInfo 
+} from "@/lib/medications";
 
 interface MedicationAutocompleteProps {
   query: string;
@@ -98,8 +103,16 @@ function DosageFrequencyPopup({ medication, position, onSelect, onClose }: Dosag
             <div className="flex items-center gap-2 mb-2">
               <Pill size={16} className="text-blue-600" />
               <span className="font-medium text-sm">{medication.name}</span>
-              <Badge variant="outline" className="text-xs">{medication.category}</Badge>
+              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                {medication.subcategory || medication.category}
+              </Badge>
             </div>
+            {medication.genericName && (
+              <div className="text-xs text-gray-400 italic mb-1">{medication.genericName}</div>
+            )}
+            {medication.indication && (
+              <div className="text-xs text-gray-600 mb-2">For: {medication.indication}</div>
+            )}
             <div className="text-xs text-gray-500">
               Select dosage and frequency (ESC to cancel)
             </div>
@@ -280,10 +293,23 @@ export function MedicationAutocomplete({
                     <Pill size={16} className="text-purple-600 flex-shrink-0" />
                     <div className="flex flex-col items-start gap-0.5 flex-1">
                       <span className="font-medium text-sm">{medication.name}</span>
+                      {medication.genericName && (
+                        <span className="text-xs text-gray-400 italic">{medication.genericName}</span>
+                      )}
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <Badge variant="outline" className="text-xs px-1 py-0 bg-blue-50 text-blue-700 border-blue-200">
+                          {medication.subcategory || medication.category}
+                        </Badge>
+                        {medication.indication && (
+                          <span className="text-xs text-gray-500 truncate max-w-32">{medication.indication}</span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs text-gray-500">{medication.category}</span>
                         <Badge variant="secondary" className="text-xs px-1 py-0">
                           {medication.commonDosages.length} dosages
+                        </Badge>
+                        <Badge variant="secondary" className="text-xs px-1 py-0">
+                          {medication.commonFrequencies.length} frequencies
                         </Badge>
                       </div>
                     </div>
