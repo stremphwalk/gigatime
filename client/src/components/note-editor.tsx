@@ -10,6 +10,7 @@ import { SmartPhraseAutocomplete } from "./smart-phrase-autocomplete";
 import { FlexibleSmartPhrasePicker } from "./flexible-smart-phrase-picker";
 import { MedicalConditionAutocomplete } from "./medical-condition-autocomplete";
 import { PertinentNegativesPopup } from "./pertinent-negatives-popup";
+import { PertinentNegativePresetSelector } from "./pertinent-negative-preset-selector";
 import { useNotes, useNoteTemplates } from "../hooks/use-notes";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
 import { useToast } from "../hooks/use-toast";
@@ -694,16 +695,21 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                     {(section.type === 'historyOfPresentIllness' || 
                       section.name.toLowerCase().includes('history of present illness') ||
                       section.name.toLowerCase().includes('hpi')) && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handlePertinentNegativesClick(section.id)}
-                        className="text-xs text-professional-blue hover:underline"
-                        data-testid={`button-pertinent-negatives-${section.id}`}
-                      >
-                        <UserCheck size={12} className="mr-1" />
-                        Pertinent Negatives
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handlePertinentNegativesClick(section.id)}
+                          className="text-xs text-professional-blue hover:underline"
+                          data-testid={`button-pertinent-negatives-${section.id}`}
+                        >
+                          <UserCheck size={12} className="mr-1" />
+                          Pertinent Negatives
+                        </Button>
+                        <PertinentNegativePresetSelector 
+                          onSelectPreset={(negativeText) => handlePertinentNegativesConfirm(negativeText, section.id)}
+                        />
+                      </div>
                     )}
                     <Button 
                       variant="ghost" 

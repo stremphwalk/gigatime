@@ -144,7 +144,7 @@ export function PertinentNegativesPopup({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
+      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col" aria-describedby="pertinent-negatives-description">
         <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center justify-between">
             <span>Select Pertinent Negatives</span>
@@ -152,6 +152,9 @@ export function PertinentNegativesPopup({
               {getSelectedCount()} symptoms selected
             </Badge>
           </DialogTitle>
+          <div id="pertinent-negatives-description" className="sr-only">
+            Select pertinent negative symptoms from medical systems to document in your clinical note
+          </div>
         </DialogHeader>
         
         <div className="flex flex-col flex-1 overflow-hidden">

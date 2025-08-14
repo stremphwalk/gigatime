@@ -346,7 +346,7 @@ export class DatabaseStorage implements IStorage {
     return db
       .select()
       .from(pertinentNegativePresets)
-      .where(eq(pertinentNegativePresets.userId, userId))
+      .where(eq(pertinentNegativePresets.userId, 'default-user')) // Use default-user for now
       .orderBy(desc(pertinentNegativePresets.createdAt));
   }
 
