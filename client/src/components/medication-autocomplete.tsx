@@ -44,8 +44,15 @@ function DosageFrequencyPopup({ medication, position, onSelect, onClose }: Dosag
       }
     };
 
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    // Add delay to prevent immediate closure when popup appears
+    const timeoutId = setTimeout(() => {
+      document.addEventListener("mousedown", handleClickOutside);
+    }, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
   }, [onClose]);
 
   const handleComplete = () => {
@@ -55,7 +62,8 @@ function DosageFrequencyPopup({ medication, position, onSelect, onClose }: Dosag
     }
   };
 
-  const handleDosageSelect = (dosage: string) => {
+  const handleDosageSelect = (dosage: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     setSelectedDosage(dosage);
     if (selectedFrequency) {
       const fullMedication = `${medication.name} ${dosage} ${selectedFrequency}`;
@@ -63,7 +71,8 @@ function DosageFrequencyPopup({ medication, position, onSelect, onClose }: Dosag
     }
   };
 
-  const handleFrequencySelect = (frequency: string) => {
+  const handleFrequencySelect = (frequency: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     setSelectedFrequency(frequency);
     if (selectedDosage) {
       const fullMedication = `${medication.name} ${selectedDosage} ${frequency}`;
@@ -106,7 +115,7 @@ function DosageFrequencyPopup({ medication, position, onSelect, onClose }: Dosag
                   variant={selectedDosage === dosage ? "default" : "outline"}
                   size="sm"
                   className="text-xs h-6 px-2"
-                  onClick={() => handleDosageSelect(dosage)}
+                  onClick={(e) => handleDosageSelect(dosage, e)}
                   data-testid={`dosage-${dosage}`}
                 >
                   {dosage}
@@ -128,7 +137,7 @@ function DosageFrequencyPopup({ medication, position, onSelect, onClose }: Dosag
                   variant={selectedFrequency === frequency ? "default" : "outline"}
                   size="sm"
                   className="text-xs h-6 px-2"
-                  onClick={() => handleFrequencySelect(frequency)}
+                  onClick={(e) => handleFrequencySelect(frequency, e)}
                   data-testid={`frequency-${frequency}`}
                 >
                   {frequency}
@@ -200,8 +209,14 @@ export function MedicationAutocomplete({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        onClose();
+      // Don't close if clicking on the dosage popup
+      const target = event.target as Node;
+      if (containerRef.current && !containerRef.current.contains(target)) {
+        // Check if click is on dosage popup
+        const dosagePopup = document.querySelector('[data-testid="medication-dosage-popup"]');
+        if (!dosagePopup || !dosagePopup.contains(target)) {
+          onClose();
+        }
       }
     };
 
@@ -209,7 +224,8 @@ export function MedicationAutocomplete({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [onClose]);
 
-  const handleMedicationSelect = (medication: MedicationInfo) => {
+  const handleMedicationSelect = (medication: MedicationInfo, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     // Show dosage/frequency popup
     setShowDosagePopup(medication);
   };
@@ -257,7 +273,7 @@ export function MedicationAutocomplete({
                     "w-full justify-start text-left h-auto py-2 px-3 rounded-none border-b border-gray-50 last:border-b-0",
                     index === selectedIndex && "bg-purple-50 text-purple-900"
                   )}
-                  onClick={() => handleMedicationSelect(medication)}
+                  onClick={(e) => handleMedicationSelect(medication, e)}
                   data-testid={`medication-suggestion-${index}`}
                 >
                   <div className="flex items-center gap-2 w-full">
