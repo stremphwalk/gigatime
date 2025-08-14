@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Sidebar } from "../components/sidebar";
 import { NoteEditor } from "../components/note-editor";
 import { TeamCollaboration } from "../components/team-collaboration";
-import { SmartPhrasesManager } from "../components/smart-phrases-manager";
+import { SmartPhrasesManager } from "../components/smart-phrases-manager-v2";
 import { TemplateBuilderManager } from "../components/template-builder-manager";
 import { useNotes } from "../hooks/use-notes";
 import { apiRequest } from "@/lib/queryClient";

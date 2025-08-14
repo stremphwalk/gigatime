@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SmartPhraseAutocomplete } from "./smart-phrase-autocomplete";
-import { SmartPhrasePicker } from "./smart-phrase-picker";
+import { FlexibleSmartPhrasePicker } from "./flexible-smart-phrase-picker";
 import { useNotes, useNoteTemplates } from "../hooks/use-notes";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
 import { useToast } from "../hooks/use-toast";
@@ -169,7 +169,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
         
         if (!phrase) return;
         
-        if (phrase.type === 'text' || !phrase.type) {
+        if (!phrase.elements || phrase.elements.length === 0) {
           finalContent = phrase.content;
         } else {
           // Show picker for interactive phrases
@@ -624,7 +624,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                   )}
                   
                   {activePicker && activePicker.sectionId === section.id && (
-                    <SmartPhrasePicker
+                    <FlexibleSmartPhrasePicker
                       phrase={activePicker.phrase}
                       position={activePicker.position}
                       onSelect={handlePickerSelect}

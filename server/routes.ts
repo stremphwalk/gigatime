@@ -397,15 +397,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.createNoteTemplate(template);
       }
 
-      // Create default smart phrases
+      // Create default flexible smart phrases
       const defaultPhrases = [
-        // Traditional text phrases
+        // Simple text phrases
         {
           trigger: "normal-heart-sounds",
           content: "Heart rate regular, no murmurs, gallops, or rubs appreciated.",
           description: "Normal cardiac examination",
           category: "cardiology",
-          type: "text",
+          elements: [],
           isPublic: true,
           userId
         },
@@ -414,87 +414,131 @@ export async function registerRoutes(app: Express): Promise<Server> {
           content: "Lungs clear to auscultation bilaterally, no wheezes, rales, or rhonchi.",
           description: "Normal pulmonary examination",
           category: "respiratory",
-          type: "text",
+          elements: [],
           isPublic: true,
           userId
         },
-        // Multipicker phrase for pain assessment
+        // Flexible admission phrase with multiple interactive elements
         {
-          trigger: "pain-level",
-          content: "Patient rates pain as {option} out of 10.",
-          description: "Pain scale assessment",
+          trigger: "admission",
+          content: "Patient admitted on {{admission_date}} for {{reason}}. Current status: {{status}}. Pain level: {{pain}}. Plan: {{plan}}.",
+          description: "Comprehensive admission note with date, reason, status, pain, and plan",
           category: "general",
-          type: "multipicker",
-          options: {
-            choices: [
-              { label: "Mild (1-3)", value: "mild (1-3)" },
-              { label: "Moderate (4-6)", value: "moderate (4-6)" },
-              { label: "Severe (7-8)", value: "severe (7-8)" },
-              { label: "Excruciating (9-10)", value: "excruciating (9-10)" }
-            ]
-          },
+          elements: [
+            {
+              id: "admission_date",
+              type: "date",
+              label: "Admission Date",
+              placeholder: "{{admission_date}}"
+            },
+            {
+              id: "reason",
+              type: "multipicker",
+              label: "Admission Reason",
+              placeholder: "{{reason}}",
+              options: [
+                { id: "chest_pain", label: "Chest pain evaluation", value: "chest pain evaluation" },
+                { id: "resp_distress", label: "Respiratory distress", value: "respiratory distress" },
+                { id: "cardiac_mon", label: "Cardiac monitoring", value: "cardiac monitoring" },
+                { id: "surgical", label: "Surgical procedure", value: "surgical procedure" }
+              ]
+            },
+            {
+              id: "status",
+              type: "nested_multipicker",
+              label: "Current Status",
+              placeholder: "{{status}}",
+              options: [
+                {
+                  id: "stable",
+                  label: "Stable",
+                  value: "stable",
+                  children: [
+                    { id: "stable_improving", label: "Improving", value: "stable and improving" },
+                    { id: "stable_unchanged", label: "Unchanged", value: "stable and unchanged" }
+                  ]
+                },
+                {
+                  id: "critical",
+                  label: "Critical", 
+                  value: "critical",
+                  children: [
+                    { id: "critical_icu", label: "Requires ICU", value: "critical - requires ICU monitoring" },
+                    { id: "critical_stable", label: "Stable in ICU", value: "critical but stable in ICU" }
+                  ]
+                }
+              ]
+            },
+            {
+              id: "pain",
+              type: "multipicker",
+              label: "Pain Level",
+              placeholder: "{{pain}}",
+              options: [
+                { id: "mild", label: "Mild (1-3)", value: "mild (1-3 out of 10)" },
+                { id: "moderate", label: "Moderate (4-6)", value: "moderate (4-6 out of 10)" },
+                { id: "severe", label: "Severe (7-8)", value: "severe (7-8 out of 10)" },
+                { id: "excruciating", label: "Excruciating (9-10)", value: "excruciating (9-10 out of 10)" }
+              ]
+            },
+            {
+              id: "plan",
+              type: "multipicker",
+              label: "Treatment Plan",
+              placeholder: "{{plan}}",
+              options: [
+                { id: "obs", label: "Observation and monitoring", value: "observation and monitoring" },
+                { id: "med_mgmt", label: "Medical management", value: "medical management" },
+                { id: "surg_eval", label: "Surgical evaluation", value: "surgical evaluation" },
+                { id: "discharge_plan", label: "Discharge planning", value: "discharge planning" }
+              ]
+            }
+          ],
           isPublic: true,
           userId
         },
-        // Nested multipicker for admission type
+        // Discharge phrase with follow-up date
         {
-          trigger: "admission-type",
-          content: "{option1} admission to {option2}.",
-          description: "Patient admission details",
+          trigger: "discharge",
+          content: "Patient discharged home on {{discharge_date}} in {{condition}} condition. {{instructions}} Follow-up appointment scheduled for {{followup_date}}.",
+          description: "Discharge summary with date and follow-up",
           category: "general",
-          type: "nested_multipicker",
-          options: {
-            choices: [
-              {
-                label: "Emergency",
-                value: "Emergency",
-                children: [
-                  { label: "ICU", value: "ICU" },
-                  { label: "Emergency Department", value: "Emergency Department" },
-                  { label: "Cardiac Care Unit", value: "Cardiac Care Unit" }
-                ]
-              },
-              {
-                label: "Elective",
-                value: "Elective",
-                children: [
-                  { label: "General Ward", value: "General Ward" },
-                  { label: "Surgery Unit", value: "Surgery Unit" },
-                  { label: "Observation Unit", value: "Observation Unit" }
-                ]
-              }
-            ]
-          },
-          isPublic: true,
-          userId
-        },
-        // Date picker phrase for follow-up
-        {
-          trigger: "follow-up",
-          content: "Follow-up appointment scheduled for {date}.",
-          description: "Schedule follow-up appointment",
-          category: "general",
-          type: "date",
-          isPublic: true,
-          userId
-        },
-        // Another multipicker for symptoms
-        {
-          trigger: "deny-symptoms",
-          content: "Patient denies {option}.",
-          description: "Common symptom denial",
-          category: "general",
-          type: "multipicker",
-          options: {
-            choices: [
-              { label: "Chest pain", value: "chest pain" },
-              { label: "Shortness of breath", value: "shortness of breath" },
-              { label: "Nausea or vomiting", value: "nausea or vomiting" },
-              { label: "Dizziness", value: "dizziness" },
-              { label: "Palpitations", value: "palpitations" },
-              { label: "Syncope", value: "syncope" }
-            ]
-          },
+          elements: [
+            {
+              id: "discharge_date",
+              type: "date",
+              label: "Discharge Date",
+              placeholder: "{{discharge_date}}"
+            },
+            {
+              id: "condition",
+              type: "multipicker",
+              label: "Discharge Condition",
+              placeholder: "{{condition}}",
+              options: [
+                { id: "stable", label: "Stable", value: "stable" },
+                { id: "improved", label: "Improved", value: "improved" },
+                { id: "unchanged", label: "Unchanged", value: "unchanged" }
+              ]
+            },
+            {
+              id: "instructions",
+              type: "multipicker",
+              label: "Discharge Instructions",
+              placeholder: "{{instructions}}",
+              options: [
+                { id: "medications", label: "Continue medications as prescribed.", value: "Continue medications as prescribed." },
+                { id: "activity", label: "Resume normal activities as tolerated.", value: "Resume normal activities as tolerated." },
+                { id: "diet", label: "No dietary restrictions.", value: "No dietary restrictions." }
+              ]
+            },
+            {
+              id: "followup_date",
+              type: "date",
+              label: "Follow-up Date",
+              placeholder: "{{followup_date}}"
+            }
+          ],
           isPublic: true,
           userId
         }

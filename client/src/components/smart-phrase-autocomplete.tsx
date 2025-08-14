@@ -53,7 +53,7 @@ export function SmartPhraseAutocomplete({
         e.preventDefault();
         if (filteredPhrases[selectedIndex]) {
           const phrase = filteredPhrases[selectedIndex];
-          if (phrase.type && phrase.type !== 'text') {
+          if (phrase.elements && phrase.elements.length > 0) {
             // For advanced phrases, pass the phrase object
             onSelect(phrase);
           } else {
@@ -95,7 +95,7 @@ export function SmartPhraseAutocomplete({
                 : "hover:bg-gray-100"
             )}
             onClick={() => {
-              if (phrase.type && phrase.type !== 'text') {
+              if (phrase.elements && phrase.elements.length > 0) {
                 onSelect(phrase);
               } else {
                 onSelect(phrase.content);
@@ -115,26 +115,19 @@ export function SmartPhraseAutocomplete({
                   </div>
                 )}
               </div>
-              {/* Type indicator */}
-              <div className="ml-2">
-                {phrase.type === 'multipicker' && (
-                  <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                    <MousePointer size={8} />
-                  </Badge>
-                )}
-                {phrase.type === 'nested_multipicker' && (
-                  <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200">
-                    <ChevronRight size={8} />
-                  </Badge>
-                )}
-                {phrase.type === 'date' && (
-                  <Badge variant="outline" className="text-xs bg-green-50 text-green-700 border-green-200">
-                    <Calendar size={8} />
-                  </Badge>
-                )}
-                {(!phrase.type || phrase.type === 'text') && (
+              {/* Interactive elements indicators */}
+              <div className="ml-2 flex space-x-1">
+                {phrase.elements && Array.isArray(phrase.elements) && phrase.elements.length > 0 ? (
+                  phrase.elements.map((element: any, index: number) => (
+                    <Badge key={index} variant="outline" className="text-xs">
+                      {element.type === 'multipicker' && <MousePointer size={6} />}
+                      {element.type === 'nested_multipicker' && <ChevronRight size={6} />}
+                      {element.type === 'date' && <Calendar size={6} />}
+                    </Badge>
+                  ))
+                ) : (
                   <Badge variant="outline" className="text-xs bg-gray-50 text-gray-600 border-gray-200">
-                    <Zap size={8} />
+                    <Zap size={6} />
                   </Badge>
                 )}
               </div>

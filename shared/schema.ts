@@ -75,15 +75,14 @@ export const notes = pgTable("notes", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// Smart phrases table
+// Smart phrases table - flexible system with mixed interactive elements
 export const smartPhrases = pgTable("smart_phrases", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   trigger: varchar("trigger", { length: 50 }).notNull(), // the phrase after /
-  content: text("content").notNull(),
+  content: text("content").notNull(), // template with placeholders like {{picker1}}, {{date1}}, etc.
   description: varchar("description", { length: 200 }),
   category: varchar("category", { length: 50 }),
-  type: varchar("type", { length: 20 }).default("text"), // text, multipicker, nested_multipicker, date
-  options: jsonb("options"), // for multipicker and nested multipicker options
+  elements: jsonb("elements"), // array of interactive elements: [{id: "picker1", type: "multipicker", options: [...]}]
   isPublic: boolean("is_public").default(false),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at").defaultNow(),
