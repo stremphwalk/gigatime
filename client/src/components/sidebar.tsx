@@ -190,7 +190,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
           >
             <Users className="text-medical-teal" size={16} />
             <span className="font-medium">Teams</span>
-            <Badge className="ml-auto bg-success-green text-white text-xs">6</Badge>
+            
           </Button>
         </div>
 
