@@ -55,22 +55,6 @@ export function PhysicalExamAutocomplete({
         setSelectedIndex(prev => 
           prev > 0 ? prev - 1 : (showCategories ? categoryResults.reduce((acc, cat) => acc + cat.findings.length, 0) - 1 : suggestions.length - 1)
         );
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        if (showCategories) {
-          let currentIndex = 0;
-          for (const category of categoryResults) {
-            for (const finding of category.findings) {
-              if (currentIndex === selectedIndex) {
-                onSelect(finding);
-                return;
-              }
-              currentIndex++;
-            }
-          }
-        } else if (suggestions[selectedIndex]) {
-          onSelect(suggestions[selectedIndex]);
-        }
       } else if (e.key === 'Escape') {
         onClose();
       } else if (e.key === 'Tab') {
@@ -271,7 +255,7 @@ export function PhysicalExamAutocomplete({
       {/* Footer */}
       <div className="bg-gray-50 px-3 py-2 border-t text-xs text-gray-600">
         <div className="flex items-center justify-between">
-          <span>Use ↑↓ to navigate, Tab/Enter to select</span>
+          <span>Use ↑↓ to navigate, Tab to select</span>
           <span>{showCategories ? `${categoryResults.reduce((acc, cat) => acc + cat.findings.length, 0)} findings` : `${suggestions.length} suggestions`}</span>
         </div>
       </div>
