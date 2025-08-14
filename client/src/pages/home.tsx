@@ -3,6 +3,7 @@ import { Sidebar } from "../components/sidebar";
 import { NoteEditor } from "../components/note-editor";
 import { TeamCollaboration } from "../components/team-collaboration";
 import { SmartPhrasesManager } from "../components/smart-phrases-manager";
+import { TemplateBuilderManager } from "../components/template-builder-manager";
 import { useNotes } from "../hooks/use-notes";
 import { apiRequest } from "@/lib/queryClient";
 import type { Note } from "@shared/schema";
@@ -10,7 +11,7 @@ import type { Note } from "@shared/schema";
 export default function Home() {
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [isCreatingNote, setIsCreatingNote] = useState(false);
-  const [currentView, setCurrentView] = useState<'notes' | 'teams' | 'smart-phrases'>('notes');
+  const [currentView, setCurrentView] = useState<'notes' | 'teams' | 'smart-phrases' | 'template-builder'>('notes');
   const { notes, isLoading } = useNotes();
 
   // Initialize default templates and phrases on first load
@@ -43,9 +44,9 @@ export default function Home() {
     setIsCreatingNote(false);
   };
 
-  const handleViewChange = (view: 'notes' | 'teams' | 'smart-phrases') => {
+  const handleViewChange = (view: 'notes' | 'teams' | 'smart-phrases' | 'template-builder') => {
     setCurrentView(view);
-    if (view === 'teams' || view === 'smart-phrases') {
+    if (view === 'teams' || view === 'smart-phrases' || view === 'template-builder') {
       setSelectedNote(null);
       setIsCreatingNote(false);
     }
@@ -76,9 +77,11 @@ export default function Home() {
               <TeamCollaboration />
             </div>
           </div>
-        ) : (
+        ) : currentView === 'smart-phrases' ? (
           <SmartPhrasesManager />
-        )}
+        ) : currentView === 'template-builder' ? (
+          <TemplateBuilderManager />
+        ) : null}
       </div>
     </div>
   );

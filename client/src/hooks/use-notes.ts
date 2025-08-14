@@ -75,11 +75,21 @@ export function useNoteTemplates() {
     },
   });
 
+  const deleteTemplateMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/note-templates/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/note-templates"] });
+    },
+  });
+
   return {
     templates,
     isLoading,
     createTemplate: createTemplateMutation.mutateAsync,
     updateTemplate: updateTemplateMutation.mutateAsync,
+    deleteTemplate: deleteTemplateMutation.mutateAsync,
     isCreating: createTemplateMutation.isPending || updateTemplateMutation.isPending,
   };
 }

@@ -50,6 +50,7 @@ export const noteTemplates = pgTable("note_templates", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name", { length: 100 }).notNull(),
   type: varchar("type", { length: 50 }).notNull(), // admission, progress, consult
+  description: text("description"),
   sections: jsonb("sections").notNull(), // array of section objects
   isDefault: boolean("is_default").default(false),
   userId: uuid("user_id").references(() => users.id, { onDelete: 'cascade' }),
