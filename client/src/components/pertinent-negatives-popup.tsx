@@ -125,8 +125,8 @@ export function PertinentNegativesPopup({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden">
-        <DialogHeader>
+      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="flex items-center justify-between">
             <span>Select Pertinent Negatives</span>
             <Badge variant="secondary">
@@ -135,10 +135,10 @@ export function PertinentNegativesPopup({
           </DialogTitle>
         </DialogHeader>
         
-        <div className="flex flex-col h-full">
+        <div className="flex flex-col flex-1 overflow-hidden">
           {/* Preset Section */}
           {presets.length > 0 && (
-            <div className="mb-4">
+            <div className="mb-4 flex-shrink-0">
               <Label className="text-sm font-medium mb-2 block">Load Preset:</Label>
               <div className="flex flex-wrap gap-2">
                 {presets.map(preset => (
@@ -157,8 +157,8 @@ export function PertinentNegativesPopup({
           )}
 
           {/* Systems Grid */}
-          <div className="flex-1 overflow-y-auto">
-            <div className="grid grid-cols-2 gap-4 pr-2">
+          <div className="flex-1 overflow-y-auto min-h-0">
+            <div className="grid grid-cols-2 gap-4 pr-2 pb-4">
               {PERTINENT_NEGATIVE_SYSTEMS.map(system => {
                 const IconComponent = SYSTEM_ICONS[system.id] || CheckSquare;
                 const selectedCount = selectedSymptoms[system.id]?.length || 0;
@@ -196,7 +196,7 @@ export function PertinentNegativesPopup({
                       </div>
                     </CardHeader>
                     <CardContent className="pt-0">
-                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                      <div className="space-y-2 max-h-44 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300">
                         {system.symptoms.map(symptom => {
                           const isSelected = selectedSymptoms[system.id]?.includes(symptom.id) || false;
                           return (
@@ -207,11 +207,11 @@ export function PertinentNegativesPopup({
                                 onCheckedChange={(checked) => 
                                   handleSymptomToggle(system.id, symptom.id, checked as boolean)
                                 }
-                                className="h-4 w-4"
+                                className="h-4 w-4 flex-shrink-0"
                               />
                               <Label 
                                 htmlFor={`${system.id}-${symptom.id}`}
-                                className="text-sm cursor-pointer flex-1"
+                                className="text-sm cursor-pointer flex-1 leading-tight"
                               >
                                 {symptom.text}
                               </Label>
@@ -226,82 +226,84 @@ export function PertinentNegativesPopup({
             </div>
           </div>
 
-          <Separator className="my-4" />
+          <div className="flex-shrink-0">
+            <Separator className="my-4" />
 
-          {/* Preview Section */}
-          {getSelectedCount() > 0 && (
-            <div className="mb-4">
-              <Label className="text-sm font-medium mb-2 block">Preview:</Label>
-              <div className="bg-gray-50 p-3 rounded text-sm border max-h-24 overflow-y-auto">
-                {formatPertinentNegatives(selectedSymptoms)}
+            {/* Preview Section */}
+            {getSelectedCount() > 0 && (
+              <div className="mb-4">
+                <Label className="text-sm font-medium mb-2 block">Preview:</Label>
+                <div className="bg-gray-50 p-3 rounded text-sm border max-h-20 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300">
+                  {formatPertinentNegatives(selectedSymptoms)}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Preset Save Section */}
-          {showPresetSave && (
-            <div className="mb-4 p-3 bg-blue-50 rounded border border-blue-200">
-              <Label className="text-sm font-medium mb-2 block">Save as Preset:</Label>
+            {/* Preset Save Section */}
+            {showPresetSave && (
+              <div className="mb-4 p-3 bg-blue-50 rounded border border-blue-200">
+                <Label className="text-sm font-medium mb-2 block">Save as Preset:</Label>
+                <div className="flex space-x-2">
+                  <Input
+                    value={presetName}
+                    onChange={(e) => setPresetName(e.target.value)}
+                    placeholder="Enter preset name..."
+                    className="flex-1"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleSavePreset();
+                      }
+                    }}
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleSavePreset}
+                    disabled={!presetName.trim()}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    <Save size={14} className="mr-1" />
+                    Save
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setShowPresetSave(false)}
+                  >
+                    <X size={14} />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex justify-between items-center">
               <div className="flex space-x-2">
-                <Input
-                  value={presetName}
-                  onChange={(e) => setPresetName(e.target.value)}
-                  placeholder="Enter preset name..."
-                  className="flex-1"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      handleSavePreset();
-                    }
-                  }}
-                />
-                <Button
-                  size="sm"
-                  onClick={handleSavePreset}
-                  disabled={!presetName.trim()}
-                  className="bg-blue-600 hover:bg-blue-700"
-                >
-                  <Save size={14} className="mr-1" />
-                  Save
+                {onSavePreset && getSelectedCount() > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowPresetSave(true)}
+                    disabled={showPresetSave}
+                  >
+                    <Save size={14} className="mr-1" />
+                    Save as Preset
+                  </Button>
+                )}
+              </div>
+              
+              <div className="flex space-x-3">
+                <Button variant="ghost" onClick={onClose}>
+                  Cancel
                 </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setShowPresetSave(false)}
+                <Button 
+                  onClick={handleConfirm}
+                  disabled={getSelectedCount() === 0}
+                  className="bg-medical-teal hover:bg-medical-teal/90"
                 >
-                  <X size={14} />
+                  <Check size={16} className="mr-2" />
+                  Insert Pertinent Negatives
                 </Button>
               </div>
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex justify-between items-center">
-            <div className="flex space-x-2">
-              {onSavePreset && getSelectedCount() > 0 && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowPresetSave(true)}
-                  disabled={showPresetSave}
-                >
-                  <Save size={14} className="mr-1" />
-                  Save as Preset
-                </Button>
-              )}
-            </div>
-            
-            <div className="flex space-x-3">
-              <Button variant="ghost" onClick={onClose}>
-                Cancel
-              </Button>
-              <Button 
-                onClick={handleConfirm}
-                disabled={getSelectedCount() === 0}
-                className="bg-medical-teal hover:bg-medical-teal/90"
-              >
-                <Check size={16} className="mr-2" />
-                Insert Pertinent Negatives
-              </Button>
             </div>
           </div>
         </div>
