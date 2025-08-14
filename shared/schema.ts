@@ -167,7 +167,6 @@ export const teamCalendarEventsRelations = relations(teamCalendarEvents, ({ one 
 
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
-  id: true,
   createdAt: true,
   updatedAt: true,
 });

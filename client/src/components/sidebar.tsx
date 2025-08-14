@@ -16,8 +16,11 @@ import {
   ClipboardList,
   User
 } from "lucide-react";
-import { useNoteTemplates } from "@/hooks/use-notes";
-import { useSmartPhrases } from "@/hooks/use-smart-phrases";
+import { useNoteTemplates } from "../hooks/use-notes";
+import { useSmartPhrases } from "../hooks/use-smart-phrases";
+import { SmartPhraseDialog } from "./smart-phrase-dialog";
+import { TemplateBuilderDialog } from "./template-builder-dialog";
+import { TeamCollaboration } from "./team-collaboration";
 import { cn } from "@/lib/utils";
 import type { Note } from "@shared/schema";
 
@@ -46,7 +49,8 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
     }));
   };
 
-  const formatDate = (dateString: string) => {
+  const formatDate = (dateString: string | Date | null) => {
+    if (!dateString) return 'N/A';
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
       month: 'short',
@@ -55,7 +59,8 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
     });
   };
 
-  const formatTime = (dateString: string) => {
+  const formatTime = (dateString: string | Date | null) => {
+    if (!dateString) return 'N/A';
     const date = new Date(dateString);
     return date.toLocaleTimeString('en-US', {
       hour: '2-digit',
@@ -137,15 +142,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
                 </Badge>
               </Button>
               
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start text-xs hover:bg-gray-100"
-                data-testid="button-template-builder"
-              >
-                <Settings size={12} className="mr-2" />
-                Template Builder
-              </Button>
+              <TemplateBuilderDialog />
             </div>
           )}
         </div>
@@ -173,28 +170,36 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
           
           {expandedSections.smartPhrases && (
             <div className="border-t border-gray-100 p-2 space-y-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start text-xs hover:bg-professional-blue hover:text-white"
-                data-testid="button-create-phrase"
-              >
-                <Plus size={12} className="mr-2" />
-                Create Command
-              </Button>
+              <SmartPhraseDialog />
               
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start text-xs hover:bg-gray-100"
-                data-testid="button-phrase-library"
-              >
-                <Folder size={12} className="mr-2" />
-                Phrase Library
-                <Badge variant="secondary" className="ml-auto text-xs">
-                  {phrases?.length || 0}
-                </Badge>
-              </Button>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between px-2 py-1">
+                  <span className="text-xs font-medium text-gray-600">Phrase Library</span>
+                  <Badge variant="secondary" className="text-xs">
+                    {phrases?.length || 0}
+                  </Badge>
+                </div>
+                
+                <div className="max-h-32 overflow-y-auto space-y-1">
+                  {phrases?.length === 0 ? (
+                    <p className="text-xs text-gray-500 text-center py-2">No smart phrases yet</p>
+                  ) : (
+                    phrases?.map((phrase) => (
+                      <SmartPhraseDialog key={phrase.id} phrase={phrase}>
+                        <div 
+                          className="text-xs p-2 bg-gray-50 rounded border hover:bg-gray-100 cursor-pointer"
+                          data-testid={`phrase-item-${phrase.id}`}
+                        >
+                          <div className="font-medium">/{phrase.trigger}</div>
+                          {phrase.description && (
+                            <div className="text-gray-500 mt-1 truncate">{phrase.description}</div>
+                          )}
+                        </div>
+                      </SmartPhraseDialog>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -221,48 +226,8 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
           </Button>
           
           {expandedSections.teams && (
-            <div className="border-t border-gray-100 p-2 space-y-1">
-              <div className="p-2 bg-gray-50 rounded text-xs text-gray-600">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-medium">Emergency Team Alpha</span>
-                  <Badge className="bg-success-green text-white text-xs">6/6</Badge>
-                </div>
-                <div className="flex -space-x-1">
-                  <Avatar className="w-5 h-5 border border-white">
-                    <AvatarFallback className="bg-professional-blue text-white text-xs">JD</AvatarFallback>
-                  </Avatar>
-                  <Avatar className="w-5 h-5 border border-white">
-                    <AvatarFallback className="bg-medical-teal text-white text-xs">SM</AvatarFallback>
-                  </Avatar>
-                  <Avatar className="w-5 h-5 border border-white">
-                    <AvatarFallback className="bg-success-green text-white text-xs">LJ</AvatarFallback>
-                  </Avatar>
-                  <Avatar className="w-5 h-5 border border-white">
-                    <AvatarFallback className="bg-gray-500 text-white text-xs">+3</AvatarFallback>
-                  </Avatar>
-                </div>
-              </div>
-              
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start text-xs hover:bg-gray-100"
-                data-testid="button-shared-todo"
-              >
-                <CheckSquare size={12} className="mr-2" />
-                Shared To-Do
-                <Badge className="ml-auto bg-medical-red text-white text-xs">3</Badge>
-              </Button>
-              
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full justify-start text-xs hover:bg-gray-100"
-                data-testid="button-team-calendar"
-              >
-                <Calendar size={12} className="mr-2" />
-                Team Calendar
-              </Button>
+            <div className="border-t border-gray-100 p-2">
+              <TeamCollaboration />
             </div>
           )}
         </div>

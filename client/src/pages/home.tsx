@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { Sidebar } from "@/components/sidebar";
-import { NoteEditor } from "@/components/note-editor";
-import { useNotes } from "@/hooks/use-notes";
+import { Sidebar } from "../components/sidebar";
+import { NoteEditor } from "../components/note-editor";
+import { useNotes } from "../hooks/use-notes";
 import { apiRequest } from "@/lib/queryClient";
 import type { Note } from "@shared/schema";
 

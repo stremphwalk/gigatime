@@ -13,15 +13,17 @@ import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Helper function to get mock user ID (replace with real auth later)
-  const getMockUserId = () => "mock-user-id";
+  const getMockUserId = () => "123e4567-e89b-12d3-a456-426614174000"; // Valid UUID
 
   // User routes
   app.get("/api/users/me", async (req, res) => {
     try {
-      // For now, create/return a mock user
-      let user = await storage.getUserByUsername("mock-user");
+      const userId = getMockUserId();
+      // For now, create/return a mock user with proper UUID
+      let user = await storage.getUser(userId);
       if (!user) {
         user = await storage.createUser({
+          id: userId,
           username: "mock-user",
           email: "doctor@hospital.com",
           firstName: "Dr. Sarah",

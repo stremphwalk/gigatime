@@ -6,9 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { SmartPhraseAutocomplete } from "@/components/smart-phrase-autocomplete";
-import { useNotes, useNoteTemplates } from "@/hooks/use-notes";
-import { useSmartPhrases } from "@/hooks/use-smart-phrases";
+import { SmartPhraseAutocomplete } from "./smart-phrase-autocomplete";
+import { useNotes, useNoteTemplates } from "../hooks/use-notes";
+import { useSmartPhrases } from "../hooks/use-smart-phrases";
 import { 
   Save, 
   Check, 
@@ -23,10 +23,13 @@ import {
   FileText,
   Zap,
   Mic,
-  Expand
+  Expand,
+  ChevronUp,
+  ChevronDown,
+  X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { noteTemplates } from "@/lib/note-templates";
+import { noteTemplates } from "../lib/note-templates";
 import type { Note, NoteTemplate } from "@shared/schema";
 
 interface NoteEditorProps {
@@ -104,11 +107,12 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
   }, [isCreating]);
 
   const handleTemplateChange = (templateType: string) => {
-    const template = templates?.find(t => t.type === templateType) || 
-                     noteTemplates.find(t => t.type === templateType);
+    const dbTemplate = templates?.find(t => t.type === templateType);
+    const localTemplate = noteTemplates.find(t => t.type === templateType);
+    const template = dbTemplate || localTemplate;
     
     if (template) {
-      setSelectedTemplate(template);
+      setSelectedTemplate(template as NoteTemplate);
       setSections(template.sections as NoteSection[]);
       setNoteData(prev => ({
         ...prev,
@@ -256,6 +260,34 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     } catch (error) {
       console.error("Error copying to clipboard:", error);
     }
+  };
+
+  const moveSectionUp = (sectionId: string) => {
+    const index = sections.findIndex(s => s.id === sectionId);
+    if (index > 0) {
+      const newSections = [...sections];
+      [newSections[index], newSections[index - 1]] = [newSections[index - 1], newSections[index]];
+      setSections(newSections);
+    }
+  };
+
+  const moveSectionDown = (sectionId: string) => {
+    const index = sections.findIndex(s => s.id === sectionId);
+    if (index < sections.length - 1) {
+      const newSections = [...sections];
+      [newSections[index], newSections[index + 1]] = [newSections[index + 1], newSections[index]];
+      setSections(newSections);
+    }
+  };
+
+  const removeSection = (sectionId: string) => {
+    setSections(sections.filter(s => s.id !== sectionId));
+    // Remove content for this section
+    setNoteData(prev => {
+      const newContent = { ...prev.content };
+      delete newContent[sectionId];
+      return { ...prev, content: newContent };
+    });
   };
 
   const getSectionIcon = (sectionId: string) => {
@@ -416,6 +448,37 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                       <Mic size={12} className="mr-1" />
                       Dictation
                     </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="text-xs text-gray-500 hover:text-gray-700"
+                      onClick={() => moveSectionUp(section.id)}
+                      disabled={sections.findIndex(s => s.id === section.id) === 0}
+                      data-testid={`button-move-section-up-${section.id}`}
+                    >
+                      <ChevronUp size={12} />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="text-xs text-gray-500 hover:text-gray-700"
+                      onClick={() => moveSectionDown(section.id)}
+                      disabled={sections.findIndex(s => s.id === section.id) === sections.length - 1}
+                      data-testid={`button-move-section-down-${section.id}`}
+                    >
+                      <ChevronDown size={12} />
+                    </Button>
+                    {!section.required && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-xs text-red-500 hover:text-red-700"
+                        onClick={() => removeSection(section.id)}
+                        data-testid={`button-remove-section-${section.id}`}
+                      >
+                        <X size={12} />
+                      </Button>
+                    )}
                     <Button variant="ghost" size="sm" className="text-xs text-gray-500 hover:text-gray-700">
                       <Expand size={12} />
                     </Button>

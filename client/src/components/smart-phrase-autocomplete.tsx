@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useSmartPhrases } from "@/hooks/use-smart-phrases";
+import { useSmartPhrases } from "../hooks/use-smart-phrases";
 import { cn } from "@/lib/utils";
 
 interface SmartPhraseAutocompleteProps {
@@ -17,22 +17,16 @@ export function SmartPhraseAutocomplete({
 }: SmartPhraseAutocompleteProps) {
   const [filteredPhrases, setFilteredPhrases] = useState<any[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const { searchPhrases } = useSmartPhrases();
+  const { phrases } = useSmartPhrases();
 
   useEffect(() => {
-    const loadPhrases = async () => {
-      try {
-        const phrases = await searchPhrases(query);
-        setFilteredPhrases(phrases.slice(0, 10)); // Limit to 10 results
-        setSelectedIndex(0);
-      } catch (error) {
-        console.error("Error searching phrases:", error);
-        setFilteredPhrases([]);
-      }
-    };
-
     if (query.length > 0) {
-      loadPhrases();
+      // Filter phrases based on trigger
+      const filtered = phrases?.filter(phrase => 
+        phrase.trigger.toLowerCase().includes(query.toLowerCase())
+      ) || [];
+      setFilteredPhrases(filtered.slice(0, 10)); // Limit to 10 results
+      setSelectedIndex(0);
     } else {
       // Show default phrases when no query
       const defaultPhrases = [
@@ -43,7 +37,7 @@ export function SmartPhraseAutocomplete({
       setFilteredPhrases(defaultPhrases);
       setSelectedIndex(0);
     }
-  }, [query, searchPhrases]);
+  }, [query, phrases]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

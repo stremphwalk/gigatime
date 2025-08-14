@@ -49,13 +49,38 @@ export function useNotes() {
 }
 
 export function useNoteTemplates() {
+  const queryClient = useQueryClient();
+  
   const { data: templates, isLoading } = useQuery<NoteTemplate[]>({
     queryKey: ["/api/note-templates"],
+  });
+
+  const createTemplateMutation = useMutation({
+    mutationFn: async (templateData: any) => {
+      const response = await apiRequest("POST", "/api/note-templates", templateData);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/note-templates"] });
+    },
+  });
+
+  const updateTemplateMutation = useMutation({
+    mutationFn: async ({ id, ...templateData }: { id: string } & any) => {
+      const response = await apiRequest("PUT", `/api/note-templates/${id}`, templateData);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/note-templates"] });
+    },
   });
 
   return {
     templates,
     isLoading,
+    createTemplate: createTemplateMutation.mutateAsync,
+    updateTemplate: updateTemplateMutation.mutateAsync,
+    isCreating: createTemplateMutation.isPending || updateTemplateMutation.isPending,
   };
 }
 
