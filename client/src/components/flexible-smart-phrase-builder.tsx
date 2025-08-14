@@ -318,49 +318,51 @@ export function FlexibleSmartPhraseBuilder({
         {/* Interactive Elements */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg font-semibold text-medical-teal mb-2">
+            <CardTitle className="text-lg font-semibold text-medical-teal">
               Insert Interactive Elements
             </CardTitle>
-            <p className="text-sm text-gray-600 mb-4">
-              Place your cursor in the content above, then click a button to insert an interactive element at that position
-            </p>
-            <div className="flex space-x-2 flex-wrap gap-2">
-              <Button
-                type="button"
-                onClick={() => addElement("date")}
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-2 hover:bg-blue-50 hover:border-blue-300"
-                data-testid="button-add-date"
-              >
-                <Calendar size={16} />
-                Insert Date
-              </Button>
-              <Button
-                type="button"
-                onClick={() => addElement("multipicker")}
-                variant="outline" 
-                size="sm"
-                className="flex items-center gap-2 hover:bg-green-50 hover:border-green-300"
-                data-testid="button-add-multipicker"
-              >
-                <MousePointer size={16} />
-                Insert Selection
-              </Button>
-              <Button
-                type="button"
-                onClick={() => addElement("nested_multipicker")}
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-2 hover:bg-purple-50 hover:border-purple-300"
-                data-testid="button-add-nested"
-              >
-                <ChevronRight size={16} />
-                Insert Nested Selection
-              </Button>
-            </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="mb-6">
+              <p className="text-sm text-gray-600 mb-4">
+                Place your cursor in the content above, then click a button to insert an interactive element at that position
+              </p>
+              <div className="flex space-x-3 flex-wrap gap-2">
+                <Button
+                  type="button"
+                  onClick={() => addElement("date")}
+                  variant="outline"
+                  size="default"
+                  className="flex items-center gap-2 hover:bg-blue-50 hover:border-blue-300"
+                  data-testid="button-add-date"
+                >
+                  <Calendar size={16} />
+                  Insert Date
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => addElement("multipicker")}
+                  variant="outline" 
+                  size="default"
+                  className="flex items-center gap-2 hover:bg-green-50 hover:border-green-300"
+                  data-testid="button-add-multipicker"
+                >
+                  <MousePointer size={16} />
+                  Insert Selection
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => addElement("nested_multipicker")}
+                  variant="outline"
+                  size="default"
+                  className="flex items-center gap-2 hover:bg-purple-50 hover:border-purple-300"
+                  data-testid="button-add-nested"
+                >
+                  <ChevronRight size={16} />
+                  Insert Nested Selection
+                </Button>
+              </div>
+            </div>
             {formData.elements.length === 0 ? (
               <div className="text-center py-8 text-gray-500">
                 <Zap size={48} className="mx-auto mb-2" />
