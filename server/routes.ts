@@ -282,6 +282,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/teams/:teamId/leave", async (req, res) => {
+    try {
+      const userId = getMockUserId();
+      const { teamId } = req.params;
+
+      const result = await storage.leaveTeam(teamId, userId);
+      
+      if (result.success) {
+        res.json(result);
+      } else {
+        res.status(400).json({ error: result.message });
+      }
+    } catch (error) {
+      console.error("Error leaving team:", error);
+      res.status(500).json({ error: "Failed to leave team" });
+    }
+  });
+
   app.get("/api/teams/:teamId/members", async (req, res) => {
     try {
       const { teamId } = req.params;

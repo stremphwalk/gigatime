@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useTeams, useCreateTeam, useJoinTeam } from "@/hooks/use-teams";
+import { useTeams, useCreateTeam, useJoinTeam, useLeaveTeam } from "@/hooks/use-teams";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -18,6 +18,7 @@ export function TeamManagement() {
 
   const createTeamMutation = useCreateTeam();
   const joinTeamMutation = useJoinTeam();
+  const leaveTeamMutation = useLeaveTeam();
 
   const [createForm, setCreateForm] = useState({
     name: "",
@@ -82,6 +83,29 @@ export function TeamManagement() {
     });
   };
 
+  const handleLeaveTeam = async (teamId: string, teamName: string) => {
+    if (!confirm(`Are you sure you want to leave "${teamName}"? This cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const result = await leaveTeamMutation.mutateAsync(teamId);
+      
+      toast({
+        title: "Left Team Successfully",
+        description: (result as any).message || `You have left "${teamName}"`,
+      });
+      
+    } catch (error: any) {
+      console.error("Error leaving team:", error);
+      toast({
+        title: "Error Leaving Team",
+        description: error?.message || "Failed to leave team. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -101,6 +125,8 @@ export function TeamManagement() {
           <h2 className="text-2xl font-bold mb-2">No Teams Yet</h2>
           <p className="text-gray-600 mb-6">
             Create a new team or join an existing one to start collaborating with your colleagues.
+            <br />
+            <span className="text-sm text-orange-600">Note: You can only be in one team at a time. Leave your current team to join or create a different one.</span>
           </p>
         </div>
 
@@ -387,6 +413,20 @@ export function TeamManagement() {
                       Joined {userTeam.joinedAt && formatDistanceToNow(new Date(userTeam.joinedAt), { addSuffix: true })}
                     </span>
                   </div>
+                </div>
+
+                {/* Leave Team Button */}
+                <div className="pt-3 border-t">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleLeaveTeam(userTeam.team.id, userTeam.team.name)}
+                    disabled={leaveTeamMutation.isPending}
+                    className="w-full text-red-600 hover:text-red-700 hover:bg-red-50"
+                    data-testid={`button-leave-${userTeam.team.id}`}
+                  >
+                    {leaveTeamMutation.isPending ? "Leaving..." : "Leave Team"}
+                  </Button>
                 </div>
               </div>
             </CardContent>

@@ -44,3 +44,16 @@ export function useJoinTeam() {
     },
   });
 }
+
+export function useLeaveTeam() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (teamId: string) => {
+      return await apiRequest(`/api/teams/${teamId}/leave`, "POST");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
+    },
+  });
+}
