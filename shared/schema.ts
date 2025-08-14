@@ -31,9 +31,12 @@ export const teams = pgTable("teams", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
+  groupCode: varchar("group_code", { length: 4 }).notNull().unique(), // 4-character unique identifier
   maxMembers: integer("max_members").default(6),
+  createdById: uuid("created_by_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(), // Team expires after 7 days
 });
 
 // Team members junction table
@@ -129,11 +132,12 @@ export const usersRelations = relations(users, ({ many }) => ({
   createdEvents: many(teamCalendarEvents),
 }));
 
-export const teamsRelations = relations(teams, ({ many }) => ({
+export const teamsRelations = relations(teams, ({ one, many }) => ({
   members: many(teamMembers),
   notes: many(notes),
   todos: many(teamTodos),
   calendarEvents: many(teamCalendarEvents),
+  createdBy: one(users, { fields: [teams.createdById], references: [users.id] }),
 }));
 
 export const teamMembersRelations = relations(teamMembers, ({ one }) => ({

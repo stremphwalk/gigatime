@@ -37,9 +37,13 @@ export interface IStorage {
 
   // Team operations
   getTeam(id: string): Promise<Team | undefined>;
+  getTeamByGroupCode(groupCode: string): Promise<Team | undefined>;
   getTeamMembers(teamId: string): Promise<(TeamMember & { user: User })[]>;
+  getUserTeams(userId: string): Promise<(TeamMember & { team: Team })[]>;
   createTeam(team: InsertTeam): Promise<Team>;
+  joinTeamByGroupCode(groupCode: string, userId: string): Promise<{ success: boolean; message: string; team?: Team }>;
   addTeamMember(teamId: string, userId: string, role?: string): Promise<void>;
+  generateUniqueGroupCode(): Promise<string>;
 
   // Note template operations
   getNoteTemplates(userId?: string): Promise<NoteTemplate[]>;
@@ -121,8 +125,99 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTeam(teamData: InsertTeam): Promise<Team> {
-    const [team] = await db.insert(teams).values(teamData).returning();
+    const groupCode = await this.generateUniqueGroupCode();
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days from now
+
+    const fullTeamData = {
+      ...teamData,
+      groupCode,
+      expiresAt,
+    };
+
+    const [team] = await db.insert(teams).values(fullTeamData).returning();
+    
+    // Add creator as admin member
+    if (teamData.createdById) {
+      await this.addTeamMember(team.id, teamData.createdById, 'admin');
+    }
+    
     return team;
+  }
+
+  async getTeamByGroupCode(groupCode: string): Promise<Team | undefined> {
+    const [team] = await db.select().from(teams).where(eq(teams.groupCode, groupCode.toUpperCase()));
+    return team;
+  }
+
+  async getUserTeams(userId: string): Promise<(TeamMember & { team: Team })[]> {
+    const userTeams = await db
+      .select({
+        id: teamMembers.id,
+        teamId: teamMembers.teamId,
+        userId: teamMembers.userId,
+        role: teamMembers.role,
+        joinedAt: teamMembers.joinedAt,
+        team: teams,
+      })
+      .from(teamMembers)
+      .innerJoin(teams, eq(teamMembers.teamId, teams.id))
+      .where(eq(teamMembers.userId, userId));
+
+    return userTeams;
+  }
+
+  async generateUniqueGroupCode(): Promise<string> {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let attempts = 0;
+    const maxAttempts = 100;
+
+    while (attempts < maxAttempts) {
+      let code = '';
+      for (let i = 0; i < 4; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+
+      // Check if code already exists
+      const existing = await this.getTeamByGroupCode(code);
+      if (!existing) {
+        return code;
+      }
+      attempts++;
+    }
+    
+    throw new Error('Unable to generate unique group code');
+  }
+
+  async joinTeamByGroupCode(groupCode: string, userId: string): Promise<{ success: boolean; message: string; team?: Team }> {
+    const team = await this.getTeamByGroupCode(groupCode);
+    
+    if (!team) {
+      return { success: false, message: 'Team not found with that group code' };
+    }
+
+    // Check if team has expired
+    if (new Date() > team.expiresAt) {
+      return { success: false, message: 'This team has expired' };
+    }
+
+    // Check if user is already a member
+    const existingMembers = await this.getTeamMembers(team.id);
+    const isAlreadyMember = existingMembers.some(member => member.userId === userId);
+    
+    if (isAlreadyMember) {
+      return { success: false, message: 'You are already a member of this team' };
+    }
+
+    // Check if team is full
+    if (existingMembers.length >= team.maxMembers) {
+      return { success: false, message: 'This team is full' };
+    }
+
+    // Add user to team
+    await this.addTeamMember(team.id, userId);
+    
+    return { success: true, message: 'Successfully joined team', team };
   }
 
   async addTeamMember(teamId: string, userId: string, role: string = "member"): Promise<void> {

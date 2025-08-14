@@ -225,6 +225,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Teams management routes
+  app.get("/api/teams", async (req, res) => {
+    try {
+      const userId = getMockUserId();
+      const userTeams = await storage.getUserTeams(userId);
+      res.json(userTeams);
+    } catch (error) {
+      console.error("Error fetching teams:", error);
+      res.status(500).json({ error: "Failed to fetch teams" });
+    }
+  });
+
+  app.post("/api/teams/create", async (req, res) => {
+    try {
+      const userId = getMockUserId();
+      const { name, description } = req.body;
+
+      if (!name || !name.trim()) {
+        return res.status(400).json({ error: "Team name is required" });
+      }
+
+      const teamData = {
+        name: name.trim(),
+        description: description?.trim() || null,
+        createdById: userId,
+      };
+
+      const newTeam = await storage.createTeam(teamData);
+      res.json(newTeam);
+    } catch (error) {
+      console.error("Error creating team:", error);
+      res.status(500).json({ error: "Failed to create team" });
+    }
+  });
+
+  app.post("/api/teams/join", async (req, res) => {
+    try {
+      const userId = getMockUserId();
+      const { groupCode } = req.body;
+
+      if (!groupCode || !groupCode.trim()) {
+        return res.status(400).json({ error: "Group code is required" });
+      }
+
+      const result = await storage.joinTeamByGroupCode(groupCode.trim(), userId);
+      
+      if (result.success) {
+        res.json(result);
+      } else {
+        res.status(400).json({ error: result.message });
+      }
+    } catch (error) {
+      console.error("Error joining team:", error);
+      res.status(500).json({ error: "Failed to join team" });
+    }
+  });
+
+  app.get("/api/teams/:teamId/members", async (req, res) => {
+    try {
+      const { teamId } = req.params;
+      const members = await storage.getTeamMembers(teamId);
+      res.json(members);
+    } catch (error) {
+      console.error("Error fetching team members:", error);
+      res.status(500).json({ error: "Failed to fetch team members" });
+    }
+  });
+
   // Team todo routes
   app.get("/api/teams/:teamId/todos", async (req, res) => {
     try {
