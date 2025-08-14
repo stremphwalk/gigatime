@@ -6,7 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import Home from "./pages/home";
 import { Teams } from "./pages/teams";
-import Landing from "./pages/landing";
+import { LoginPage } from "./pages/login";
 import NotFound from "./pages/not-found";
 
 function Router() {
@@ -32,7 +32,7 @@ function Router() {
           <Route path="/teams" component={Teams} />
         </>
       ) : (
-        <Route path="/" component={Landing} />
+        <Route path="/" component={LoginPage} />
       )}
       <Route component={NotFound} />
     </Switch>

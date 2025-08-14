@@ -43,7 +43,7 @@ export const teams = pgTable("teams", {
   description: text("description"),
   groupCode: varchar("group_code", { length: 4 }).notNull().unique(), // 4-character unique identifier
   maxMembers: integer("max_members").default(6),
-  createdById: uuid("created_by_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdById: varchar("created_by_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   expiresAt: timestamp("expires_at").notNull(), // Team expires after 7 days
@@ -53,7 +53,7 @@ export const teams = pgTable("teams", {
 export const teamMembers = pgTable("team_members", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: 'cascade' }),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   role: varchar("role", { length: 50 }).default("member"),
   joinedAt: timestamp("joined_at").defaultNow(),
 });
@@ -68,7 +68,7 @@ export const noteTemplates = pgTable("note_templates", {
   sections: jsonb("sections").notNull(), // array of section objects
   isDefault: boolean("is_default").default(false),
   isPublic: boolean("is_public").default(false), // allows importing by other users
-  userId: uuid("user_id").references(() => users.id, { onDelete: 'cascade' }),
+  userId: varchar("user_id").references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -84,7 +84,7 @@ export const notes = pgTable("notes", {
   templateType: varchar("template_type", { length: 50 }),
   content: jsonb("content").notNull(), // sections with their content
   status: varchar("status", { length: 20 }).default("draft"), // draft, finalized
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   teamId: uuid("team_id").references(() => teams.id, { onDelete: 'set null' }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -100,7 +100,7 @@ export const smartPhrases = pgTable("smart_phrases", {
   category: varchar("category", { length: 50 }),
   elements: jsonb("elements"), // array of interactive elements: [{id: "picker1", type: "multipicker", options: [...]}]
   isPublic: boolean("is_public").default(false),
-  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -113,9 +113,9 @@ export const teamTodos = pgTable("team_todos", {
   completed: boolean("completed").default(false),
   priority: varchar("priority", { length: 20 }).default("medium"), // low, medium, high
   dueDate: timestamp("due_date"),
-  assignedToId: uuid("assigned_to_id").references(() => users.id, { onDelete: 'set null' }),
+  assignedToId: varchar("assigned_to_id").references(() => users.id, { onDelete: 'set null' }),
   teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: 'cascade' }),
-  createdById: uuid("created_by_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdById: varchar("created_by_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -129,7 +129,7 @@ export const teamCalendarEvents = pgTable("team_calendar_events", {
   endDate: timestamp("end_date").notNull(),
   allDay: boolean("all_day").default(false),
   teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: 'cascade' }),
-  createdById: uuid("created_by_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdById: varchar("created_by_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

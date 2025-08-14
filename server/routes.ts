@@ -31,11 +31,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth routes with proper authentication
   app.get('/api/auth/user', async (req: any, res) => {
     try {
-      if (!req.user && process.env.NODE_ENV !== 'development') {
+      // In development mode, allow access unless explicitly logged out
+      if (process.env.NODE_ENV === 'development') {
+        // Check if user has been explicitly logged out
+        if (req.session.loggedOut) {
+          return res.status(401).json({ message: "Not authenticated" });
+        }
+        
+        // Otherwise, use mock user
+        const userId = "123e4567-e89b-12d3-a456-426614174000";
+        let user = await storage.getUser(userId);
+        
+        if (!user) {
+          user = await storage.createUser({
+            id: userId,
+            email: "doctor@hospital.com",
+            firstName: "Dr. Sarah",
+            lastName: "Mitchell",
+            specialty: "Emergency Medicine"
+          });
+        }
+        
+        return res.json(user);
+      }
+      
+      // Production authentication logic
+      if (!req.user) {
         return res.status(401).json({ message: "Not authenticated" });
       }
       
-      const userId = getCurrentUserId(req);
+      const userId = req.user.claims.sub;
       let user = await storage.getUser(userId);
       
       // If user doesn't exist and we have claims from auth, create user from auth data
@@ -74,16 +99,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: 'Failed to logout' });
       }
       
-      req.session.destroy((err: any) => {
-        if (err) {
-          console.error('Session destroy error:', err);
-          return res.status(500).json({ message: 'Failed to destroy session' });
-        }
-        
-        res.clearCookie('connect.sid');
+      // In development, mark as logged out but keep session
+      if (process.env.NODE_ENV === 'development') {
+        req.session.loggedOut = true;
         res.json({ message: 'Logged out successfully' });
-      });
+      } else {
+        // Destroy the session completely in production
+        req.session.destroy((sessionErr: any) => {
+          if (sessionErr) {
+            console.error('Session destroy error:', sessionErr);
+            return res.status(500).json({ message: 'Failed to clear session' });
+          }
+          
+          // Clear the session cookie
+          res.clearCookie('connect.sid');
+          res.json({ message: 'Logged out successfully' });
+        });
+      }
     });
+  });
+
+  // Login route for development
+  app.post('/api/auth/login', async (req: any, res) => {
+    try {
+      // In development, clear the logged out flag
+      if (process.env.NODE_ENV === 'development') {
+        req.session.loggedOut = false;
+        res.json({ message: 'Logged in successfully' });
+      } else {
+        res.status(400).json({ message: 'Manual login not available in production' });
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      res.status(500).json({ message: "Failed to login" });
+    }
   });
 
   // Initialize user endpoint

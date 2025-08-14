@@ -4,7 +4,7 @@ import type { User } from "@shared/schema";
 export function useAuth() {
   const queryClient = useQueryClient();
   
-  const { data: user, isLoading } = useQuery<User>({
+  const { data: user, isLoading, refetch } = useQuery<User>({
     queryKey: ["/api/auth/user"],
     retry: false,
   });
@@ -38,6 +38,7 @@ export function useAuth() {
   return {
     user,
     isLoading,
+    refetch,
     isAuthenticated: !!user,
     logout: () => logoutMutation.mutate(),
     isLoggingOut: logoutMutation.isPending,
