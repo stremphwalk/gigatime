@@ -173,7 +173,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
           >
             <Zap className="text-medical-teal" size={16} />
             <span className="font-medium">Smart Phrases</span>
-            <Badge className="ml-auto bg-medical-teal text-white text-xs">{phrases?.length || 0}</Badge>
+            
           </Button>
         </div>
 
