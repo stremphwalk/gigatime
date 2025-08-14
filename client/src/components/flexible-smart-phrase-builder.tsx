@@ -282,12 +282,12 @@ export function FlexibleSmartPhraseBuilder({
               id="content"
               value={formData.content}
               onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
-              placeholder="Enter your text with {{placeholder}} markers for interactive elements"
+              placeholder="Enter your text with placeholder markers for interactive elements"
               className="min-h-[120px]"
               required
             />
             <div className="mt-2 text-sm text-gray-600">
-              Use placeholders like {{element_123}} where you want interactive elements
+              Use placeholders like {`{{element_123}}`} where you want interactive elements
             </div>
           </CardContent>
         </Card>
@@ -414,7 +414,7 @@ export function FlexibleSmartPhraseBuilder({
                           <Input
                             value={element.placeholder}
                             onChange={(e) => updateElement(element.id, { placeholder: e.target.value })}
-                            placeholder="{{element_id}}"
+                placeholder="Placeholder ID like element_id"
                           />
                         </div>
                       </div>

@@ -35,7 +35,7 @@ export function SmartPhrasesManager() {
   const handleDelete = async (phraseId: string) => {
     if (window.confirm("Are you sure you want to delete this phrase?")) {
       try {
-        await deletePhrase.mutateAsync(phraseId);
+        await deletePhrase(phraseId);
         toast({
           title: "Success",
           description: "Smart phrase deleted successfully",
@@ -53,13 +53,13 @@ export function SmartPhrasesManager() {
   const handleSave = async (data: any) => {
     try {
       if (editingPhrase) {
-        await updatePhrase.mutateAsync({ id: editingPhrase.id, ...data });
+        await updatePhrase({ id: editingPhrase.id, ...data });
         toast({
           title: "Success",
           description: "Smart phrase updated successfully",
         });
       } else {
-        await createPhrase.mutateAsync(data);
+        await createPhrase(data);
         toast({
           title: "Success", 
           description: "Smart phrase created successfully",
@@ -176,9 +176,9 @@ export function SmartPhrasesManager() {
                           <span className="text-medical-teal">/{phrase.trigger}</span>
                         </CardTitle>
                         {/* Interactive elements indicators */}
-                        {phrase.elements && Array.isArray(phrase.elements) && phrase.elements.length > 0 && (
+                        {phrase.elements && Array.isArray(phrase.elements) && (phrase.elements as any[]).length > 0 && (
                           <div className="flex space-x-1">
-                            {phrase.elements.map((element: any, index: number) => (
+                            {(phrase.elements as any[]).map((element: any, index: number) => (
                               <Badge 
                                 key={index}
                                 variant="outline" 
@@ -189,7 +189,7 @@ export function SmartPhrasesManager() {
                             ))}
                           </div>
                         )}
-                        {(!phrase.elements || phrase.elements.length === 0) && (
+                        {(!phrase.elements || !Array.isArray(phrase.elements) || (phrase.elements as any[]).length === 0) && (
                           <Badge variant="outline" className="text-xs bg-gray-50 text-gray-600 border-gray-200">
                             <Zap size={10} className="mr-1" />
                             Text
@@ -214,9 +214,9 @@ export function SmartPhrasesManager() {
                         {phrase.content}
                       </p>
                     </div>
-                    {phrase.elements && Array.isArray(phrase.elements) && phrase.elements.length > 0 && (
+                    {phrase.elements && Array.isArray(phrase.elements) && (phrase.elements as any[]).length > 0 && (
                       <div className="text-xs text-gray-500">
-                        {phrase.elements.length} interactive element{phrase.elements.length !== 1 ? 's' : ''}
+                        {(phrase.elements as any[]).length} interactive element{(phrase.elements as any[]).length !== 1 ? 's' : ''}
                       </div>
                     )}
                     <div className="flex items-center justify-between">
