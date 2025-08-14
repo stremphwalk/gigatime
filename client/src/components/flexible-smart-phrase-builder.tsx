@@ -397,7 +397,7 @@ export function FlexibleSmartPhraseBuilder({
                 <p className="text-sm">Click the cards above to add interactive parts to your phrase</p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-6">
                 {formData.elements.map((element, index) => (
                   <Card key={element.id} className="border-2 border-dashed">
                     <CardHeader className="pb-3">
@@ -498,57 +498,124 @@ export function FlexibleSmartPhraseBuilder({
                         </div>
                       </div>
 
-                      {/* Options for picker types */}
+                      {/* Simple Options Table */}
                       {element.type !== 'date' && (
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <Label>Options</Label>
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-base font-medium">Options</Label>
                             <Button
                               type="button"
                               size="sm"
                               onClick={() => addOption(element.id)}
+                              className="bg-blue-600 hover:bg-blue-700"
                             >
                               <Plus size={14} className="mr-1" />
                               Add Option
                             </Button>
                           </div>
-                          <div className="space-y-2">
-                            {(element.options || []).map((option) => (
-                              <div key={option.id} className="flex items-center space-x-2">
-                                <Input
-                                  value={option.label}
-                                  onChange={(e) => updateOption(element.id, option.id, 'label', e.target.value)}
-                                  placeholder="Option label"
-                                  className="flex-1"
-                                />
-                                <Input
-                                  value={option.value}
-                                  onChange={(e) => updateOption(element.id, option.id, 'value', e.target.value)}
-                                  placeholder="Value"
-                                  className="flex-1"
-                                />
-                                {element.type === 'nested_multipicker' && (
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => addOption(element.id, [option.id])}
-                                  >
-                                    <Plus size={12} />
-                                  </Button>
-                                )}
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => removeOption(element.id, option.id)}
-                                  className="text-red-600"
-                                >
-                                  <X size={12} />
-                                </Button>
-                              </div>
-                            ))}
-                          </div>
+                          
+                          {(element.options || []).length === 0 ? (
+                            <div className="text-center py-4 bg-gray-50 rounded-lg border-2 border-dashed">
+                              <p className="text-gray-500">No options added yet</p>
+                              <p className="text-sm text-gray-400">Click "Add Option" to get started</p>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              {element.type === 'multipicker' ? (
+                                // Simple Selection List
+                                <div className="space-y-2">
+                                  {(element.options || []).map((option, optIndex) => (
+                                    <div key={option.id} className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
+                                      <div className="flex items-center gap-2 flex-1">
+                                        <span className="text-sm font-medium text-gray-600 min-w-[60px]">Option {optIndex + 1}:</span>
+                                        <Input
+                                          value={option.label || ''}
+                                          onChange={(e) => updateOption(element.id, option.id, 'label', e.target.value)}
+                                          placeholder="Enter option text..."
+                                          className="flex-1"
+                                        />
+                                      </div>
+                                      <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => removeOption(element.id, option.id)}
+                                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                      >
+                                        <X size={16} />
+                                      </Button>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                // Nested/Grouped Selection
+                                <div className="space-y-4">
+                                  {(element.options || []).map((option, optIndex) => (
+                                    <div key={option.id} className="border border-gray-200 rounded-lg p-4 bg-white">
+                                      {/* Parent Option */}
+                                      <div className="flex items-center gap-2 mb-3">
+                                        <div className="flex items-center gap-2 flex-1">
+                                          <span className="text-sm font-medium text-purple-600 min-w-[60px]">Group {optIndex + 1}:</span>
+                                          <Input
+                                            value={option.label || ''}
+                                            onChange={(e) => updateOption(element.id, option.id, 'label', e.target.value)}
+                                            placeholder="Enter group name..."
+                                            className="flex-1 border-purple-200 focus:border-purple-400"
+                                          />
+                                        </div>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={() => addOption(element.id, [option.id])}
+                                          className="text-purple-600 border-purple-200 hover:bg-purple-50"
+                                        >
+                                          <Plus size={14} className="mr-1" />
+                                          Add Sub-Option
+                                        </Button>
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => removeOption(element.id, option.id)}
+                                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                        >
+                                          <X size={16} />
+                                        </Button>
+                                      </div>
+                                      
+                                      {/* Sub-options */}
+                                      {option.children && option.children.length > 0 && (
+                                        <div className="ml-4 space-y-2">
+                                          {option.children.map((child: any, childIndex: number) => (
+                                            <div key={child.id} className="flex items-center gap-2 p-2 bg-purple-50 rounded">
+                                              <span className="text-xs text-purple-600 min-w-[40px]">└ {childIndex + 1}:</span>
+                                              <Input
+                                                value={child.label || ''}
+                                                onChange={(e) => updateOption(element.id, child.id, 'label', e.target.value, option.id)}
+                                                placeholder="Enter sub-option text..."
+                                                className="flex-1 text-sm"
+                                                size="sm"
+                                              />
+                                              <Button
+                                                type="button"
+                                                size="sm"
+                                                variant="ghost"
+                                                onClick={() => removeOption(element.id, child.id, option.id)}
+                                                className="text-red-600 hover:text-red-700 hover:bg-red-100"
+                                              >
+                                                <X size={12} />
+                                              </Button>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
                         </div>
                       )}
                     </CardContent>
