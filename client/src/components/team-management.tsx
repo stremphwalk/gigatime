@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Users, Plus, LogIn, Copy, Calendar, Clock, Shield, User } from "lucide-react";
+import { Users, Plus, LogIn, Copy, Calendar, Clock, Shield, User, ArrowLeft, CheckSquare, CalendarDays } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
 export function TeamManagement() {
@@ -15,6 +15,7 @@ export function TeamManagement() {
   const { toast } = useToast();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showJoinDialog, setShowJoinDialog] = useState(false);
+  const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
 
   const createTeamMutation = useCreateTeam();
   const joinTeamMutation = useJoinTeam();
@@ -105,6 +106,129 @@ export function TeamManagement() {
       });
     }
   };
+
+  const handleTeamClick = (teamId: string) => {
+    setSelectedTeam(teamId);
+  };
+
+  const handleBackToTeams = () => {
+    setSelectedTeam(null);
+  };
+
+  // If a team is selected, show the team collaboration view
+  if (selectedTeam) {
+    const team = userTeams.find(ut => ut.team.id === selectedTeam)?.team;
+    if (!team) return null;
+
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        {/* Header with back button */}
+        <div className="flex items-center gap-4 mb-6">
+          <Button
+            variant="ghost"
+            onClick={handleBackToTeams}
+            className="flex items-center gap-2 text-gray-600 hover:text-gray-800"
+          >
+            <ArrowLeft size={16} />
+            Back to Teams
+          </Button>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">{team.name}</h1>
+            <p className="text-sm text-gray-600">Group Code: {team.groupCode}</p>
+          </div>
+        </div>
+
+        {/* Team collaboration features */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Calendar Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CalendarDays className="text-blue-500" size={20} />
+                Team Calendar
+              </CardTitle>
+              <CardDescription>
+                Upcoming events and schedules for your team
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center py-8 text-gray-500">
+                <Calendar className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                <p className="text-sm">No upcoming events</p>
+                <Button variant="outline" size="sm" className="mt-3">
+                  Add Event
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Todo Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CheckSquare className="text-green-500" size={20} />
+                Team Tasks
+              </CardTitle>
+              <CardDescription>
+                Shared tasks and assignments for the team
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center py-8 text-gray-500">
+                <CheckSquare className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                <p className="text-sm">No active tasks</p>
+                <Button variant="outline" size="sm" className="mt-3">
+                  Add Task
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Team Info Section */}
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="text-purple-500" size={20} />
+              Team Information
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="text-center p-4 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-600">Members</p>
+                <p className="text-2xl font-bold text-gray-900">1/{team.maxMembers}</p>
+              </div>
+              <div className="text-center p-4 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-600">Expires In</p>
+                <p className="text-2xl font-bold text-orange-600">
+                  {formatDistanceToNow(new Date(team.expiresAt))}
+                </p>
+              </div>
+              <div className="text-center p-4 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-600">Group Code</p>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => copyGroupCode(team.groupCode)}
+                  className="mt-1"
+                >
+                  {team.groupCode} <Copy className="ml-1" size={12} />
+                </Button>
+              </div>
+            </div>
+            
+            {team.description && (
+              <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                <p className="text-sm text-gray-600 mb-1">Description</p>
+                <p className="text-gray-800">{team.description}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (
@@ -354,7 +478,12 @@ export function TeamManagement() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {userTeams.map((userTeam) => (
-          <Card key={userTeam.teamId} className="hover:shadow-md transition-shadow" data-testid={`card-team-${userTeam.teamId}`}>
+          <Card 
+            key={userTeam.teamId} 
+            className="hover:shadow-md transition-shadow cursor-pointer" 
+            data-testid={`card-team-${userTeam.teamId}`}
+            onClick={() => handleTeamClick(userTeam.team.id)}
+          >
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div>
@@ -362,6 +491,9 @@ export function TeamManagement() {
                   {userTeam.team.description && (
                     <CardDescription className="mt-1">{userTeam.team.description}</CardDescription>
                   )}
+                  <div className="mt-2 text-sm text-blue-600 font-medium">
+                    Click to view team features →
+                  </div>
                 </div>
                 <div className="flex items-center space-x-1">
                   {userTeam.role === 'admin' ? (
@@ -385,7 +517,10 @@ export function TeamManagement() {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => copyGroupCode(userTeam.team.groupCode)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      copyGroupCode(userTeam.team.groupCode);
+                    }}
                     data-testid={`button-copy-${userTeam.team.groupCode}`}
                   >
                     <Copy className="h-4 w-4" />
@@ -420,7 +555,10 @@ export function TeamManagement() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleLeaveTeam(userTeam.team.id, userTeam.team.name)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleLeaveTeam(userTeam.team.id, userTeam.team.name);
+                    }}
                     disabled={leaveTeamMutation.isPending}
                     className="w-full text-red-600 hover:text-red-700 hover:bg-red-50"
                     data-testid={`button-leave-${userTeam.team.id}`}
