@@ -16,9 +16,11 @@ import { LabValuesPopup } from "./lab-values-popup";
 import { PhysicalExamAutocomplete } from "./physical-exam-autocomplete";
 import { PertinentNegativesPopup } from "./pertinent-negatives-popup";
 import { PertinentNegativePresetSelector } from "./pertinent-negative-preset-selector";
+import { ImagingAutocomplete } from "./imaging-autocomplete";
 import { useNotes, useNoteTemplates } from "../hooks/use-notes";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
 import { useToast } from "../hooks/use-toast";
+import { useImagingAutocomplete } from "../hooks/use-imaging-autocomplete";
 import { 
   Save, 
   Check, 
@@ -38,7 +40,8 @@ import {
   ChevronUp,
   ChevronDown,
   X,
-  UserCheck
+  UserCheck,
+  Camera
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { noteTemplates } from "../lib/note-templates";
@@ -125,6 +128,32 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
   const { templates } = useNoteTemplates();
   const { phrases, searchPhrases } = useSmartPhrases();
   const { toast } = useToast();
+  
+  // Add imaging autocomplete functionality
+  const [activeImageEditorSection, setActiveImageEditorSection] = useState<string | null>(null);
+  const { handleImagingSelect, formatImagingTemplate } = useImagingAutocomplete({
+    onInsert: (text: string) => {
+      if (activeImageEditorSection) {
+        const currentContent = noteData.content[activeImageEditorSection] || '';
+        const newContent = currentContent + (currentContent ? '\n\n' : '') + text;
+        
+        setNoteData(prev => ({
+          ...prev,
+          content: {
+            ...prev.content,
+            [activeImageEditorSection]: newContent
+          }
+        }));
+        
+        setActiveImageEditorSection(null);
+        
+        toast({
+          title: "Imaging template added",
+          description: "Medical imaging findings and pertinent negatives have been inserted.",
+        });
+      }
+    }
+  });
 
   // Load note data when editing existing note
   useEffect(() => {
@@ -487,6 +516,58 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       }
     } else if (activePhysicalExamAutocomplete && activePhysicalExamAutocomplete.sectionId === sectionId) {
       setActivePhysicalExamAutocomplete(null);
+    }
+    
+    // Handle imaging abbreviation detection for quick template insertion
+    const isImagingSection = section.type === 'imaging' || 
+      section.type === 'radiology' ||
+      section.name.toLowerCase().includes('imaging') ||
+      section.name.toLowerCase().includes('radiology') ||
+      section.name.toLowerCase().includes('x-ray') ||
+      section.name.toLowerCase().includes('ct') ||
+      section.name.toLowerCase().includes('mri') ||
+      section.name.toLowerCase().includes('ultrasound');
+      
+    if (isImagingSection) {
+      const cursorPosition = textarea.selectionStart;
+      const beforeCursor = content.slice(0, cursorPosition);
+      const wordMatch = beforeCursor.match(/\b([A-Z]{2,})\s*$/);
+      
+      if (wordMatch) {
+        const abbreviation = wordMatch[1];
+        const template = formatImagingTemplate(abbreviation);
+        
+        if (template) {
+          // Auto-suggest quick template insertion
+          const wordStart = cursorPosition - wordMatch[0].length;
+          const newContent = 
+            content.slice(0, wordStart) + 
+            template + 
+            content.slice(cursorPosition);
+          
+          setNoteData(prev => ({
+            ...prev,
+            content: {
+              ...prev.content,
+              [sectionId]: newContent
+            }
+          }));
+          
+          toast({
+            title: `${abbreviation} template inserted`,
+            description: "Common findings and pertinent negatives added automatically.",
+          });
+          
+          // Focus back to textarea at end of inserted content
+          setTimeout(() => {
+            if (textarea) {
+              textarea.focus();
+              const newCursorPos = wordStart + template.length;
+              textarea.setSelectionRange(newCursorPos, newCursorPos);
+            }
+          }, 0);
+        }
+      }
     }
   };
 
@@ -1104,6 +1185,32 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                     {section.required && <span className="text-medical-red text-xs">*</span>}
                   </h3>
                   <div className="flex items-center space-x-2">
+                    {/* Imaging Autocomplete Button - Show for imaging or radiology sections */}
+                    {(section.type === 'imaging' || 
+                      section.type === 'radiology' ||
+                      section.name.toLowerCase().includes('imaging') ||
+                      section.name.toLowerCase().includes('radiology') ||
+                      section.name.toLowerCase().includes('x-ray') ||
+                      section.name.toLowerCase().includes('ct') ||
+                      section.name.toLowerCase().includes('mri') ||
+                      section.name.toLowerCase().includes('ultrasound')) && (
+                      <ImagingAutocomplete
+                        onSelect={handleImagingSelect}
+                        trigger={
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setActiveImageEditorSection(section.id)}
+                            className="flex items-center gap-2 text-xs"
+                            data-testid={`imaging-autocomplete-button-${section.id}`}
+                          >
+                            <Camera size={14} />
+                            Imaging Templates
+                          </Button>
+                        }
+                      />
+                    )}
                     {/* Lab Values Button - Show for lab sections in header */}
                     {(section.type === 'labs' || 
                       section.name.toLowerCase().includes('lab') ||

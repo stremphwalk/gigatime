@@ -1,5 +1,37 @@
 export const noteTemplates = [
   {
+    id: "radiology-report",
+    name: "Radiology/Imaging Report",
+    type: "radiology",
+    description: "Template for documenting radiology and imaging findings",
+    sections: [
+      {
+        id: "clinical-history",
+        name: "Clinical History",
+        type: "clinicalHistory",
+        required: true
+      },
+      {
+        id: "technique",
+        name: "Technique",
+        type: "technique",
+        required: true
+      },
+      {
+        id: "imaging-findings",
+        name: "Imaging Findings",
+        type: "imaging",
+        required: true
+      },
+      {
+        id: "impression",
+        name: "Impression",
+        type: "impression",
+        required: true
+      }
+    ]
+  },
+  {
     id: "admission-template",
     name: "Admission Note",
     type: "admission",
