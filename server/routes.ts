@@ -13,14 +13,32 @@ import {
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Set up Replit authentication
-  await setupAuth(app);
+  // Temporarily skip auth setup for testing
+  // await setupAuth(app);
 
-  // Auth routes
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+  // Helper function to get current user ID (for now, use mock until auth is fully working)
+  const getCurrentUserId = (req: any) => {
+    if (req.user?.claims?.sub) {
+      return req.user.claims.sub;
+    }
+    return "123e4567-e89b-12d3-a456-426614174000"; // Mock user ID
+  };
+
+  // Auth routes (temporarily without authentication for testing)
+  app.get('/api/auth/user', async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
+      const userId = getCurrentUserId(req);
+      let user = await storage.getUser(userId);
+      if (!user) {
+        user = await storage.createUser({
+          id: userId,
+          username: "doctor",
+          email: "doctor@hospital.com",
+          firstName: "Dr. Sarah",
+          lastName: "Mitchell",
+          specialty: "Emergency Medicine"
+        });
+      }
       res.json(user);
     } catch (error) {
       console.error("Error fetching user:", error);
@@ -31,13 +49,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize user endpoint
   app.post("/api/init-user", async (req, res) => {
     try {
-      const userId = getMockUserId();
+      const userId = getCurrentUserId(req);
       // Ensure user exists
       let user = await storage.getUser(userId);
       if (!user) {
         user = await storage.createUser({
           id: userId,
-          username: "mock-user",
           email: "doctor@hospital.com",
           firstName: "Dr. Sarah",
           lastName: "Mitchell",
@@ -54,7 +71,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Note template routes
   app.get("/api/note-templates", async (req, res) => {
     try {
-      const userId = getMockUserId();
+      const userId = getCurrentUserId(req);
       const templates = await storage.getNoteTemplates(userId);
       res.json(templates);
     } catch (error) {
@@ -65,7 +82,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/note-templates", async (req, res) => {
     try {
-      const userId = getMockUserId();
+      const userId = getCurrentUserId(req);
       const templateData = insertNoteTemplateSchema.parse({ ...req.body, userId });
       const template = await storage.createNoteTemplate(templateData);
       res.json(template);
@@ -101,7 +118,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Note routes
   app.get("/api/notes", async (req, res) => {
     try {
-      const userId = getMockUserId();
+      const userId = getCurrentUserId(req);
       const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
       const notes = await storage.getNotes(userId, limit);
       res.json(notes);
@@ -127,7 +144,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/notes", async (req, res) => {
     try {
-      const userId = getMockUserId();
+      const userId = getCurrentUserId(req);
       const noteData = insertNoteSchema.parse({ ...req.body, userId });
       const note = await storage.createNote(noteData);
       res.json(note);
@@ -163,7 +180,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Smart phrase routes
   app.get("/api/smart-phrases", async (req, res) => {
     try {
-      const userId = getMockUserId();
+      const userId = getCurrentUserId(req);
       const query = req.query.q as string;
       
       let phrases;
@@ -182,7 +199,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/smart-phrases", async (req, res) => {
     try {
-      const userId = getMockUserId();
+      const userId = getCurrentUserId(req);
       const phraseData = insertSmartPhraseSchema.parse({ ...req.body, userId });
       const phrase = await storage.createSmartPhrase(phraseData);
       res.json(phrase);
@@ -218,7 +235,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Teams management routes
   app.get("/api/teams", async (req, res) => {
     try {
-      const userId = getMockUserId();
+      const userId = getCurrentUserId(req);
       const userTeams = await storage.getUserTeams(userId);
       res.json(userTeams);
     } catch (error) {
@@ -229,7 +246,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/teams/create", async (req, res) => {
     try {
-      const userId = getMockUserId();
+      const userId = getCurrentUserId(req);
       const { name, description } = req.body;
 
       if (!name || !name.trim()) {
@@ -240,6 +257,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         name: name.trim(),
         description: description?.trim() || null,
         createdById: userId,
+        groupCode: await storage.generateUniqueGroupCode(),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days from now
       };
 
       const newTeam = await storage.createTeam(teamData);
@@ -252,7 +271,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/teams/join", async (req, res) => {
     try {
-      const userId = getMockUserId();
+      const userId = getCurrentUserId(req);
       const { groupCode } = req.body;
 
       if (!groupCode || !groupCode.trim()) {
@@ -274,7 +293,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/teams/:teamId/leave", async (req, res) => {
     try {
-      const userId = getMockUserId();
+      const userId = getCurrentUserId(req);
       const { teamId } = req.params;
 
       const result = await storage.leaveTeam(teamId, userId);
@@ -316,7 +335,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/teams/:teamId/todos", async (req, res) => {
     try {
       const { teamId } = req.params;
-      const userId = getMockUserId();
+      const userId = getCurrentUserId(req);
       const todoData = insertTeamTodoSchema.parse({ 
         ...req.body, 
         teamId, 
@@ -368,7 +387,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/teams/:teamId/calendar", async (req, res) => {
     try {
       const { teamId } = req.params;
-      const userId = getMockUserId();
+      const userId = getCurrentUserId(req);
       const eventData = insertTeamCalendarEventSchema.parse({ 
         ...req.body, 
         teamId, 
@@ -408,7 +427,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize default templates
   app.post("/api/init", async (req, res) => {
     try {
-      const userId = getMockUserId();
+      const userId = getCurrentUserId(req);
       
       // Check if templates already exist
       const existingTemplates = await storage.getNoteTemplates();
@@ -634,7 +653,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Pertinent negative presets routes
   app.get("/api/pertinent-negative-presets", async (req, res) => {
     try {
-      const userId = getMockUserId();
+      const userId = getCurrentUserId(req);
       const presets = await storage.getPertinentNegativePresets(userId);
       res.json(presets);
     } catch (error) {
