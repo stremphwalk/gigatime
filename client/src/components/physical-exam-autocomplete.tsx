@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Stethoscope, Eye, Heart, Zap, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { searchPhysicalExamOptions, getPhysicalExamSuggestions, QUICK_PHYSICAL_EXAM_PHRASES, type PhysicalExamOption } from "@/lib/physical-exam-options";
+import { searchPhysicalExamOptions, getPhysicalExamSuggestions, QUICK_PHYSICAL_EXAM_PHRASES, COMPREHENSIVE_NEGATIVE_FINDINGS, type PhysicalExamOption } from "@/lib/physical-exam-options";
 
 interface PhysicalExamAutocompleteProps {
   query: string;
@@ -75,8 +75,20 @@ export function PhysicalExamAutocomplete({
         onClose();
       } else if (e.key === 'Tab') {
         e.preventDefault();
-        setShowCategories(!showCategories);
-        setSelectedIndex(0);
+        if (showCategories) {
+          let currentIndex = 0;
+          for (const category of categoryResults) {
+            for (const finding of category.findings) {
+              if (currentIndex === selectedIndex) {
+                onSelect(finding);
+                return;
+              }
+              currentIndex++;
+            }
+          }
+        } else if (suggestions[selectedIndex]) {
+          onSelect(suggestions[selectedIndex]);
+        }
       }
     };
 
@@ -119,7 +131,7 @@ export function PhysicalExamAutocomplete({
           <span className="text-sm font-medium">Physical Exam</span>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-xs">Tab to toggle view</Badge>
+          <Badge variant="outline" className="text-xs">Tab to select</Badge>
           <Button
             variant="ghost"
             size="sm"
@@ -154,7 +166,15 @@ export function PhysicalExamAutocomplete({
                   >
                     <div className="flex items-center gap-2">
                       <Stethoscope size={12} className="text-gray-400 flex-shrink-0" />
-                      <span className="flex-1">{suggestion}</span>
+                      <span className={cn(
+                        "flex-1",
+                        suggestion === COMPREHENSIVE_NEGATIVE_FINDINGS ? "text-green-700 font-medium" : ""
+                      )}>
+                        {suggestion === COMPREHENSIVE_NEGATIVE_FINDINGS 
+                          ? "Complete Normal Physical Exam (All Systems)" 
+                          : suggestion
+                        }
+                      </span>
                       <ChevronRight size={12} className="text-gray-400" />
                     </div>
                   </div>
@@ -166,21 +186,36 @@ export function PhysicalExamAutocomplete({
               </div>
             )}
 
-            {/* Quick phrases at bottom */}
+            {/* Quick phrases and comprehensive negative at bottom */}
             {query.length < 3 && (
-              <div className="mt-3 pt-3 border-t">
-                <div className="text-xs text-gray-600 mb-2 font-medium">Quick Templates:</div>
-                <div className="grid gap-1">
-                  {QUICK_PHYSICAL_EXAM_PHRASES.slice(0, 4).map((phrase, index) => (
-                    <div
-                      key={`quick-${index}`}
-                      className="p-2 rounded cursor-pointer text-xs bg-green-50 border border-green-200 hover:bg-green-100 transition-colors"
-                      onClick={() => onSelect(phrase)}
-                      data-testid={`quick-phrase-${index}`}
-                    >
-                      {phrase}
-                    </div>
-                  ))}
+              <div className="mt-3 pt-3 border-t space-y-3">
+                {/* Comprehensive negative option */}
+                <div>
+                  <div className="text-xs text-gray-600 mb-2 font-medium">Complete Normal Exam:</div>
+                  <div
+                    className="p-2 rounded cursor-pointer text-xs bg-green-50 border border-green-200 hover:bg-green-100 transition-colors font-medium"
+                    onClick={() => onSelect(COMPREHENSIVE_NEGATIVE_FINDINGS)}
+                    data-testid="comprehensive-negative-findings"
+                  >
+                    🔍 Complete Normal Physical Exam (All Systems)
+                  </div>
+                </div>
+                
+                {/* Quick templates */}
+                <div>
+                  <div className="text-xs text-gray-600 mb-2 font-medium">System Templates:</div>
+                  <div className="grid gap-1">
+                    {QUICK_PHYSICAL_EXAM_PHRASES.slice(0, 4).map((phrase, index) => (
+                      <div
+                        key={`quick-${index}`}
+                        className="p-2 rounded cursor-pointer text-xs bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors"
+                        onClick={() => onSelect(phrase)}
+                        data-testid={`quick-phrase-${index}`}
+                      >
+                        {phrase}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
@@ -236,7 +271,7 @@ export function PhysicalExamAutocomplete({
       {/* Footer */}
       <div className="bg-gray-50 px-3 py-2 border-t text-xs text-gray-600">
         <div className="flex items-center justify-between">
-          <span>Use ↑↓ to navigate, Enter to select</span>
+          <span>Use ↑↓ to navigate, Tab/Enter to select</span>
           <span>{showCategories ? `${categoryResults.reduce((acc, cat) => acc + cat.findings.length, 0)} findings` : `${suggestions.length} suggestions`}</span>
         </div>
       </div>
