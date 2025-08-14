@@ -47,33 +47,19 @@ export function useDictation() {
 
       // Create live transcription connection with medical optimization
       const connection = deepgram.listen.live({
-        model: 'nova-3-medical',
+        model: 'nova-2',
         language: 'en-US',
         smart_format: true,
         interim_results: true,
         filler_words: false,
         utterance_end_ms: 1500,
         punctuate: true,
-        profanity_filter: false,
-        redact: false,
-        diarize: false,
-        multichannel: false,
-        alternatives: 1,
         numerals: true,
-        search: [
-          // Medical terminology context
-          'patient', 'diagnosis', 'symptoms', 'treatment', 'medication', 'dosage',
-          'blood pressure', 'heart rate', 'temperature', 'respiratory', 'chest pain',
-          'abdomen', 'neurological', 'cardiovascular', 'pulmonary', 'prescription',
-          'milligrams', 'milliliters', 'twice daily', 'three times daily', 'as needed',
-          'history of present illness', 'physical examination', 'assessment', 'plan'
-        ],
         keywords: [
-          // Common medical terms for better recognition
-          'hypertension:5', 'diabetes:5', 'pneumonia:5', 'infection:5', 'inflammation:5',
-          'coronary:5', 'myocardial:5', 'infarction:5', 'arrhythmia:5', 'tachycardia:5',
-          'bradycardia:5', 'dyspnea:5', 'syncope:5', 'nausea:5', 'vomiting:5',
-          'mg:3', 'ml:3', 'cc:3', 'units:3', 'bid:3', 'tid:3', 'qid:3', 'prn:3'
+          // Essential medical terms for better recognition
+          'hypertension:5', 'diabetes:5', 'pneumonia:5', 'medication:5',
+          'patient:5', 'symptoms:5', 'diagnosis:5', 'treatment:5',
+          'mg:3', 'ml:3', 'bid:3', 'tid:3', 'prn:3'
         ]
       } as LiveSchema);
 
