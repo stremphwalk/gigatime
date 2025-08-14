@@ -125,26 +125,33 @@ export function FlexibleSmartPhrasePicker({
               {element.label}
             </h3>
             <div className="grid grid-cols-1 gap-2">
-              {element.options?.map(option => (
-                <Button
-                  key={option.id}
-                  variant={selections[element.id] === option.value ? "default" : "outline"}
-                  onClick={() => handleElementSelection(element.id, option.value)}
-                  className="justify-start"
-                >
-                  {selections[element.id] === option.value && (
-                    <Check size={16} className="mr-2" />
-                  )}
-                  {option.label}
-                </Button>
-              ))}
+              {element.options?.map(option => {
+                const optionValue = option.value || option.label; // Use label as fallback if value is empty
+                const isSelected = selections[element.id] === optionValue;
+                return (
+                  <Button
+                    key={option.id}
+                    variant={isSelected ? "default" : "outline"}
+                    onClick={() => {
+                      console.log(`Selecting option: ${optionValue} for element: ${element.id}`);
+                      handleElementSelection(element.id, optionValue);
+                    }}
+                    className="justify-start"
+                  >
+                    {isSelected && (
+                      <Check size={16} className="mr-2" />
+                    )}
+                    {option.label}
+                  </Button>
+                );
+              })}
             </div>
           </div>
         );
 
       case 'nested_multipicker':
         const selectedParent = selections[`${element.id}_parent`];
-        const selectedParentOption = element.options?.find(opt => opt.value === selectedParent);
+        const selectedParentOption = element.options?.find(opt => (opt.value || opt.label) === selectedParent);
 
         return (
           <div className="space-y-3">
@@ -157,25 +164,30 @@ export function FlexibleSmartPhrasePicker({
             <div>
               <label className="text-sm text-gray-600 mb-2 block">Select category</label>
               <div className="grid grid-cols-1 gap-2">
-                {element.options?.map(option => (
-                  <Button
-                    key={option.id}
-                    variant={selectedParent === option.value ? "default" : "outline"}
-                    onClick={() => {
-                      setSelections(prev => ({
-                        ...prev,
-                        [`${element.id}_parent`]: option.value,
-                        [element.id]: undefined // Reset child selection
-                      }));
-                    }}
-                    className="justify-start"
-                  >
-                    {selectedParent === option.value && (
-                      <Check size={16} className="mr-2" />
-                    )}
-                    {option.label}
-                  </Button>
-                ))}
+                {element.options?.map(option => {
+                  const optionValue = option.value || option.label; // Use label as fallback if value is empty
+                  const isSelected = selectedParent === optionValue;
+                  return (
+                    <Button
+                      key={option.id}
+                      variant={isSelected ? "default" : "outline"}
+                      onClick={() => {
+                        console.log(`Selecting parent: ${optionValue} for element: ${element.id}`);
+                        setSelections(prev => ({
+                          ...prev,
+                          [`${element.id}_parent`]: optionValue,
+                          [element.id]: undefined // Reset child selection
+                        }));
+                      }}
+                      className="justify-start"
+                    >
+                      {isSelected && (
+                        <Check size={16} className="mr-2" />
+                      )}
+                      {option.label}
+                    </Button>
+                  );
+                })}
               </div>
             </div>
 
@@ -184,19 +196,26 @@ export function FlexibleSmartPhrasePicker({
               <div>
                 <label className="text-sm text-gray-600 mb-2 block">Select option</label>
                 <div className="grid grid-cols-1 gap-2">
-                  {selectedParentOption.children.map(child => (
-                    <Button
-                      key={child.id}
-                      variant={selections[element.id] === child.value ? "default" : "outline"}
-                      onClick={() => handleElementSelection(element.id, child.value)}
-                      className="justify-start ml-4"
-                    >
-                      {selections[element.id] === child.value && (
-                        <Check size={16} className="mr-2" />
-                      )}
-                      {child.label}
-                    </Button>
-                  ))}
+                  {selectedParentOption.children.map(child => {
+                    const childValue = child.value || child.label; // Use label as fallback if value is empty
+                    const isSelected = selections[element.id] === childValue;
+                    return (
+                      <Button
+                        key={child.id}
+                        variant={isSelected ? "default" : "outline"}
+                        onClick={() => {
+                          console.log(`Selecting child: ${childValue} for element: ${element.id}`);
+                          handleElementSelection(element.id, childValue);
+                        }}
+                        className="justify-start ml-4"
+                      >
+                        {isSelected && (
+                          <Check size={16} className="mr-2" />
+                        )}
+                        {child.label}
+                      </Button>
+                    );
+                  })}
                 </div>
               </div>
             )}
