@@ -12,6 +12,7 @@ import { MedicalConditionAutocomplete } from "./medical-condition-autocomplete";
 import { AllergyAutocomplete } from "./allergy-autocomplete";
 import { SocialHistoryAutocomplete } from "./social-history-autocomplete";
 import { MedicationAutocomplete } from "./medication-autocomplete";
+import { LabValuesPopup } from "./lab-values-popup";
 import { PertinentNegativesPopup } from "./pertinent-negatives-popup";
 import { PertinentNegativePresetSelector } from "./pertinent-negative-preset-selector";
 import { useNotes, useNoteTemplates } from "../hooks/use-notes";
@@ -32,6 +33,7 @@ import {
   Zap,
   Mic,
   Expand,
+  Beaker,
   ChevronUp,
   ChevronDown,
   X,
@@ -109,6 +111,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
 
   const [showPertinentNegatives, setShowPertinentNegatives] = useState(false);
   const [pertinentNegativesSection, setPertinentNegativesSection] = useState<string | null>(null);
+  const [activeLabValuesPopup, setActiveLabValuesPopup] = useState<string | null>(null);
 
   const { createNote, updateNote, isCreating: isSaving } = useNotes();
   const { templates } = useNoteTemplates();
@@ -1102,6 +1105,10 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                           section.name.toLowerCase().includes('current medications') ||
                           section.name.toLowerCase().includes('meds')
                         ? ', start typing medication names for autocomplete with dosages'
+                        : section.type === 'labs' ||
+                          section.name.toLowerCase().includes('lab') ||
+                          section.name.toLowerCase().includes('laboratory')
+                        ? ', use Lab Entry button for structured lab value entry with trending'
                         : ''
                     })`}
                     className="min-h-[100px] resize-none"
@@ -1169,6 +1176,25 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                       sectionId={section.id}
                     />
                   )}
+
+                  {/* Lab Values Button - Show for lab sections */}
+                  {(section.type === 'labs' || 
+                    section.name.toLowerCase().includes('lab') ||
+                    section.name.toLowerCase().includes('laboratory')) && (
+                    <div className="mt-2 pb-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setActiveLabValuesPopup(section.id)}
+                        className="flex items-center gap-2 text-xs"
+                        data-testid={`lab-entry-button-${section.id}`}
+                      >
+                        <Beaker size={14} />
+                        Lab Entry
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -1214,6 +1240,34 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
         }}
         onConfirm={(negativeText: string) => handlePertinentNegativesConfirm(negativeText)}
       />
+
+      {/* Lab Values Popup */}
+      {activeLabValuesPopup && (
+        <LabValuesPopup
+          isOpen={true}
+          onClose={() => setActiveLabValuesPopup(null)}
+          onConfirm={(formattedLabs) => {
+            if (activeLabValuesPopup && formattedLabs) {
+              const content = noteData.content[activeLabValuesPopup] || '';
+              const newContent = content + (content ? '\n\n' : '') + formattedLabs;
+              
+              setNoteData(prev => ({
+                ...prev,
+                content: {
+                  ...prev.content,
+                  [activeLabValuesPopup]: newContent
+                }
+              }));
+              
+              toast({
+                title: "Lab values added",
+                description: "Laboratory values have been inserted with trending data.",
+              });
+            }
+            setActiveLabValuesPopup(null);
+          }}
+        />
+      )}
     </div>
   );
 }
