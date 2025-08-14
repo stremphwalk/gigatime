@@ -61,11 +61,13 @@ export const teamMembers = pgTable("team_members", {
 // Note templates table
 export const noteTemplates = pgTable("note_templates", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  shareableId: varchar("shareable_id", { length: 12 }).unique().notNull().default(sql`upper(substring(replace(gen_random_uuid()::text, '-', ''), 1, 12))`),
   name: varchar("name", { length: 100 }).notNull(),
   type: varchar("type", { length: 50 }).notNull(), // admission, progress, consult
   description: text("description"),
   sections: jsonb("sections").notNull(), // array of section objects
   isDefault: boolean("is_default").default(false),
+  isPublic: boolean("is_public").default(false), // allows importing by other users
   userId: uuid("user_id").references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -91,6 +93,7 @@ export const notes = pgTable("notes", {
 // Smart phrases table - flexible system with mixed interactive elements
 export const smartPhrases = pgTable("smart_phrases", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  shareableId: varchar("shareable_id", { length: 12 }).unique().notNull().default(sql`upper(substring(replace(gen_random_uuid()::text, '-', ''), 1, 12))`),
   trigger: varchar("trigger", { length: 50 }).notNull(), // the phrase after /
   content: text("content").notNull(), // template with placeholders like {{picker1}}, {{date1}}, etc.
   description: varchar("description", { length: 200 }),

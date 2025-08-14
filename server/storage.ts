@@ -55,6 +55,7 @@ export interface IStorage {
   createNoteTemplate(template: InsertNoteTemplate): Promise<NoteTemplate>;
   updateNoteTemplate(id: string, template: Partial<InsertNoteTemplate>): Promise<NoteTemplate>;
   deleteNoteTemplate(id: string): Promise<void>;
+  importNoteTemplate(shareableId: string, userId: string): Promise<{ success: boolean; message: string; template?: NoteTemplate }>;
 
   // Note operations
   getNotes(userId: string, limit?: number): Promise<Note[]>;
@@ -69,6 +70,7 @@ export interface IStorage {
   createSmartPhrase(phrase: InsertSmartPhrase): Promise<SmartPhrase>;
   updateSmartPhrase(id: string, phrase: Partial<InsertSmartPhrase>): Promise<SmartPhrase>;
   deleteSmartPhrase(id: string): Promise<void>;
+  importSmartPhrase(shareableId: string, userId: string): Promise<{ success: boolean; message: string; phrase?: SmartPhrase }>;
 
   // Team todo operations
   getTeamTodos(teamId: string): Promise<(TeamTodo & { assignedTo?: User; createdBy: User })[]>;
@@ -315,6 +317,49 @@ export class DatabaseStorage implements IStorage {
     await db.delete(noteTemplates).where(eq(noteTemplates.id, id));
   }
 
+  async importNoteTemplate(shareableId: string, userId: string): Promise<{ success: boolean; message: string; template?: NoteTemplate }> {
+    // Find the template by shareable ID
+    const [sourceTemplate] = await db
+      .select()
+      .from(noteTemplates)
+      .where(and(
+        eq(noteTemplates.shareableId, shareableId),
+        eq(noteTemplates.isPublic, true)
+      ));
+
+    if (!sourceTemplate) {
+      return { success: false, message: 'Template not found or not public' };
+    }
+
+    // Check if user already has this template (avoid duplicates)
+    const existingTemplate = await db
+      .select()
+      .from(noteTemplates)
+      .where(and(
+        eq(noteTemplates.userId, userId),
+        eq(noteTemplates.name, sourceTemplate.name),
+        eq(noteTemplates.type, sourceTemplate.type)
+      ));
+
+    if (existingTemplate.length > 0) {
+      return { success: false, message: 'You already have a template with this name and type' };
+    }
+
+    // Create a copy for the user
+    const templateCopy = {
+      name: sourceTemplate.name,
+      type: sourceTemplate.type,
+      description: sourceTemplate.description,
+      sections: sourceTemplate.sections,
+      isDefault: false,
+      isPublic: false,
+      userId: userId,
+    };
+
+    const [newTemplate] = await db.insert(noteTemplates).values(templateCopy).returning();
+    return { success: true, message: 'Template imported successfully', template: newTemplate };
+  }
+
   // Note operations
   async getNotes(userId: string, limit: number = 50): Promise<Note[]> {
     return await db
@@ -390,6 +435,48 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSmartPhrase(id: string): Promise<void> {
     await db.delete(smartPhrases).where(eq(smartPhrases.id, id));
+  }
+
+  async importSmartPhrase(shareableId: string, userId: string): Promise<{ success: boolean; message: string; phrase?: SmartPhrase }> {
+    // Find the smart phrase by shareable ID
+    const [sourcePhrase] = await db
+      .select()
+      .from(smartPhrases)
+      .where(and(
+        eq(smartPhrases.shareableId, shareableId),
+        eq(smartPhrases.isPublic, true)
+      ));
+
+    if (!sourcePhrase) {
+      return { success: false, message: 'Smart phrase not found or not public' };
+    }
+
+    // Check if user already has this trigger (avoid conflicts)
+    const existingPhrase = await db
+      .select()
+      .from(smartPhrases)
+      .where(and(
+        eq(smartPhrases.userId, userId),
+        eq(smartPhrases.trigger, sourcePhrase.trigger)
+      ));
+
+    if (existingPhrase.length > 0) {
+      return { success: false, message: 'You already have a smart phrase with this trigger' };
+    }
+
+    // Create a copy for the user
+    const phraseCopy = {
+      trigger: sourcePhrase.trigger,
+      content: sourcePhrase.content,
+      description: sourcePhrase.description,
+      category: sourcePhrase.category,
+      elements: sourcePhrase.elements,
+      isPublic: false,
+      userId: userId,
+    };
+
+    const [newPhrase] = await db.insert(smartPhrases).values(phraseCopy).returning();
+    return { success: true, message: 'Smart phrase imported successfully', phrase: newPhrase };
   }
 
   // Team todo operations

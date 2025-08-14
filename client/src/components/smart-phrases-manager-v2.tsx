@@ -5,13 +5,15 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Plus, Edit2, Trash2, Zap, Calendar, MousePointer, ChevronRight } from "lucide-react";
+import { Search, Plus, Edit2, Trash2, Zap, Calendar, MousePointer, ChevronRight, Download } from "lucide-react";
 import { FlexibleSmartPhraseBuilder } from "./flexible-smart-phrase-builder";
+import { ImportSmartPhraseDialog } from "./import-smart-phrase-dialog";
 
 export function SmartPhrasesManager() {
   const [activeTab, setActiveTab] = useState<"library" | "create" | "edit">("library");
   const [searchQuery, setSearchQuery] = useState("");
   const [editingPhrase, setEditingPhrase] = useState<any>(null);
+  const [showImportDialog, setShowImportDialog] = useState(false);
 
   const { phrases, createPhrase, updatePhrase, deletePhrase, isCreating } = useSmartPhrases();
   const { toast } = useToast();
@@ -121,10 +123,21 @@ export function SmartPhrasesManager() {
             <h1 className="text-2xl font-bold text-text-primary">Smart Phrases Library</h1>
             <p className="text-gray-600 mt-1">Manage flexible smart phrases with mixed interactive elements</p>
           </div>
-          <Button onClick={handleCreateNew} data-testid="button-create-phrase">
-            <Plus size={16} className="mr-2" />
-            Create New Phrase
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline"
+              onClick={() => setShowImportDialog(true)}
+              className="border-professional-blue text-professional-blue hover:bg-professional-blue/10"
+              data-testid="button-import-phrase"
+            >
+              <Download size={16} className="mr-2" />
+              Import Phrase
+            </Button>
+            <Button onClick={handleCreateNew} data-testid="button-create-phrase">
+              <Plus size={16} className="mr-2" />
+              Create New Phrase
+            </Button>
+          </div>
         </div>
 
         <div className="mt-4 flex items-center space-x-4">
@@ -250,6 +263,10 @@ export function SmartPhrasesManager() {
           </div>
         )}
       </div>
+      <ImportSmartPhraseDialog 
+        open={showImportDialog} 
+        onOpenChange={setShowImportDialog} 
+      />
     </div>
   );
 }

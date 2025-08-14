@@ -32,7 +32,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!user) {
         user = await storage.createUser({
           id: userId,
-          username: "doctor",
           email: "doctor@hospital.com",
           firstName: "Dr. Sarah",
           lastName: "Mitchell",
@@ -112,6 +111,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting note template:", error);
       res.status(500).json({ message: "Failed to delete note template" });
+    }
+  });
+
+  app.post("/api/note-templates/import", async (req, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const { shareableId } = req.body;
+
+      if (!shareableId || !shareableId.trim()) {
+        return res.status(400).json({ error: "Shareable ID is required" });
+      }
+
+      const result = await storage.importNoteTemplate(shareableId.trim().toUpperCase(), userId);
+      
+      if (result.success) {
+        res.json(result);
+      } else {
+        res.status(400).json({ error: result.message });
+      }
+    } catch (error) {
+      console.error("Error importing template:", error);
+      res.status(500).json({ error: "Failed to import template" });
     }
   });
 
@@ -229,6 +250,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting smart phrase:", error);
       res.status(500).json({ message: "Failed to delete smart phrase" });
+    }
+  });
+
+  app.post("/api/smart-phrases/import/:shareableId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { shareableId } = req.params;
+
+      if (!shareableId || !shareableId.trim()) {
+        return res.status(400).json({ error: "Shareable ID is required" });
+      }
+
+      const result = await storage.importSmartPhrase(shareableId.trim().toUpperCase(), userId);
+      
+      if (result.success) {
+        res.json(result);
+      } else {
+        res.status(400).json({ error: result.message });
+      }
+    } catch (error) {
+      console.error("Error importing smart phrase:", error);
+      res.status(500).json({ error: "Failed to import smart phrase" });
     }
   });
 

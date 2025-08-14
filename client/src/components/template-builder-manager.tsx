@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNoteTemplates } from "../hooks/use-notes";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
+import { ImportTemplateDialog } from "./import-template-dialog";
 import { 
   Plus, 
   Edit2, 
@@ -20,7 +21,8 @@ import {
   Copy,
   Save,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Download
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { NoteTemplate } from "@shared/schema";
@@ -38,6 +40,7 @@ export function TemplateBuilderManager() {
   const [activeTab, setActiveTab] = useState<'library' | 'create' | 'edit'>('library');
   const [editingTemplate, setEditingTemplate] = useState<NoteTemplate | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showImportDialog, setShowImportDialog] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     type: "progress",
@@ -620,14 +623,25 @@ export function TemplateBuilderManager() {
               <p className="text-gray-700 font-medium mt-1">Manage your note templates with smart phrases and medical sections</p>
             </div>
           </div>
-          <Button 
-            onClick={handleCreateNew} 
-            className="bg-gradient-to-r from-medical-teal to-professional-blue hover:from-medical-teal/90 hover:to-professional-blue/90 text-white shadow-lg"
-            data-testid="button-create-template"
-          >
-            <Plus size={16} className="mr-2" />
-            Create New Template
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline"
+              onClick={() => setShowImportDialog(true)}
+              className="border-professional-blue text-professional-blue hover:bg-professional-blue/10"
+              data-testid="button-import-template"
+            >
+              <Download size={16} className="mr-2" />
+              Import Template
+            </Button>
+            <Button 
+              onClick={handleCreateNew} 
+              className="bg-gradient-to-r from-medical-teal to-professional-blue hover:from-medical-teal/90 hover:to-professional-blue/90 text-white shadow-lg"
+              data-testid="button-create-template"
+            >
+              <Plus size={16} className="mr-2" />
+              Create New Template
+            </Button>
+          </div>
         </div>
 
         <div className="mt-4 flex items-center space-x-4">
@@ -745,6 +759,10 @@ export function TemplateBuilderManager() {
           </div>
         )}
       </div>
+      <ImportTemplateDialog 
+        open={showImportDialog} 
+        onOpenChange={setShowImportDialog} 
+      />
     </div>
   );
 }
