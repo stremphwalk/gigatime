@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Sidebar } from "../components/sidebar";
 import { NoteEditor } from "../components/note-editor";
 import { TeamCollaboration } from "../components/team-collaboration";
+import { SmartPhrasesManager } from "../components/smart-phrases-manager";
 import { useNotes } from "../hooks/use-notes";
 import { apiRequest } from "@/lib/queryClient";
 import type { Note } from "@shared/schema";
@@ -9,7 +10,7 @@ import type { Note } from "@shared/schema";
 export default function Home() {
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [isCreatingNote, setIsCreatingNote] = useState(false);
-  const [currentView, setCurrentView] = useState<'notes' | 'teams'>('notes');
+  const [currentView, setCurrentView] = useState<'notes' | 'teams' | 'smart-phrases'>('notes');
   const { notes, isLoading } = useNotes();
 
   // Initialize default templates and phrases on first load
@@ -42,9 +43,9 @@ export default function Home() {
     setIsCreatingNote(false);
   };
 
-  const handleViewChange = (view: 'notes' | 'teams') => {
+  const handleViewChange = (view: 'notes' | 'teams' | 'smart-phrases') => {
     setCurrentView(view);
-    if (view === 'teams') {
+    if (view === 'teams' || view === 'smart-phrases') {
       setSelectedNote(null);
       setIsCreatingNote(false);
     }
@@ -68,13 +69,15 @@ export default function Home() {
             isCreating={isCreatingNote}
             onNoteSaved={handleNoteSaved}
           />
-        ) : (
+        ) : currentView === 'teams' ? (
           <div className="flex-1 overflow-y-auto p-6">
             <div className="max-w-6xl mx-auto">
               <h1 className="text-2xl font-bold text-text-primary mb-6">Team Collaboration</h1>
               <TeamCollaboration />
             </div>
           </div>
+        ) : (
+          <SmartPhrasesManager />
         )}
       </div>
     </div>

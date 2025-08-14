@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import { useNoteTemplates } from "../hooks/use-notes";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
-import { SmartPhraseDialog } from "./smart-phrase-dialog";
 import { TemplateBuilderDialog } from "./template-builder-dialog";
 import { cn } from "@/lib/utils";
 import type { Note } from "@shared/schema";
@@ -27,14 +26,13 @@ interface SidebarProps {
   selectedNote: Note | null;
   isLoading: boolean;
   notes: Note[];
-  currentView: 'notes' | 'teams';
-  onViewChange: (view: 'notes' | 'teams') => void;
+  currentView: 'notes' | 'teams' | 'smart-phrases';
+  onViewChange: (view: 'notes' | 'teams' | 'smart-phrases') => void;
 }
 
 export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, notes, currentView, onViewChange }: SidebarProps) {
   const [expandedSections, setExpandedSections] = useState({
-    notes: true,
-    smartPhrases: true
+    notes: true
   });
   
   const { templates } = useNoteTemplates();
@@ -149,56 +147,17 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
         <div className="bg-white rounded-lg shadow-sm border border-gray-100">
           <Button
             variant="ghost"
-            className="w-full p-3 text-left flex items-center justify-between hover:bg-gray-50 rounded-t-lg"
-            onClick={() => toggleSection('smartPhrases')}
-            data-testid="toggle-smart-phrases-section"
+            className={cn(
+              "w-full p-3 text-left flex items-center space-x-3 hover:bg-gray-50 rounded-lg",
+              currentView === 'smart-phrases' && "bg-blue-50 border border-professional-blue"
+            )}
+            onClick={() => onViewChange('smart-phrases')}
+            data-testid="smart-phrases-menu-button"
           >
-            <div className="flex items-center space-x-3">
-              <Zap className="text-medical-teal" size={16} />
-              <span className="font-medium">Smart Phrases</span>
-            </div>
-            <ChevronDown 
-              className={cn(
-                "text-gray-400 transition-transform",
-                expandedSections.smartPhrases ? "rotate-0" : "-rotate-90"
-              )} 
-              size={14} 
-            />
+            <Zap className="text-medical-teal" size={16} />
+            <span className="font-medium">Smart Phrases</span>
+            <Badge className="ml-auto bg-medical-teal text-white text-xs">{phrases?.length || 0}</Badge>
           </Button>
-          
-          {expandedSections.smartPhrases && (
-            <div className="border-t border-gray-100 p-2 space-y-1">
-              <SmartPhraseDialog />
-              
-              <div className="space-y-1">
-                <div className="flex items-center justify-between px-2 py-1">
-                  <span className="text-xs font-medium text-gray-600">Phrase Library</span>
-                  <Badge variant="secondary" className="text-xs">
-                    {phrases?.length || 0}
-                  </Badge>
-                </div>
-                
-                <div className="max-h-32 overflow-y-auto space-y-1">
-                  {phrases?.length === 0 ? (
-                    <p className="text-xs text-gray-500 text-center py-2">No smart phrases yet</p>
-                  ) : (
-                    phrases?.map((phrase) => (
-                      <div 
-                        key={phrase.id}
-                        className="text-xs p-2 bg-gray-50 rounded border hover:bg-gray-100 cursor-pointer"
-                        data-testid={`phrase-item-${phrase.id}`}
-                      >
-                        <div className="font-medium">/{phrase.trigger}</div>
-                        {phrase.description && (
-                          <div className="text-gray-500 mt-1 truncate">{phrase.description}</div>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Teams Section */}
