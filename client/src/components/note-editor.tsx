@@ -10,6 +10,7 @@ import { SmartPhraseAutocomplete } from "./smart-phrase-autocomplete";
 import { FlexibleSmartPhrasePicker } from "./flexible-smart-phrase-picker";
 import { MedicalConditionAutocomplete } from "./medical-condition-autocomplete";
 import { AllergyAutocomplete } from "./allergy-autocomplete";
+import { SocialHistoryAutocomplete } from "./social-history-autocomplete";
 import { PertinentNegativesPopup } from "./pertinent-negatives-popup";
 import { PertinentNegativePresetSelector } from "./pertinent-negative-preset-selector";
 import { useNotes, useNoteTemplates } from "../hooks/use-notes";
@@ -84,6 +85,13 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     wordStart: number;
   } | null>(null);
   const [activeAllergyAutocomplete, setActiveAllergyAutocomplete] = useState<{
+    sectionId: string;
+    position: { top: number; left: number };
+    query: string;
+    cursorPosition: number;
+    wordStart: number;
+  } | null>(null);
+  const [activeSocialHistoryAutocomplete, setActiveSocialHistoryAutocomplete] = useState<{
     sectionId: string;
     position: { top: number; left: number };
     query: string;
@@ -187,6 +195,9 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     const isAllergiesSection = section?.type === 'allergies' || 
                                section?.name.toLowerCase().includes('allergies') ||
                                section?.name.toLowerCase().includes('allergy');
+    const isSocialHistorySection = section?.type === 'socialHistory' || 
+                                   section?.name.toLowerCase().includes('social history') ||
+                                   section?.name.toLowerCase().includes('social hx');
     
     if (isPastMedicalHistory) {
       const cursorPosition = textarea.selectionStart;
@@ -289,6 +300,59 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       }
     } else if (activeAllergyAutocomplete && activeAllergyAutocomplete.sectionId === sectionId) {
       setActiveAllergyAutocomplete(null);
+    }
+
+    // Handle social history autocomplete
+    if (isSocialHistorySection) {
+      const cursorPosition = textarea.selectionStart;
+      
+      // Find the current word being typed at cursor position
+      const beforeCursor = content.slice(0, cursorPosition);
+      const afterCursor = content.slice(cursorPosition);
+      
+      // Find word boundaries - more flexible for numbers and text
+      const wordStartMatch = beforeCursor.match(/[\w\d\.]+$/);
+      const wordEndMatch = afterCursor.match(/^[\w\d\.]*/);
+      
+      if (wordStartMatch) {
+        const wordStart = cursorPosition - wordStartMatch[0].length;
+        const currentWord = wordStartMatch[0] + (wordEndMatch ? wordEndMatch[0] : '');
+        
+        if (currentWord && currentWord.length >= 1 && !currentWord.includes('/')) {
+          // Calculate precise cursor position in the textarea
+          const textBeforeCursor = content.slice(0, cursorPosition);
+          const lines = textBeforeCursor.split('\n');
+          const currentLine = lines.length - 1;
+          const charInLine = lines[lines.length - 1].length;
+          
+          // Get textarea position and line height
+          const rect = textarea.getBoundingClientRect();
+          const style = window.getComputedStyle(textarea);
+          const lineHeight = parseInt(style.lineHeight) || 20;
+          const paddingTop = parseInt(style.paddingTop) || 8;
+          const paddingLeft = parseInt(style.paddingLeft) || 12;
+          
+          // Approximate character width (monospace assumption)
+          const charWidth = 8;
+          
+          setActiveSocialHistoryAutocomplete({
+            sectionId,
+            position: { 
+              top: rect.top + paddingTop + (currentLine * lineHeight) + lineHeight + 5,
+              left: rect.left + paddingLeft + (charInLine * charWidth)
+            },
+            query: currentWord,
+            cursorPosition,
+            wordStart
+          });
+        } else {
+          setActiveSocialHistoryAutocomplete(null);
+        }
+      } else {
+        setActiveSocialHistoryAutocomplete(null);
+      }
+    } else if (activeSocialHistoryAutocomplete && activeSocialHistoryAutocomplete.sectionId === sectionId) {
+      setActiveSocialHistoryAutocomplete(null);
     }
   };
 
@@ -440,6 +504,39 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       title: "Allergy added",
       description: `${allergy} has been added to allergies.`,
     });
+  };
+
+  const handleSocialHistorySelect = (formatted: string) => {
+    if (!activeSocialHistoryAutocomplete) return;
+    
+    const { sectionId, cursorPosition, wordStart } = activeSocialHistoryAutocomplete;
+    const currentContent = noteData.content[sectionId] || '';
+    
+    // Replace the current word with the formatted text
+    const newContent = 
+      currentContent.slice(0, wordStart) + 
+      formatted + 
+      currentContent.slice(cursorPosition);
+    
+    setNoteData(prev => ({
+      ...prev,
+      content: {
+        ...prev.content,
+        [sectionId]: newContent
+      }
+    }));
+    
+    setActiveSocialHistoryAutocomplete(null);
+    
+    // Focus back to the textarea
+    setTimeout(() => {
+      const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
+      if (textarea) {
+        textarea.focus();
+        const newCursorPos = wordStart + formatted.length;
+        textarea.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 0);
   };
 
   const handlePertinentNegativesClick = (sectionId: string) => {
@@ -898,6 +995,10 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                           section.name.toLowerCase().includes('allergies') ||
                           section.name.toLowerCase().includes('allergy')
                         ? ', start typing allergies for autocomplete'
+                        : section.type === 'socialHistory' ||
+                          section.name.toLowerCase().includes('social history') ||
+                          section.name.toLowerCase().includes('social hx')
+                        ? ', type numbers for pack-years/standard drinks or "nil" for negatives'
                         : ''
                     })`}
                     className="min-h-[100px] resize-none"
@@ -942,6 +1043,16 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                       position={activeAllergyAutocomplete.position}
                       onSelect={handleAllergySelect}
                       onClose={() => setActiveAllergyAutocomplete(null)}
+                      sectionId={section.id}
+                    />
+                  )}
+                  
+                  {activeSocialHistoryAutocomplete && activeSocialHistoryAutocomplete.sectionId === section.id && (
+                    <SocialHistoryAutocomplete
+                      query={activeSocialHistoryAutocomplete.query}
+                      position={activeSocialHistoryAutocomplete.position}
+                      onSelect={handleSocialHistorySelect}
+                      onClose={() => setActiveSocialHistoryAutocomplete(null)}
                       sectionId={section.id}
                     />
                   )}
