@@ -96,7 +96,7 @@ export function SmartPhrasesManager() {
 
   if (activeTab === "create" || activeTab === "edit") {
     return (
-      <div className="h-full">
+      <div className="h-full overflow-hidden">
         <FlexibleSmartPhraseBuilder
           initialData={editingPhrase ? {
             trigger: editingPhrase.trigger,

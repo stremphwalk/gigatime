@@ -234,23 +234,29 @@ export function FlexibleSmartPhraseBuilder({
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Flexible Smart Phrase Builder</h2>
-          <p className="text-gray-600">Create phrases with mixed text and interactive elements</p>
-        </div>
-        <div className="flex space-x-2">
-          <Button variant="outline" onClick={onCancel} disabled={isLoading}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={isLoading}>
-            {isLoading ? "Saving..." : "Save Phrase"}
-          </Button>
+    <div className="flex flex-col h-full">
+      {/* Fixed Header */}
+      <div className="flex-shrink-0 p-6 border-b bg-white">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold">Flexible Smart Phrase Builder</h2>
+            <p className="text-gray-600">Create phrases with mixed text and interactive elements</p>
+          </div>
+          <div className="flex space-x-2">
+            <Button variant="outline" onClick={onCancel} disabled={isLoading}>
+              Cancel
+            </Button>
+            <Button onClick={handleSubmit} disabled={isLoading}>
+              {isLoading ? "Saving..." : "Save Phrase"}
+            </Button>
+          </div>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-4xl mx-auto p-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
         {/* Basic Info */}
         <Card>
           <CardHeader>
@@ -542,6 +548,8 @@ export function FlexibleSmartPhraseBuilder({
           </CardContent>
         </Card>
       </form>
+        </div>
+      </div>
     </div>
   );
 }
