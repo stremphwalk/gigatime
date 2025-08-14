@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SmartPhraseAutocomplete } from "./smart-phrase-autocomplete";
 import { useNotes, useNoteTemplates } from "../hooks/use-notes";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
+import { useToast } from "../hooks/use-toast";
 import { 
   Save, 
   Check, 
@@ -66,6 +67,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
   const { createNote, updateNote, isCreating: isSaving } = useNotes();
   const { templates } = useNoteTemplates();
   const { searchPhrases } = useSmartPhrases();
+  const { toast } = useToast();
 
   // Load note data when editing existing note
   useEffect(() => {
@@ -219,46 +221,105 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
   };
 
   const handleExport = () => {
+    // Create the same comprehensive plain text format as copy function
     let exportText = `${noteData.title}\n`;
-    exportText += `Patient: ${noteData.patientName}\n`;
-    exportText += `MRN: ${noteData.patientMrn}\n`;
-    exportText += `DOB: ${noteData.patientDob}\n\n`;
+    exportText += `${'='.repeat(noteData.title.length)}\n\n`;
+    
+    // Patient information section
+    if (noteData.patientName || noteData.patientMrn || noteData.patientDob) {
+      exportText += `PATIENT INFORMATION:\n`;
+      exportText += `-`.repeat(20) + `\n`;
+      if (noteData.patientName.trim()) exportText += `Patient: ${noteData.patientName}\n`;
+      if (noteData.patientMrn.trim()) exportText += `MRN: ${noteData.patientMrn}\n`;
+      if (noteData.patientDob.trim()) exportText += `DOB: ${noteData.patientDob}\n`;
+      exportText += `\n`;
+    }
 
-    sections.forEach(section => {
+    // Note sections with content
+    sections.forEach((section, index) => {
       const content = noteData.content[section.id] || '';
       if (content.trim()) {
-        exportText += `${section.name}:\n${content}\n\n`;
+        exportText += `${section.name.toUpperCase()}:\n`;
+        exportText += `-`.repeat(section.name.length + 1) + `\n`;
+        exportText += `${content.trim()}\n\n`;
       }
     });
 
-    const blob = new Blob([exportText], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${noteData.title.replace(/\s+/g, '_')}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    // Remove trailing newlines and add footer
+    exportText = exportText.trim();
+    exportText += `\n\n---\nGenerated from Medical Documentation System\nDate: ${new Date().toLocaleString()}`;
+
+    try {
+      const blob = new Blob([exportText], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${noteData.title.replace(/\s+/g, '_').replace(/[^\w-]/g, '') || 'medical_note'}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast({
+        title: "✓ Export Complete",
+        description: `Note exported as plain text file: ${noteData.title.replace(/\s+/g, '_').replace(/[^\w-]/g, '') || 'medical_note'}.txt`,
+        duration: 3000,
+      });
+    } catch (error) {
+      console.error("Error exporting file:", error);
+      toast({
+        title: "Export Failed",
+        description: "Unable to export file. Please try again.",
+        variant: "destructive",
+        duration: 4000,
+      });
+    }
   };
 
   const handleCopy = async () => {
+    // Create a comprehensive plain text format with proper structure
     let copyText = `${noteData.title}\n`;
-    copyText += `Patient: ${noteData.patientName}\n`;
-    copyText += `MRN: ${noteData.patientMrn}\n`;
-    copyText += `DOB: ${noteData.patientDob}\n\n`;
+    copyText += `${'='.repeat(noteData.title.length)}\n\n`;
+    
+    // Patient information section
+    if (noteData.patientName || noteData.patientMrn || noteData.patientDob) {
+      copyText += `PATIENT INFORMATION:\n`;
+      copyText += `-`.repeat(20) + `\n`;
+      if (noteData.patientName.trim()) copyText += `Patient: ${noteData.patientName}\n`;
+      if (noteData.patientMrn.trim()) copyText += `MRN: ${noteData.patientMrn}\n`;
+      if (noteData.patientDob.trim()) copyText += `DOB: ${noteData.patientDob}\n`;
+      copyText += `\n`;
+    }
 
-    sections.forEach(section => {
+    // Note sections with content
+    sections.forEach((section, index) => {
       const content = noteData.content[section.id] || '';
       if (content.trim()) {
-        copyText += `${section.name}:\n${content}\n\n`;
+        copyText += `${section.name.toUpperCase()}:\n`;
+        copyText += `-`.repeat(section.name.length + 1) + `\n`;
+        copyText += `${content.trim()}\n\n`;
       }
     });
 
+    // Remove trailing newlines and add footer
+    copyText = copyText.trim();
+    copyText += `\n\n---\nGenerated from Medical Documentation System\nDate: ${new Date().toLocaleString()}`;
+
     try {
       await navigator.clipboard.writeText(copyText);
+      toast({
+        title: "✓ Copied Successfully",
+        description: "Note content has been copied to clipboard as plain text with section headings",
+        duration: 3000,
+      });
     } catch (error) {
       console.error("Error copying to clipboard:", error);
+      toast({
+        title: "Copy Failed",
+        description: "Unable to copy to clipboard. Please try again or check browser permissions.",
+        variant: "destructive",
+        duration: 4000,
+      });
     }
   };
 
