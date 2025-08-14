@@ -24,7 +24,7 @@ export function useCreateTeam() {
   
   return useMutation({
     mutationFn: async (data: { name: string; description?: string }) => {
-      return await apiRequest("/api/teams/create", "POST", data);
+      return await apiRequest("POST", "/api/teams/create", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
@@ -37,7 +37,7 @@ export function useJoinTeam() {
   
   return useMutation({
     mutationFn: async (data: { groupCode: string }) => {
-      return await apiRequest("/api/teams/join", "POST", data);
+      return await apiRequest("POST", "/api/teams/join", data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
@@ -50,7 +50,7 @@ export function useLeaveTeam() {
   
   return useMutation({
     mutationFn: async (teamId: string) => {
-      return await apiRequest(`/api/teams/${teamId}/leave`, "POST");
+      return await apiRequest("POST", `/api/teams/${teamId}/leave`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/teams"] });

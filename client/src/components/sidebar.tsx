@@ -178,21 +178,19 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
 
         {/* Teams Section */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-100">
-          <Link href="/teams">
-            <Button
-              variant="ghost"
-              className={cn(
-                "w-full p-3 text-left flex items-center space-x-3 hover:bg-gray-50 rounded-lg",
-                currentView === 'teams' && "bg-blue-50 border border-professional-blue"
-              )}
-              onClick={() => onViewChange('teams')}
-              data-testid="teams-menu-button"
-            >
-              <Users className="text-medical-teal" size={16} />
-              <span className="font-medium">Teams</span>
-              <Badge className="ml-auto bg-success-green text-white text-xs">6</Badge>
-            </Button>
-          </Link>
+          <Button
+            variant="ghost"
+            className={cn(
+              "w-full p-3 text-left flex items-center space-x-3 hover:bg-gray-50 rounded-lg",
+              currentView === 'teams' && "bg-blue-50 border border-professional-blue"
+            )}
+            onClick={() => onViewChange('teams')}
+            data-testid="teams-menu-button"
+          >
+            <Users className="text-medical-teal" size={16} />
+            <span className="font-medium">Teams</span>
+            <Badge className="ml-auto bg-success-green text-white text-xs">6</Badge>
+          </Button>
         </div>
 
         {/* Recent Notes */}
