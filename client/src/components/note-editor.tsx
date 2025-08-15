@@ -14,6 +14,7 @@ import { SocialHistoryAutocomplete } from "./social-history-autocomplete";
 import { MedicationAutocomplete } from "./medication-autocomplete";
 import { MedicationReorderDialog } from "./medication-reorder-dialog";
 import { LabValuesPopup } from "./lab-values-popup";
+import { LabParsingDialog } from "./lab-parsing-dialog";
 import { PhysicalExamAutocomplete } from "./physical-exam-autocomplete";
 import { PertinentNegativesPopup } from "./pertinent-negatives-popup";
 import { PertinentNegativePresetSelector } from "./pertinent-negative-preset-selector";
@@ -45,7 +46,8 @@ import {
   UserCheck,
   Camera,
   ArrowUpDown,
-  Shuffle
+  Shuffle,
+  FileSearch
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { noteTemplates } from "../lib/note-templates";
@@ -126,6 +128,8 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
   } | null>(null);
   const [showMedicationReorderDialog, setShowMedicationReorderDialog] = useState(false);
   const [medicationReorderSectionId, setMedicationReorderSectionId] = useState<string | null>(null);
+  const [showLabParsingDialog, setShowLabParsingDialog] = useState(false);
+  const [labParsingSectionId, setLabParsingSectionId] = useState<string | null>(null);
 
   const [showPertinentNegatives, setShowPertinentNegatives] = useState(false);
   const [pertinentNegativesSection, setPertinentNegativesSection] = useState<string | null>(null);
@@ -984,6 +988,33 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     setMedicationReorderSectionId(null);
   };
 
+  const handleLabParsing = (sectionId: string) => {
+    setLabParsingSectionId(sectionId);
+    setShowLabParsingDialog(true);
+  };
+
+  const handleLabParsingConfirm = (formattedLabs: string) => {
+    if (labParsingSectionId) {
+      const content = noteData.content[labParsingSectionId] || '';
+      const newContent = content + (content ? '\n\n' : '') + formattedLabs;
+      
+      setNoteData(prev => ({
+        ...prev,
+        content: {
+          ...prev.content,
+          [labParsingSectionId]: newContent
+        }
+      }));
+      
+      toast({
+        title: "Lab values parsed and added",
+        description: "EHR lab results have been standardized and inserted with customizable trending data.",
+      });
+    }
+    setShowLabParsingDialog(false);
+    setLabParsingSectionId(null);
+  };
+
   const handleSave = async () => {
     try {
       const notePayload = {
@@ -1405,21 +1436,36 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                       </div>
                     )}
                     
-                    {/* Lab Values Button - Show for lab sections in header */}
+                    {/* Lab Values Buttons - Show for lab sections in header */}
                     {(section.type === 'labs' || 
                       section.name.toLowerCase().includes('lab') ||
                       section.name.toLowerCase().includes('laboratory')) && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setActiveLabValuesPopup(section.id)}
-                        className="flex items-center gap-2 text-xs"
-                        data-testid={`lab-entry-button-${section.id}`}
-                      >
-                        <Beaker size={14} />
-                        Lab Entry
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleLabParsing(section.id)}
+                          className="flex items-center gap-1 text-xs px-2"
+                          data-testid={`lab-smart-parser-button-${section.id}`}
+                          title="Parse and standardize EHR lab results with customizable trending"
+                        >
+                          <FileSearch size={12} />
+                          Smart Parser
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setActiveLabValuesPopup(section.id)}
+                          className="flex items-center gap-1 text-xs px-2"
+                          data-testid={`lab-entry-button-${section.id}`}
+                          title="Manual lab value entry with trending"
+                        >
+                          <Beaker size={12} />
+                          Manual Entry
+                        </Button>
+                      </div>
                     )}
                     {(section.type === 'historyOfPresentIllness' || 
                       section.name.toLowerCase().includes('history of present illness') ||
@@ -1707,6 +1753,13 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
         onClose={() => setShowMedicationReorderDialog(false)}
         medicationText={medicationReorderSectionId ? (noteData.content[medicationReorderSectionId] || '') : ''}
         onReorder={handleMedicationReorderConfirm}
+      />
+
+      {/* Lab Parsing Dialog */}
+      <LabParsingDialog
+        isOpen={showLabParsingDialog}
+        onClose={() => setShowLabParsingDialog(false)}
+        onConfirm={handleLabParsingConfirm}
       />
     </div>
   );
