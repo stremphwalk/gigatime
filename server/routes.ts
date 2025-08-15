@@ -1,7 +1,9 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth, isAuthenticated } from "./replitAuth";
+import { setupAuth } from "./replitAuth";
+import { requireAuth, optionalAuth, getCurrentUserId } from "./auth";
+import session from "express-session";
 import { 
   insertNoteSchema, 
   insertNoteTemplateSchema, 
@@ -13,28 +15,36 @@ import {
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Set up session for development mode
+  if (process.env.NODE_ENV === 'development') {
+    app.use(session({
+      secret: process.env.SESSION_SECRET || 'dev-secret-key-replace-in-production',
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        httpOnly: true,
+        secure: false, // Allow in development over HTTP
+        maxAge: 7 * 24 * 60 * 60 * 1000 // 1 week
+      }
+    }));
+  }
+  
   // Set up proper authentication
   await setupAuth(app);
 
-  // Helper function to get current user ID
-  const getCurrentUserId = (req: any) => {
-    if (req.user?.claims?.sub) {
-      return req.user.claims.sub;
-    }
-    // Fallback to mock user ID only in development for testing
-    if (process.env.NODE_ENV === 'development') {
-      return "123e4567-e89b-12d3-a456-426614174000";
-    }
-    throw new Error("User not authenticated");
-  };
 
   // Auth routes with proper authentication
-  app.get('/api/auth/user', async (req: any, res) => {
+  app.get('/api/auth/user', optionalAuth, async (req: any, res) => {
     try {
       // In development mode, allow access unless explicitly logged out
       if (process.env.NODE_ENV === 'development') {
+        // Initialize session if it doesn't exist
+        if (!req.session) {
+          req.session = {};
+        }
+        
         // Check if user has been explicitly logged out
-        if (req.session.loggedOut) {
+        if (req.session.loggedOut === true) {
           return res.status(401).json({ message: "Not authenticated" });
         }
         
@@ -93,29 +103,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Logout route
   app.post('/api/auth/logout', (req: any, res) => {
+    // In development, mark as logged out but keep session
+    if (process.env.NODE_ENV === 'development') {
+      // Initialize session if it doesn't exist
+      if (!req.session) {
+        req.session = {};
+      }
+      req.session.loggedOut = true;
+      return res.json({ message: 'Logged out successfully' });
+    }
+    
+    // In production, properly logout with Replit Auth
     req.logout((err: any) => {
       if (err) {
         console.error('Logout error:', err);
         return res.status(500).json({ message: 'Failed to logout' });
       }
       
-      // In development, mark as logged out but keep session
-      if (process.env.NODE_ENV === 'development') {
-        req.session.loggedOut = true;
+      // Destroy the session completely in production
+      req.session.destroy((sessionErr: any) => {
+        if (sessionErr) {
+          console.error('Session destroy error:', sessionErr);
+          return res.status(500).json({ message: 'Failed to clear session' });
+        }
+        
+        // Clear the session cookie
+        res.clearCookie('connect.sid');
         res.json({ message: 'Logged out successfully' });
-      } else {
-        // Destroy the session completely in production
-        req.session.destroy((sessionErr: any) => {
-          if (sessionErr) {
-            console.error('Session destroy error:', sessionErr);
-            return res.status(500).json({ message: 'Failed to clear session' });
-          }
-          
-          // Clear the session cookie
-          res.clearCookie('connect.sid');
-          res.json({ message: 'Logged out successfully' });
-        });
-      }
+      });
     });
   });
 
@@ -124,6 +139,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // In development, clear the logged out flag
       if (process.env.NODE_ENV === 'development') {
+        // Initialize session if it doesn't exist
+        if (!req.session) {
+          req.session = {};
+        }
         req.session.loggedOut = false;
         res.json({ message: 'Logged in successfully' });
       } else {
@@ -136,7 +155,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Initialize user endpoint
-  app.post("/api/init-user", async (req, res) => {
+  app.post("/api/init-user", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
       // Ensure user exists
@@ -158,7 +177,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Note template routes
-  app.get("/api/note-templates", async (req, res) => {
+  app.get("/api/note-templates", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
       const templates = await storage.getNoteTemplates(userId);
@@ -169,7 +188,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/note-templates", async (req, res) => {
+  app.post("/api/note-templates", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
       const templateData = insertNoteTemplateSchema.parse({ ...req.body, userId });
@@ -181,7 +200,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/note-templates/:id", async (req, res) => {
+  app.put("/api/note-templates/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
       const templateData = insertNoteTemplateSchema.partial().parse(req.body);
@@ -193,7 +212,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/note-templates/:id", async (req, res) => {
+  app.delete("/api/note-templates/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
       await storage.deleteNoteTemplate(id);
@@ -204,7 +223,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/note-templates/import", async (req, res) => {
+  app.post("/api/note-templates/import", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
       const { shareableId } = req.body;
@@ -227,7 +246,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Note routes
-  app.get("/api/notes", async (req, res) => {
+  app.get("/api/notes", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
       const limit = req.query.limit ? parseInt(req.query.limit as string) : undefined;
@@ -239,7 +258,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/notes/:id", async (req, res) => {
+  app.get("/api/notes/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
       const note = await storage.getNote(id);
@@ -253,7 +272,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/notes", async (req, res) => {
+  app.post("/api/notes", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
       const noteData = insertNoteSchema.parse({ ...req.body, userId });
@@ -265,7 +284,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/notes/:id", async (req, res) => {
+  app.put("/api/notes/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
       const noteData = insertNoteSchema.partial().parse(req.body);
@@ -277,7 +296,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/notes/:id", async (req, res) => {
+  app.delete("/api/notes/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
       await storage.deleteNote(id);
@@ -289,12 +308,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Deepgram API key endpoint
-  app.get("/api/deepgram-key", (req, res) => {
+  app.get("/api/deepgram-key", requireAuth, (req, res) => {
     res.json({ apiKey: process.env.DEEPGRAM_API_KEY });
   });
 
   // Smart phrase routes
-  app.get("/api/smart-phrases", async (req, res) => {
+  app.get("/api/smart-phrases", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
       const query = req.query.q as string;
@@ -313,7 +332,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/smart-phrases", async (req, res) => {
+  app.post("/api/smart-phrases", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
       const phraseData = insertSmartPhraseSchema.parse({ ...req.body, userId });
@@ -325,7 +344,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/smart-phrases/:id", async (req, res) => {
+  app.put("/api/smart-phrases/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
       const phraseData = insertSmartPhraseSchema.partial().parse(req.body);
@@ -337,7 +356,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/smart-phrases/:id", async (req, res) => {
+  app.delete("/api/smart-phrases/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
       await storage.deleteSmartPhrase(id);
@@ -348,9 +367,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/smart-phrases/import/:shareableId", isAuthenticated, async (req: any, res) => {
+  app.post("/api/smart-phrases/import/:shareableId", requireAuth, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const userId = getCurrentUserId(req);
       const { shareableId } = req.params;
 
       if (!shareableId || !shareableId.trim()) {
@@ -371,7 +390,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Teams management routes
-  app.get("/api/teams", async (req, res) => {
+  app.get("/api/teams", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
       const userTeams = await storage.getUserTeams(userId);
@@ -382,7 +401,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/teams/create", async (req, res) => {
+  app.post("/api/teams/create", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
       const { name, description } = req.body;
@@ -407,7 +426,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/teams/join", async (req, res) => {
+  app.post("/api/teams/join", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
       const { groupCode } = req.body;
@@ -429,7 +448,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/teams/:teamId/leave", async (req, res) => {
+  app.post("/api/teams/:teamId/leave", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
       const { teamId } = req.params;
@@ -447,7 +466,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/teams/:teamId/members", async (req, res) => {
+  app.get("/api/teams/:teamId/members", requireAuth, async (req, res) => {
     try {
       const { teamId } = req.params;
       const members = await storage.getTeamMembers(teamId);
@@ -459,7 +478,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Team todo routes
-  app.get("/api/teams/:teamId/todos", async (req, res) => {
+  app.get("/api/teams/:teamId/todos", requireAuth, async (req, res) => {
     try {
       const { teamId } = req.params;
       const todos = await storage.getTeamTodos(teamId);
@@ -470,7 +489,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/teams/:teamId/todos", async (req, res) => {
+  app.post("/api/teams/:teamId/todos", requireAuth, async (req, res) => {
     try {
       const { teamId } = req.params;
       const userId = getCurrentUserId(req);
@@ -487,7 +506,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/todos/:id", async (req, res) => {
+  app.put("/api/todos/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
       const todoData = insertTeamTodoSchema.partial().parse(req.body);
@@ -499,7 +518,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/todos/:id", async (req, res) => {
+  app.delete("/api/todos/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
       await storage.deleteTeamTodo(id);
@@ -511,7 +530,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Team calendar routes
-  app.get("/api/teams/:teamId/calendar", async (req, res) => {
+  app.get("/api/teams/:teamId/calendar", requireAuth, async (req, res) => {
     try {
       const { teamId } = req.params;
       const events = await storage.getTeamCalendarEvents(teamId);
@@ -522,7 +541,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/teams/:teamId/calendar", async (req, res) => {
+  app.post("/api/teams/:teamId/calendar", requireAuth, async (req, res) => {
     try {
       const { teamId } = req.params;
       const userId = getCurrentUserId(req);
@@ -539,7 +558,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/calendar/:id", async (req, res) => {
+  app.put("/api/calendar/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
       const eventData = insertTeamCalendarEventSchema.partial().parse(req.body);
@@ -551,7 +570,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/calendar/:id", async (req, res) => {
+  app.delete("/api/calendar/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
       await storage.deleteTeamCalendarEvent(id);
@@ -563,7 +582,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Initialize default templates
-  app.post("/api/init", async (req, res) => {
+  app.post("/api/init", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
       
@@ -789,7 +808,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Pertinent negative presets routes
-  app.get("/api/pertinent-negative-presets", async (req, res) => {
+  app.get("/api/pertinent-negative-presets", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
       const presets = await storage.getPertinentNegativePresets(userId);
@@ -800,7 +819,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/pertinent-negative-presets", async (req, res) => {
+  app.post("/api/pertinent-negative-presets", requireAuth, async (req, res) => {
     try {
       const preset = req.body;
       const created = await storage.createPertinentNegativePreset(preset);
@@ -811,7 +830,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/pertinent-negative-presets/:id", async (req, res) => {
+  app.put("/api/pertinent-negative-presets/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
       const updated = await storage.updatePertinentNegativePreset(id, req.body);
@@ -822,7 +841,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/pertinent-negative-presets/:id", async (req, res) => {
+  app.delete("/api/pertinent-negative-presets/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
       await storage.deletePertinentNegativePreset(id);
@@ -833,25 +852,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/pertinent-negative-presets/:id", async (req, res) => {
-    try {
-      const { id } = req.params;
-      await storage.deletePertinentNegativePreset(id);
-      res.json({ message: "Preset deleted successfully" });
-    } catch (error) {
-      console.error("Error deleting pertinent negative preset:", error);
-      res.status(500).json({ message: "Failed to delete preset" });
-    }
-  });
-
-  // Deepgram API key endpoint
-  app.get('/api/deepgram-key', (req, res) => {
-    const apiKey = process.env.DEEPGRAM_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: 'Deepgram API key not configured' });
-    }
-    res.json({ apiKey });
-  });
 
   const httpServer = createServer(app);
   return httpServer;

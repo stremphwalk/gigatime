@@ -1,8 +1,11 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
-import { ClipboardList, User } from "lucide-react";
+import { ClipboardList, User, Shield } from "lucide-react";
 import { useSimpleAuth as useAuth } from "../hooks/useSimpleAuth";
+
+const isDevelopment = window.location.hostname === 'localhost' || 
+                      window.location.hostname.includes('.replit.dev');
 
 export function LoginPage() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -54,14 +57,18 @@ export function LoginPage() {
               </div>
             ) : (
               <div className="flex items-center space-x-2">
-                <User size={16} />
-                <span>Sign In</span>
+                {isDevelopment ? <User size={16} /> : <Shield size={16} />}
+                <span>{isDevelopment ? 'Sign In (Dev Mode)' : 'Sign In with Replit'}</span>
               </div>
             )}
           </Button>
 
           <div className="text-center text-xs text-gray-500">
-            <p>Development Mode - Click to authenticate</p>
+            {isDevelopment ? (
+              <p>Development Mode - Click to authenticate</p>
+            ) : (
+              <p>Secure authentication via Replit</p>
+            )}
           </div>
         </CardContent>
       </Card>

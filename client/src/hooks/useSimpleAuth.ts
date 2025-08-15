@@ -1,6 +1,9 @@
 import { useState, useEffect } from "react";
 import type { User } from "@shared/schema";
 
+const isDevelopment = window.location.hostname === 'localhost' || 
+                      window.location.hostname.includes('.replit.dev');
+
 export function useSimpleAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -33,18 +36,24 @@ export function useSimpleAuth() {
 
   const login = async () => {
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include'
-      });
+      if (isDevelopment) {
+        // In development, use simple auth
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include'
+        });
 
-      if (response.ok) {
-        await checkAuth(); // Refresh user data
+        if (response.ok) {
+          await checkAuth(); // Refresh user data
+        } else {
+          console.error('Login response not ok:', response.status);
+        }
       } else {
-        console.error('Login response not ok:', response.status);
+        // In production, redirect to Replit Auth
+        window.location.href = '/api/login';
       }
     } catch (error) {
       console.error('Login failed:', error);
@@ -53,17 +62,25 @@ export function useSimpleAuth() {
 
   const logout = async () => {
     try {
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include'
-      });
+      if (isDevelopment) {
+        // In development, use simple logout
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include'
+        });
+        // Clear local state
+        setUser(null);
+        setIsAuthenticated(false);
+      } else {
+        // In production, redirect to Replit Auth logout
+        window.location.href = '/api/logout';
+      }
     } catch (error) {
       console.error('Logout failed:', error);
-    } finally {
-      // Always clear local state regardless of server response
+      // Always clear local state on error
       setUser(null);
       setIsAuthenticated(false);
     }
