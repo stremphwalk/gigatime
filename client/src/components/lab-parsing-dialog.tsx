@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,15 +36,59 @@ export function LabParsingDialog({ isOpen, onClose, onConfirm }: LabParsingDialo
   const [customVisibility, setCustomVisibility] = useState<{ [labName: string]: boolean }>({});
   const [customTrendCounts, setCustomTrendCounts] = useState<{ [labName: string]: number }>({});
   const [activeTab, setActiveTab] = useState<string>('paste');
+  
+  const queryClient = useQueryClient();
+  
+  // Load user lab settings
+  const { data: userLabSettings } = useQuery({
+    queryKey: ['/api/user-lab-settings'],
+    enabled: isOpen,
+  });
+  
+  // Mutation to save lab settings
+  const saveLabSettingMutation = useMutation({
+    mutationFn: async (setting: any) => {
+      return fetch('/api/user-lab-settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(setting),
+      }).then(res => res.json());
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/user-lab-settings'] });
+    },
+  });
+
+  // Load saved user settings when dialog opens
+  useEffect(() => {
+    if (Array.isArray(userLabSettings) && userLabSettings.length > 0) {
+      const loadedPreferences = { ...DEFAULT_LAB_PREFERENCES };
+      const loadedVisibility: { [labName: string]: boolean } = {};
+      const loadedTrendCounts: { [labName: string]: number } = {};
+      
+      userLabSettings.forEach((setting: any) => {
+        // Since we're working with panel-based preferences, we need to ensure compatibility
+        loadedVisibility[setting.labId] = setting.isVisible;
+        loadedTrendCounts[setting.labId] = setting.trendingCount;
+      });
+      
+      setCustomVisibility(loadedVisibility);
+      setCustomTrendCounts(loadedTrendCounts);
+    }
+  }, [userLabSettings]);
 
   useEffect(() => {
     if (rawLabText.trim()) {
       const parsed = parseLabText(rawLabText);
       setParsedLabs(parsed);
       
-      // Reset custom settings when new data is pasted
-      setCustomVisibility({});
-      setCustomTrendCounts({});
+      // Don't reset custom settings when user has saved preferences
+      if (!Array.isArray(userLabSettings) || userLabSettings.length === 0) {
+        setCustomVisibility({});
+        setCustomTrendCounts({});
+      }
     } else {
       setParsedLabs([]);
     }
@@ -74,10 +120,25 @@ export function LabParsingDialog({ isOpen, onClose, onConfirm }: LabParsingDialo
   };
 
   const toggleLabVisibility = (labName: string, currentlyVisible: boolean) => {
+    const newVisibility = !currentlyVisible;
     setCustomVisibility(prev => ({
       ...prev,
-      [labName]: !currentlyVisible
+      [labName]: newVisibility
     }));
+    
+    // Save to backend - try to find panel for this lab
+    const panel = Object.entries(panels).find(([_, labs]) => 
+      labs.some(lab => lab.standardizedName === labName)
+    );
+    
+    if (panel) {
+      saveLabSettingMutation.mutate({
+        panelId: panel[0],
+        labId: labName,
+        isVisible: newVisibility,
+        trendingCount: getCurrentTrendCount(labName)
+      });
+    }
   };
 
   const adjustTrendCount = (labName: string, currentCount: number, delta: number) => {
@@ -91,6 +152,20 @@ export function LabParsingDialog({ isOpen, onClose, onConfirm }: LabParsingDialo
       ...prev,
       [labName]: newCount
     }));
+    
+    // Save to backend - try to find panel for this lab
+    const panel = Object.entries(panels).find(([_, labs]) => 
+      labs.some(l => l.standardizedName === labName)
+    );
+    
+    if (panel) {
+      saveLabSettingMutation.mutate({
+        panelId: panel[0],
+        labId: labName,
+        isVisible: isLabVisible(labName, panel[0]),
+        trendingCount: newCount
+      });
+    }
   };
 
   const getCurrentTrendCount = (labName: string): number => {

@@ -8,6 +8,7 @@ import {
   teamTodos,
   teamCalendarEvents,
   pertinentNegativePresets,
+  userLabSettings,
   type User,
   type InsertUser,
   type UpsertUser,
@@ -26,6 +27,8 @@ import {
   type TeamMember,
   type PertinentNegativePreset,
   type InsertPertinentNegativePreset,
+  type UserLabSetting,
+  type InsertUserLabSetting,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, like, or } from "drizzle-orm";
@@ -88,6 +91,11 @@ export interface IStorage {
   getPertinentNegativePresets(userId: string): Promise<PertinentNegativePreset[]>;
   createPertinentNegativePreset(preset: Omit<InsertPertinentNegativePreset, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<PertinentNegativePreset>;
   deletePertinentNegativePreset(id: string): Promise<void>;
+
+  // User lab settings operations
+  getUserLabSettings(userId: string): Promise<UserLabSetting[]>;
+  upsertUserLabSetting(setting: InsertUserLabSetting): Promise<UserLabSetting>;
+  deleteUserLabSetting(userId: string, panelId: string, labId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -611,6 +619,43 @@ export class DatabaseStorage implements IStorage {
 
   async deletePertinentNegativePreset(id: string): Promise<void> {
     await db.delete(pertinentNegativePresets).where(eq(pertinentNegativePresets.id, id));
+  }
+
+  // User lab settings operations
+  async getUserLabSettings(userId: string): Promise<UserLabSetting[]> {
+    return db
+      .select()
+      .from(userLabSettings)
+      .where(eq(userLabSettings.userId, userId))
+      .orderBy(userLabSettings.panelId, userLabSettings.labId);
+  }
+
+  async upsertUserLabSetting(setting: InsertUserLabSetting): Promise<UserLabSetting> {
+    const [result] = await db
+      .insert(userLabSettings)
+      .values(setting)
+      .onConflictDoUpdate({
+        target: [userLabSettings.userId, userLabSettings.panelId, userLabSettings.labId],
+        set: {
+          trendingCount: setting.trendingCount,
+          isVisible: setting.isVisible,
+          updatedAt: new Date(),
+        },
+      })
+      .returning();
+    return result;
+  }
+
+  async deleteUserLabSetting(userId: string, panelId: string, labId: string): Promise<void> {
+    await db
+      .delete(userLabSettings)
+      .where(
+        and(
+          eq(userLabSettings.userId, userId),
+          eq(userLabSettings.panelId, panelId),
+          eq(userLabSettings.labId, labId)
+        )
+      );
   }
 }
 

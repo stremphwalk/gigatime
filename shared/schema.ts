@@ -134,6 +134,18 @@ export const teamCalendarEvents = pgTable("team_calendar_events", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// User lab settings table for persistent preferences
+export const userLabSettings = pgTable("user_lab_settings", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  panelId: varchar("panel_id").notNull(), // e.g., "hematology", "chemistry"
+  labId: varchar("lab_id").notNull(), // e.g., "hemoglobin", "glucose"
+  trendingCount: integer("trending_count").notNull().default(3),
+  isVisible: boolean("is_visible").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   notes: many(notes),
@@ -143,6 +155,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   createdTodos: many(teamTodos, { relationName: "createdTodos" }),
   assignedTodos: many(teamTodos, { relationName: "assignedTodos" }),
   createdEvents: many(teamCalendarEvents),
+  labSettings: many(userLabSettings),
 }));
 
 export const teamsRelations = relations(teams, ({ one, many }) => ({
@@ -182,6 +195,10 @@ export const teamTodosRelations = relations(teamTodos, ({ one }) => ({
 export const teamCalendarEventsRelations = relations(teamCalendarEvents, ({ one }) => ({
   team: one(teams, { fields: [teamCalendarEvents.teamId], references: [teams.id] }),
   createdBy: one(users, { fields: [teamCalendarEvents.createdById], references: [users.id] }),
+}));
+
+export const userLabSettingsRelations = relations(userLabSettings, ({ one }) => ({
+  user: one(users, { fields: [userLabSettings.userId], references: [users.id] }),
 }));
 
 // Insert schemas
@@ -242,6 +259,12 @@ export const insertPertinentNegativePresetSchema = createInsertSchema(pertinentN
   updatedAt: true,
 });
 
+export const insertUserLabSettingSchema = createInsertSchema(userLabSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -269,3 +292,6 @@ export type InsertTeamTodo = z.infer<typeof insertTeamTodoSchema>;
 
 export type TeamCalendarEvent = typeof teamCalendarEvents.$inferSelect;
 export type InsertTeamCalendarEvent = z.infer<typeof insertTeamCalendarEventSchema>;
+
+export type UserLabSetting = typeof userLabSettings.$inferSelect;
+export type InsertUserLabSetting = z.infer<typeof insertUserLabSettingSchema>;

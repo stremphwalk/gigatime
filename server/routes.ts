@@ -10,7 +10,8 @@ import {
   insertSmartPhraseSchema,
   insertTeamTodoSchema,
   insertTeamCalendarEventSchema,
-  insertUserSchema 
+  insertUserSchema,
+  insertUserLabSettingSchema
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -852,6 +853,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // User lab settings routes
+  app.get("/api/user-lab-settings", requireAuth, async (req, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const settings = await storage.getUserLabSettings(userId);
+      res.json(settings);
+    } catch (error) {
+      console.error("Error fetching user lab settings:", error);
+      res.status(500).json({ message: "Failed to fetch lab settings" });
+    }
+  });
+
+  app.post("/api/user-lab-settings", requireAuth, async (req, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const setting = { ...req.body, userId };
+      const created = await storage.upsertUserLabSetting(setting);
+      res.json(created);
+    } catch (error) {
+      console.error("Error saving user lab setting:", error);
+      res.status(500).json({ message: "Failed to save lab setting" });
+    }
+  });
+
+  app.delete("/api/user-lab-settings", requireAuth, async (req, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const { panelId, labId } = req.query;
+      await storage.deleteUserLabSetting(userId, panelId as string, labId as string);
+      res.json({ message: "Lab setting deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting user lab setting:", error);
+      res.status(500).json({ message: "Failed to delete lab setting" });
+    }
+  });
 
   const httpServer = createServer(app);
   return httpServer;
