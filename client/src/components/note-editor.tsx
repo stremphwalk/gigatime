@@ -1172,50 +1172,54 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Top Bar */}
-      <div className="bg-white border-b border-gray-200 p-4 flex items-center justify-between">
-        <div className="flex items-center space-x-4">
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-6 py-3 flex items-center justify-between">
+        <div className="flex items-center space-x-6">
           <div>
             <Input
               value={noteData.title}
               onChange={(e) => setNoteData(prev => ({ ...prev, title: e.target.value }))}
-              className="text-lg font-semibold border-none p-0 h-auto focus-visible:ring-0"
-              placeholder="Note Title"
+              className="text-lg font-medium border-none p-0 h-auto focus-visible:ring-0 bg-transparent text-gray-900 dark:text-gray-100"
+              placeholder="Untitled Note"
               data-testid="input-note-title"
             />
-            <div className="text-sm text-gray-500 flex items-center space-x-4 mt-1">
+            <div className="text-xs text-gray-400 dark:text-gray-500 flex items-center space-x-3 mt-1">
               <span>{new Date().toLocaleDateString()}</span>
-              <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+              <span className="text-gray-300 dark:text-gray-600">•</span>
               <span>{selectedTemplate?.name || "No Template"}</span>
-              <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
-              <Badge variant={note?.status === "finalized" ? "default" : "secondary"}>
+              <span className="text-gray-300 dark:text-gray-600">•</span>
+              <Badge 
+                variant={note?.status === "finalized" ? "default" : "secondary"}
+                className="text-xs px-2 py-0.5 font-normal"
+              >
                 {note?.status === "finalized" ? "Finalized" : "Draft"}
               </Badge>
             </div>
           </div>
         </div>
-        <div className="flex items-center space-x-3">
+        <div className="flex items-center space-x-2">
           <Button 
-            variant="outline" 
+            variant="ghost" 
             size="sm"
             onClick={handleSave}
             disabled={isSaving}
+            className="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-xs px-3"
             data-testid="button-save-note"
           >
-            <Save size={16} className="mr-2" />
-            {isSaving ? "Saving..." : "Save Draft"}
+            <Save size={14} className="mr-1.5" />
+            {isSaving ? "Saving..." : "Save"}
           </Button>
           <Button 
-            className="bg-medical-teal hover:bg-medical-teal/90 text-white"
+            className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 h-8"
             size="sm"
             onClick={handleFinalize}
             disabled={isSaving}
             data-testid="button-finalize-note"
           >
-            <Check size={16} className="mr-2" />
-            Finalize Note
+            <Check size={14} className="mr-1.5" />
+            Finalize
           </Button>
-          <Button variant="ghost" size="sm" data-testid="button-note-options">
-            <MoreVertical size={16} />
+          <Button variant="ghost" size="sm" className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 px-2" data-testid="button-note-options">
+            <MoreVertical size={14} />
           </Button>
         </div>
       </div>
