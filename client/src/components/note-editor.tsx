@@ -12,6 +12,7 @@ import { MedicalConditionAutocomplete } from "./medical-condition-autocomplete";
 import { AllergyAutocomplete } from "./allergy-autocomplete";
 import { SocialHistoryAutocomplete } from "./social-history-autocomplete";
 import { MedicationAutocomplete } from "./medication-autocomplete";
+import { MedicationReorderDialog } from "./medication-reorder-dialog";
 import { LabValuesPopup } from "./lab-values-popup";
 import { PhysicalExamAutocomplete } from "./physical-exam-autocomplete";
 import { PertinentNegativesPopup } from "./pertinent-negatives-popup";
@@ -42,7 +43,9 @@ import {
   ChevronDown,
   X,
   UserCheck,
-  Camera
+  Camera,
+  ArrowUpDown,
+  Shuffle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { noteTemplates } from "../lib/note-templates";
@@ -121,6 +124,8 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     cursorPosition: number;
     wordStart: number;
   } | null>(null);
+  const [showMedicationReorderDialog, setShowMedicationReorderDialog] = useState(false);
+  const [medicationReorderSectionId, setMedicationReorderSectionId] = useState<string | null>(null);
 
   const [showPertinentNegatives, setShowPertinentNegatives] = useState(false);
   const [pertinentNegativesSection, setPertinentNegativesSection] = useState<string | null>(null);
@@ -470,10 +475,10 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     }
 
     // Handle physical exam autocomplete
-    const isPhysicalExamSection = section.type === 'physicalExam' || 
-      section.name.toLowerCase().includes('physical') || 
-      section.name.toLowerCase().includes('exam') ||
-      section.name.toLowerCase().includes('pe');
+    const isPhysicalExamSection = section?.type === 'physicalExam' || 
+      section?.name.toLowerCase().includes('physical') || 
+      section?.name.toLowerCase().includes('exam') ||
+      section?.name.toLowerCase().includes('pe');
 
     if (isPhysicalExamSection) {
       const cursorPosition = textarea.selectionStart;
@@ -528,10 +533,10 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     }
 
     // Handle consultation reason autocomplete
-    const isConsultationReasonSection = section.id === 'reason' || section.id === 'chief' ||
-      section.name.toLowerCase().includes('reason for consultation') ||
-      section.name.toLowerCase().includes('reason for admission') ||
-      section.name.toLowerCase().includes('chief complaint');
+    const isConsultationReasonSection = section?.id === 'reason' || section?.id === 'chief' ||
+      section?.name.toLowerCase().includes('reason for consultation') ||
+      section?.name.toLowerCase().includes('reason for admission') ||
+      section?.name.toLowerCase().includes('chief complaint');
 
     if (isConsultationReasonSection) {
       const cursorPosition = textarea.selectionStart;
@@ -565,7 +570,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
           // Approximate character width (monospace assumption)
           const charWidth = 8;
           
-          const reasonType = section.name.toLowerCase().includes('admission') ? 'admission' : 'consultation';
+          const reasonType = section?.name.toLowerCase().includes('admission') ? 'admission' : 'consultation';
           
           setActiveConsultationReasonAutocomplete({
             sectionId,
@@ -589,14 +594,14 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     }
     
     // Handle imaging abbreviation detection for quick template insertion
-    const isImagingSection = section.type === 'imaging' || 
-      section.type === 'radiology' ||
-      section.name.toLowerCase().includes('imaging') ||
-      section.name.toLowerCase().includes('radiology') ||
-      section.name.toLowerCase().includes('x-ray') ||
-      section.name.toLowerCase().includes('ct') ||
-      section.name.toLowerCase().includes('mri') ||
-      section.name.toLowerCase().includes('ultrasound');
+    const isImagingSection = section?.type === 'imaging' || 
+      section?.type === 'radiology' ||
+      section?.name.toLowerCase().includes('imaging') ||
+      section?.name.toLowerCase().includes('radiology') ||
+      section?.name.toLowerCase().includes('x-ray') ||
+      section?.name.toLowerCase().includes('ct') ||
+      section?.name.toLowerCase().includes('mri') ||
+      section?.name.toLowerCase().includes('ultrasound');
       
     if (isImagingSection) {
       const cursorPosition = textarea.selectionStart;
@@ -953,6 +958,30 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
 
   const handlePickerCancel = () => {
     setActivePicker(null);
+  };
+
+  const handleMedicationReorder = (sectionId: string) => {
+    setMedicationReorderSectionId(sectionId);
+    setShowMedicationReorderDialog(true);
+  };
+
+  const handleMedicationReorderConfirm = (reorderedText: string) => {
+    if (medicationReorderSectionId) {
+      setNoteData(prev => ({
+        ...prev,
+        content: {
+          ...prev.content,
+          [medicationReorderSectionId]: reorderedText
+        }
+      }));
+      
+      toast({
+        title: "Medications reordered",
+        description: "The medication list has been reorganized successfully.",
+      });
+    }
+    setShowMedicationReorderDialog(false);
+    setMedicationReorderSectionId(null);
   };
 
   const handleSave = async () => {
@@ -1319,7 +1348,62 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                       />
                     )}
                     
-
+                    {/* Medication Reorder Buttons - Show for medication sections */}
+                    {(section.type === 'medications' || 
+                      section.name.toLowerCase().includes('medications') ||
+                      section.name.toLowerCase().includes('current medications') ||
+                      section.name.toLowerCase().includes('meds')) && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleMedicationReorder(section.id)}
+                          className="flex items-center gap-1 text-xs px-2"
+                          data-testid={`manual-reorder-button-${section.id}`}
+                          title="Click medications in order to rearrange"
+                        >
+                          <ArrowUpDown size={12} />
+                          Reorder
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setMedicationReorderSectionId(section.id);
+                            // Directly trigger smart reorder
+                            const currentContent = noteData.content[section.id] || '';
+                            if (currentContent.trim()) {
+                              import('@/lib/medication-ordering').then(({ parseMedicationsFromText, smartReorderMedications, medicationsToText }) => {
+                                const parsed = parseMedicationsFromText(currentContent);
+                                const smartOrdered = smartReorderMedications(parsed);
+                                const reorderedText = medicationsToText(smartOrdered);
+                                
+                                setNoteData(prev => ({
+                                  ...prev,
+                                  content: {
+                                    ...prev.content,
+                                    [section.id]: reorderedText
+                                  }
+                                }));
+                                
+                                toast({
+                                  title: "Smart reorder applied",
+                                  description: "Medications ordered by therapeutic category (anticoagulants, antiplatelets, cardiac, diabetes, etc.)",
+                                });
+                              });
+                            }
+                          }}
+                          className="flex items-center gap-1 text-xs px-2"
+                          data-testid={`smart-reorder-button-${section.id}`}
+                          title="Automatically order by therapeutic category"
+                        >
+                          <Shuffle size={12} />
+                          Smart
+                        </Button>
+                      </div>
+                    )}
                     
                     {/* Lab Values Button - Show for lab sections in header */}
                     {(section.type === 'labs' || 
@@ -1616,6 +1700,14 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
           }}
         />
       )}
+
+      {/* Medication Reorder Dialog */}
+      <MedicationReorderDialog
+        isOpen={showMedicationReorderDialog}
+        onClose={() => setShowMedicationReorderDialog(false)}
+        medicationText={medicationReorderSectionId ? (noteData.content[medicationReorderSectionId] || '') : ''}
+        onReorder={handleMedicationReorderConfirm}
+      />
     </div>
   );
 }
