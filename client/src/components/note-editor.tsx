@@ -1618,7 +1618,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                 )}
                 </CardHeader>
               )}
-              <CardContent className="pt-0">
+              <CardContent className="p-6 mt-[9px] mb-[9px] pt-[3px] pb-[3px]">
                 <div className="relative">
                   <Textarea
                     value={noteData.content[section.id] || ''}
