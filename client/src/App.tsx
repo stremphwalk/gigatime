@@ -4,12 +4,14 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
-import { useClerkAuth as useAuth } from "@/hooks/useClerkAuth";
+import { useAuth } from "@/hooks/useAuth0";
 import { GlobalDictation } from "@/components/global-dictation";
 import { ClerkProvider } from "@clerk/clerk-react";
+import { Auth0ProviderWrapper } from "@/providers/Auth0Provider";
 import Home from "./pages/home";
 import { Teams } from "./pages/teams";
 import { LoginPage } from "./pages/login";
+import LandingNew from "./pages/landing-new";
 import NotFound from "./pages/not-found";
 
 // Check if Clerk is configured
@@ -19,10 +21,13 @@ const isClerkConfigured = clerkPubKey && clerkPubKey !== 'your_clerk_publishable
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
 
-
+  // Development bypass - add ?dev=true to URL to skip auth
+  const isDevelopment = import.meta.env.DEV;
+  const urlParams = new URLSearchParams(window.location.search);
+  const devBypass = isDevelopment && urlParams.get('dev') === 'true';
 
   // Show loading state while checking authentication
-  if (isLoading) {
+  if (isLoading && !devBypass) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -33,8 +38,8 @@ function Router() {
     );
   }
 
-  // Force authentication state based on user presence
-  const shouldShowApp = isAuthenticated && user;
+  // Force authentication state based on user presence or dev bypass
+  const shouldShowApp = (isAuthenticated && user) || devBypass;
 
   return (
     <Switch>
@@ -44,7 +49,7 @@ function Router() {
           <Route path="/teams" component={Teams} />
         </>
       ) : (
-        <Route path="/" component={LoginPage} />
+        <Route path="/" component={LandingNew} />
       )}
       <Route component={NotFound} />
     </Switch>
@@ -64,16 +69,20 @@ function App() {
     </QueryClientProvider>
   );
 
-  // Wrap with ClerkProvider only if configured
-  if (isClerkConfigured) {
-    return (
-      <ClerkProvider publishableKey={clerkPubKey}>
-        {AppContent}
-      </ClerkProvider>
-    );
-  }
+  // Wrap with Auth0Provider (which handles its own check for configuration)
+  const AppWithAuth = (
+    <Auth0ProviderWrapper>
+      {isClerkConfigured ? (
+        <ClerkProvider publishableKey={clerkPubKey}>
+          {AppContent}
+        </ClerkProvider>
+      ) : (
+        AppContent
+      )}
+    </Auth0ProviderWrapper>
+  );
 
-  return AppContent;
+  return AppWithAuth;
 }
 
 export default App;

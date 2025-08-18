@@ -2,22 +2,26 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { ClipboardList, User, Shield } from "lucide-react";
-import { useSimpleAuth as useAuth } from "../hooks/useSimpleAuth";
+import { useAuth } from "@/hooks/useAuth0";
 
-const isDevelopment = window.location.hostname === 'localhost' || 
-                      window.location.hostname.includes('.replit.dev');
+const isDevelopment = window.location.hostname === 'localhost';
+const hasAuth0 = !!import.meta.env.VITE_AUTH0_DOMAIN && !!import.meta.env.VITE_AUTH0_CLIENT_ID;
 
 export function LoginPage() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
-  const { login } = useAuth();
+  const { loginWithRedirect } = useAuth();
 
   const handleLogin = async () => {
     setIsLoggingIn(true);
     try {
-      await login();
+      if (hasAuth0) {
+        await loginWithRedirect();
+      } else {
+        // Development mode - redirect to mock login
+        window.location.href = "/api/auth/login";
+      }
     } catch (error) {
       console.error('Login error:', error);
-    } finally {
       setIsLoggingIn(false);
     }
   };
@@ -57,17 +61,17 @@ export function LoginPage() {
               </div>
             ) : (
               <div className="flex items-center space-x-2">
-                {isDevelopment ? <User size={16} /> : <Shield size={16} />}
-                <span>{isDevelopment ? 'Sign In (Dev Mode)' : 'Sign In with Replit'}</span>
+                {hasAuth0 ? <Shield size={16} /> : <User size={16} />}
+                <span>{hasAuth0 ? 'Sign In with Auth0' : 'Sign In (Dev Mode)'}</span>
               </div>
             )}
           </Button>
 
           <div className="text-center text-xs text-gray-500">
-            {isDevelopment ? (
-              <p>Development Mode - Click to authenticate</p>
+            {hasAuth0 ? (
+              <p>Secure authentication via Auth0</p>
             ) : (
-              <p>Secure authentication via Replit</p>
+              <p>Development Mode - Click to authenticate</p>
             )}
           </div>
         </CardContent>

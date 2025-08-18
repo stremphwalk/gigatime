@@ -1,17 +1,9 @@
 import type { RequestHandler } from "express";
-
-let replitIsAuthenticated: RequestHandler | undefined;
-
-// Only import Replit auth in production
-if (process.env.NODE_ENV !== 'development') {
-  import("./replitAuth").then(module => {
-    replitIsAuthenticated = module.isAuthenticated;
-  });
-}
+import { isAuth0Authenticated, getAuth0UserId } from './auth0';
 
 export const requireAuth: RequestHandler = async (req: any, res, next) => {
-  // In development mode, allow access with mock user unless explicitly logged out
-  if (process.env.NODE_ENV === 'development') {
+  // In development with no Auth0 config, use mock user
+  if (process.env.NODE_ENV === 'development' && !process.env.AUTH0_CLIENT_ID) {
     // Initialize session if it doesn't exist
     if (!req.session) {
       req.session = {};
@@ -22,7 +14,7 @@ export const requireAuth: RequestHandler = async (req: any, res, next) => {
       return res.status(401).json({ message: "Not authenticated" });
     }
     
-    // Set mock user for development
+    // Set mock user
     if (!req.user) {
       req.user = {
         claims: {
@@ -37,17 +29,13 @@ export const requireAuth: RequestHandler = async (req: any, res, next) => {
     return next();
   }
   
-  // In production, use Replit authentication
-  if (replitIsAuthenticated) {
-    return replitIsAuthenticated(req, res, next);
-  }
-  
-  return res.status(401).json({ message: "Authentication not configured" });
+  // Use Auth0 authentication
+  return isAuth0Authenticated(req, res, next);
 };
 
 export const optionalAuth: RequestHandler = async (req: any, res, next) => {
-  // In development mode, set mock user if not logged out
-  if (process.env.NODE_ENV === 'development') {
+  // In development with no Auth0 config, set mock user if not logged out
+  if (process.env.NODE_ENV === 'development' && !process.env.AUTH0_CLIENT_ID) {
     // Initialize session if it doesn't exist
     if (!req.session) {
       req.session = {};
@@ -66,21 +54,23 @@ export const optionalAuth: RequestHandler = async (req: any, res, next) => {
     return next();
   }
   
-  // In production, check if authenticated but don't require it
-  if (req.isAuthenticated && req.isAuthenticated() && replitIsAuthenticated) {
-    return replitIsAuthenticated(req, res, next);
-  }
-  
+  // With Auth0, just continue (auth not required)
   return next();
 };
 
 export const getCurrentUserId = (req: any): string => {
+  // Check for Auth0 user first
+  if (req.oidc && req.oidc.isAuthenticated() && req.oidc.user) {
+    return getAuth0UserId(req);
+  }
+  
+  // Fallback to mock user in development
   if (req.user?.claims?.sub) {
     return req.user.claims.sub;
   }
   
-  // In development, return mock user ID if not logged out
-  if (process.env.NODE_ENV === 'development') {
+  // In development with no Auth0, return mock user ID if not logged out
+  if (process.env.NODE_ENV === 'development' && !process.env.AUTH0_CLIENT_ID) {
     // Initialize session if it doesn't exist
     if (!req.session) {
       req.session = {};

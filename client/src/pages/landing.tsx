@@ -1,10 +1,17 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FileText, Users, Zap, Shield } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth0";
 
 export default function Landing() {
-  const handleLogin = () => {
-    window.location.href = "/api/login";
+  const { loginWithRedirect, isAuthenticated } = useAuth();
+  
+  const handleGetStarted = () => {
+    if (isAuthenticated) {
+      window.location.href = "/";
+    } else {
+      loginWithRedirect();
+    }
   };
 
   return (
@@ -19,12 +26,12 @@ export default function Landing() {
             Streamline your clinical note-taking with intelligent templates, smart phrases, and seamless team collaboration.
           </p>
           <Button 
-            onClick={handleLogin}
+            onClick={handleGetStarted}
             size="lg" 
             className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg"
-            data-testid="button-login"
+            data-testid="button-get-started"
           >
-            Sign In to Get Started
+            {isAuthenticated ? 'Go to Dashboard' : 'Sign In to Get Started'}
           </Button>
         </div>
 

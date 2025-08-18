@@ -168,11 +168,11 @@ export function PertinentNegativesPopup({
         
         <div className="flex flex-col flex-1 overflow-hidden">
           {/* Preset Section */}
-          {(presets as PertinentNegativePreset[]).length > 0 && (
+          {presets && (presets as PertinentNegativePreset[]).length > 0 && (
             <div className="mb-4 flex-shrink-0">
               <Label className="text-sm font-medium mb-2 block">Load Preset:</Label>
               <div className="flex flex-wrap gap-2">
-                {(presets as PertinentNegativePreset[]).map(preset => (
+                {presets && (presets as PertinentNegativePreset[]).map(preset => (
                   <Button
                     key={preset.id}
                     size="sm"
