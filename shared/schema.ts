@@ -26,7 +26,7 @@ export const sessions = pgTable(
 
 // Users table (modified for Replit Auth)
 export const users = pgTable("users", {
-  id: varchar("id").primaryKey(), // Replit user ID from claims.sub
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`), // Keep default for existing seq config
   email: varchar("email", { length: 100 }),
   firstName: varchar("first_name", { length: 50 }),
   lastName: varchar("last_name", { length: 50 }),
