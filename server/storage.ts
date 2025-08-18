@@ -592,12 +592,11 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(pertinentNegativePresets.createdAt));
   }
 
-  async createPertinentNegativePreset(preset: Omit<InsertPertinentNegativePreset, 'id' | 'createdAt' | 'updatedAt'>): Promise<PertinentNegativePreset> {
+  async createPertinentNegativePreset(preset: Omit<InsertPertinentNegativePreset, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<PertinentNegativePreset> {
     const [created] = await db
       .insert(pertinentNegativePresets)
       .values({
-        name: preset.name,
-        selectedSymptoms: preset.selectedSymptoms,
+        ...preset,
         userId: 'default-user',
       })
       .returning();

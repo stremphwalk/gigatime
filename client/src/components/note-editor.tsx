@@ -271,7 +271,9 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       
       // Reset cursor position
       setTimeout(() => {
-        textarea.setSelectionRange(cursorPosition - 5, cursorPosition - 5);
+        if (textarea && typeof textarea.setSelectionRange === 'function') {
+          textarea.setSelectionRange(cursorPosition - 5, cursorPosition - 5);
+        }
       }, 10);
       
       return; // Don't process other triggers
@@ -786,7 +788,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     // Focus back to the textarea
     setTimeout(() => {
       const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
-      if (textarea) {
+      if (textarea && typeof textarea.setSelectionRange === 'function') {
         textarea.focus();
         const newCursorPos = wordStart + condition.length;
         textarea.setSelectionRange(newCursorPos, newCursorPos);
@@ -819,7 +821,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     // Focus back to the textarea
     setTimeout(() => {
       const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
-      if (textarea) {
+      if (textarea && typeof textarea.setSelectionRange === 'function') {
         textarea.focus();
         const newCursorPos = wordStart + allergy.length;
         textarea.setSelectionRange(newCursorPos, newCursorPos);
@@ -870,7 +872,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     // Focus back to the textarea
     setTimeout(() => {
       const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
-      if (textarea) {
+      if (textarea && typeof textarea.setSelectionRange === 'function') {
         textarea.focus();
         const newCursorPos = wordStart + formatted.length;
         textarea.setSelectionRange(newCursorPos, newCursorPos);
@@ -903,7 +905,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     // Focus back to the textarea
     setTimeout(() => {
       const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
-      if (textarea) {
+      if (textarea && typeof textarea.setSelectionRange === 'function') {
         textarea.focus();
         const newCursorPos = wordStart + medication.length;
         textarea.setSelectionRange(newCursorPos, newCursorPos);
@@ -936,7 +938,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     // Focus back to the textarea
     setTimeout(() => {
       const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
-      if (textarea) {
+      if (textarea && typeof textarea.setSelectionRange === 'function') {
         textarea.focus();
         const newCursorPos = wordStart + finding.length;
         textarea.setSelectionRange(newCursorPos, newCursorPos);
@@ -969,7 +971,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     // Focus back to the textarea
     setTimeout(() => {
       const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
-      if (textarea) {
+      if (textarea && typeof textarea.setSelectionRange === 'function') {
         textarea.focus();
         const newCursorPos = wordStart + reason.length;
         textarea.setSelectionRange(newCursorPos, newCursorPos);
@@ -1430,8 +1432,10 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                       <SelectValue placeholder="Select template" />
                     </SelectTrigger>
                     <SelectContent>
-                      {/* Local templates */}
-                      {noteTemplates.map((template) => (
+                      {/* Local templates - only blank note */}
+                      {noteTemplates
+                        .filter(template => template.type === 'blank')
+                        .map((template) => (
                         <SelectItem key={`local-${template.id}`} value={template.type}>
                           {template.name}
                         </SelectItem>
@@ -1655,7 +1659,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                 )}
                 </CardHeader>
               )}
-              <CardContent className="p-6 mt-[9px] mb-[9px] pt-[3px] pb-[3px]">
+              <CardContent className="p-4">
                 <div className="relative">
                   <Textarea
                     value={noteData.content[section.id] || ''}
@@ -1700,7 +1704,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                         ? ', start typing consultation/admission reasons for autocomplete'
                         : ''
                     })`}
-                    className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm resize-none min-h-[400px] mt-[24px] mb-[24px] pl-[15px] pr-[15px] pt-[15px] pb-[15px]"
+                    className={`flex w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm resize-none ${selectedTemplate?.type === 'blank' ? 'min-h-[300px]' : 'min-h-[120px]'}`}
                     data-testid={`textarea-${section.id}`}
                     data-section-id={section.id}
                   />

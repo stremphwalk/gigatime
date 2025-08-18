@@ -1,156 +1,101 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, Users, MessageSquare, Stethoscope, Shield, Zap } from "lucide-react";
+import { FileText, Users, Zap, Shield } from "lucide-react";
 
 export default function Landing() {
+  const handleLogin = () => {
+    window.location.href = "/api/login";
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-medical-teal/10">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
       <div className="container mx-auto px-4 py-16">
         {/* Header */}
         <div className="text-center mb-16">
-          <div className="flex items-center justify-center mb-6">
-            <Stethoscope className="h-12 w-12 text-professional-blue mr-4" />
-            <h1 className="text-4xl font-bold text-gray-900">MedDoc Pro</h1>
-          </div>
-          <h2 className="text-2xl text-gray-700 mb-4">
-            Professional Medical Documentation Platform
-          </h2>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto mb-8">
-            Streamline your clinical workflow with intelligent note templates, 
-            smart phrase autocomplete, and secure team collaboration.
+          <h1 className="text-4xl md:text-6xl font-bold text-gray-900 dark:text-white mb-6">
+            Medical Documentation Platform
+          </h1>
+          <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-3xl mx-auto">
+            Streamline your clinical note-taking with intelligent templates, smart phrases, and seamless team collaboration.
           </p>
           <Button 
+            onClick={handleLogin}
             size="lg" 
-            className="bg-professional-blue hover:bg-professional-blue/90"
-            onClick={() => window.location.href = "/api/login"}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg"
+            data-testid="button-login"
           >
-            Sign In with Replit
+            Sign In to Get Started
           </Button>
         </div>
 
-        {/* Features Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16">
-          <Card className="border-2 hover:border-professional-blue/50 transition-colors">
+        {/* Features */}
+        <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 mb-16">
+          <Card className="text-center">
             <CardHeader>
-              <FileText className="h-10 w-10 text-professional-blue mb-2" />
-              <CardTitle>Smart Note Templates</CardTitle>
-              <CardDescription>
-                Pre-built templates for admission, progress, and consultation notes
-              </CardDescription>
+              <FileText className="mx-auto h-12 w-12 text-blue-600 mb-4" />
+              <CardTitle>Smart Templates</CardTitle>
             </CardHeader>
             <CardContent>
-              <ul className="text-sm text-gray-600 space-y-1">
-                <li>• Customizable medical sections</li>
-                <li>• Template builder with drag & drop</li>
-                <li>• Export to plain text</li>
-              </ul>
+              <CardDescription>
+                Pre-built templates for admission notes, progress notes, and consultations to speed up documentation.
+              </CardDescription>
             </CardContent>
           </Card>
 
-          <Card className="border-2 hover:border-medical-teal/50 transition-colors">
+          <Card className="text-center">
             <CardHeader>
-              <MessageSquare className="h-10 w-10 text-medical-teal mb-2" />
+              <Zap className="mx-auto h-12 w-12 text-green-600 mb-4" />
               <CardTitle>Smart Phrases</CardTitle>
-              <CardDescription>
-                Autocomplete common medical phrases and save time
-              </CardDescription>
             </CardHeader>
             <CardContent>
-              <ul className="text-sm text-gray-600 space-y-1">
-                <li>• Custom trigger phrases</li>
-                <li>• Medical condition autocomplete</li>
-                <li>• Medication database integration</li>
-              </ul>
+              <CardDescription>
+                Autocomplete common medical phrases and templates with intelligent suggestions.
+              </CardDescription>
             </CardContent>
           </Card>
 
-          <Card className="border-2 hover:border-success-green/50 transition-colors">
+          <Card className="text-center">
             <CardHeader>
-              <Users className="h-10 w-10 text-success-green mb-2" />
+              <Users className="mx-auto h-12 w-12 text-purple-600 mb-4" />
               <CardTitle>Team Collaboration</CardTitle>
-              <CardDescription>
-                Collaborate with up to 6 team members securely
-              </CardDescription>
             </CardHeader>
             <CardContent>
-              <ul className="text-sm text-gray-600 space-y-1">
-                <li>• Unique group codes</li>
-                <li>• 7-day team sessions</li>
-                <li>• Shared calendars & tasks</li>
-              </ul>
+              <CardDescription>
+                Work together with team members using shared group codes and collaborative tools.
+              </CardDescription>
             </CardContent>
           </Card>
 
-          <Card className="border-2 hover:border-warning-orange/50 transition-colors">
+          <Card className="text-center">
             <CardHeader>
-              <Zap className="h-10 w-10 text-warning-orange mb-2" />
-              <CardTitle>Medical Tools</CardTitle>
-              <CardDescription>
-                Specialized tools for clinical documentation
-              </CardDescription>
+              <Shield className="mx-auto h-12 w-12 text-orange-600 mb-4" />
+              <CardTitle>Secure & Reliable</CardTitle>
             </CardHeader>
             <CardContent>
-              <ul className="text-sm text-gray-600 space-y-1">
-                <li>• Pertinent negatives tool</li>
-                <li>• Lab values tracking</li>
-                <li>• Physical exam templates</li>
-              </ul>
-            </CardContent>
-          </Card>
-
-          <Card className="border-2 hover:border-professional-blue/50 transition-colors">
-            <CardHeader>
-              <Shield className="h-10 w-10 text-professional-blue mb-2" />
-              <CardTitle>Secure & Compliant</CardTitle>
               <CardDescription>
-                Built with healthcare privacy and security in mind
+                Built with healthcare standards in mind, ensuring your data is secure and accessible.
               </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ul className="text-sm text-gray-600 space-y-1">
-                <li>• Secure authentication</li>
-                <li>• Data encryption</li>
-                <li>• Privacy-first design</li>
-              </ul>
-            </CardContent>
-          </Card>
-
-          <Card className="border-2 hover:border-medical-teal/50 transition-colors">
-            <CardHeader>
-              <FileText className="h-10 w-10 text-medical-teal mb-2" />
-              <CardTitle>Export & Integration</CardTitle>
-              <CardDescription>
-                Export your notes to various formats and systems
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ul className="text-sm text-gray-600 space-y-1">
-                <li>• Plain text export</li>
-                <li>• Copy to clipboard</li>
-                <li>• Template sharing</li>
-              </ul>
             </CardContent>
           </Card>
         </div>
 
         {/* Call to Action */}
         <div className="text-center">
-          <Card className="max-w-md mx-auto">
-            <CardHeader>
-              <CardTitle>Ready to get started?</CardTitle>
-              <CardDescription>
-                Sign in with your Replit account to access all features
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button 
-                className="w-full bg-professional-blue hover:bg-professional-blue/90"
-                onClick={() => window.location.href = "/api/login"}
-              >
-                Sign In Now
-              </Button>
-            </CardContent>
-          </Card>
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+            Ready to improve your workflow?
+          </h2>
+          <p className="text-lg text-gray-600 dark:text-gray-300 mb-8">
+            Join healthcare professionals who trust our platform for efficient clinical documentation.
+          </p>
+          <Button 
+            onClick={handleLogin}
+            size="lg" 
+            variant="outline"
+            className="border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white px-8 py-3 text-lg"
+            data-testid="button-login-secondary"
+          >
+            Get Started Now
+          </Button>
         </div>
       </div>
     </div>

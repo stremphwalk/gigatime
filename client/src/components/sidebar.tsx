@@ -85,21 +85,14 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
           <Button
             variant="ghost"
-            className="w-full p-3 text-left flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t-lg"
+            className={cn(
+              "w-full p-3 text-left flex items-center justify-start space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t-lg"
+            )}
             onClick={() => toggleSection('notes')}
             data-testid="toggle-notes-section"
           >
-            <div className="flex items-center space-x-3">
-              <FileText className="text-medical-teal dark:text-blue-400" size={16} />
-              <span className="font-medium text-gray-900 dark:text-gray-100">Notes</span>
-            </div>
-            <ChevronDown 
-              className={cn(
-                "text-gray-400 dark:text-gray-500 transition-transform",
-                expandedSections.notes ? "rotate-0" : "-rotate-90"
-              )} 
-              size={14} 
-            />
+            <FileText className="text-medical-teal dark:text-blue-400" size={16} />
+            <span className="font-medium text-gray-900 dark:text-gray-100">Notes</span>
           </Button>
           
           {expandedSections.notes && (
@@ -166,7 +159,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
           <Button
             variant="ghost"
             className={cn(
-              "w-full p-3 text-left flex items-center space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg",
+              "w-full p-3 text-left flex items-center justify-start space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg",
               currentView === 'smart-phrases' && "bg-blue-50 dark:bg-blue-900/50 border border-professional-blue dark:border-blue-600"
             )}
             onClick={() => onViewChange('smart-phrases')}
@@ -174,7 +167,6 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
           >
             <Zap className="text-medical-teal dark:text-blue-400" size={16} />
             <span className="font-medium text-gray-900 dark:text-gray-100">Smart Phrases</span>
-            
           </Button>
         </div>
 
@@ -183,7 +175,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
           <Button
             variant="ghost"
             className={cn(
-              "w-full p-3 text-left flex items-center space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg",
+              "w-full p-3 text-left flex items-center justify-start space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg",
               currentView === 'teams' && "bg-blue-50 dark:bg-blue-900/50 border border-professional-blue dark:border-blue-600"
             )}
             onClick={() => onViewChange('teams')}
@@ -191,7 +183,6 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
           >
             <Users className="text-medical-teal dark:text-blue-400" size={16} />
             <span className="font-medium text-gray-900 dark:text-gray-100">Teams</span>
-            
           </Button>
         </div>
 
