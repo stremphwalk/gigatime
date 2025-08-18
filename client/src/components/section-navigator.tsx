@@ -94,16 +94,24 @@ export function SectionNavigator({
     return '📄';
   };
 
-  const toggleMode = () => {
+  const showIcons = () => {
     if (!onModeChange) return;
-    
-    if (mode === 'hidden') {
-      onModeChange('icons');
-    } else if (mode === 'icons') {
-      onModeChange('full');
-    } else {
-      onModeChange('hidden');
-    }
+    onModeChange('icons');
+  };
+
+  const showFull = () => {
+    if (!onModeChange) return;
+    onModeChange('full');
+  };
+
+  const hideCompletely = () => {
+    if (!onModeChange) return;
+    onModeChange('hidden');
+  };
+
+  const halfClose = () => {
+    if (!onModeChange) return;
+    onModeChange('icons');
   };
 
   // Hidden mode - completely collapsed
@@ -112,7 +120,7 @@ export function SectionNavigator({
       <div className="w-8 flex-shrink-0">
         <div className="sticky top-6">
           <Button
-            onClick={toggleMode}
+            onClick={showIcons}
             variant="ghost"
             size="sm"
             className="w-8 h-8 p-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -132,15 +140,28 @@ export function SectionNavigator({
         <div className="sticky top-6">
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
             <div className="p-2">
-              <Button
-                onClick={toggleMode}
-                variant="ghost"
-                size="sm"
-                className="w-8 h-8 p-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 mb-2"
-                data-testid="button-section-navigator-expand"
-              >
-                <ChevronDown size={12} className="rotate-90" />
-              </Button>
+              <div className="flex flex-col gap-1 mb-2">
+                <Button
+                  onClick={showFull}
+                  variant="ghost"
+                  size="sm"
+                  className="w-8 h-8 p-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  title="Expand to full view"
+                  data-testid="button-section-navigator-expand"
+                >
+                  <ChevronDown size={12} className="rotate-90" />
+                </Button>
+                <Button
+                  onClick={hideCompletely}
+                  variant="ghost"
+                  size="sm"
+                  className="w-8 h-8 p-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  title="Hide completely"
+                  data-testid="button-section-navigator-hide"
+                >
+                  <X size={10} />
+                </Button>
+              </div>
               
               <div className="space-y-1 max-h-[60vh] overflow-y-auto">
                 {sections.map((section, index) => {
@@ -184,15 +205,28 @@ export function SectionNavigator({
                 <ScrollText size={14} className="text-gray-400" />
                 <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Sections</span>
               </div>
-              <Button
-                onClick={toggleMode}
-                variant="ghost"
-                size="sm"
-                className="w-6 h-6 p-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                data-testid="button-section-navigator-collapse"
-              >
-                <X size={12} />
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  onClick={halfClose}
+                  variant="ghost"
+                  size="sm"
+                  className="w-6 h-6 p-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  title="Half close (icons only)"
+                  data-testid="button-section-navigator-half-close"
+                >
+                  <ChevronDown size={10} className="rotate-[-90deg]" />
+                </Button>
+                <Button
+                  onClick={hideCompletely}
+                  variant="ghost"
+                  size="sm"
+                  className="w-6 h-6 p-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  title="Full close (hide completely)"
+                  data-testid="button-section-navigator-full-close"
+                >
+                  <X size={12} />
+                </Button>
+              </div>
             </div>
             
             <div className="space-y-0.5 max-h-[65vh] overflow-y-auto">
