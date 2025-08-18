@@ -271,7 +271,9 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       
       // Reset cursor position
       setTimeout(() => {
-        textarea.setSelectionRange(cursorPosition - 5, cursorPosition - 5);
+        if (textarea && typeof textarea.setSelectionRange === 'function') {
+          textarea.setSelectionRange(cursorPosition - 5, cursorPosition - 5);
+        }
       }, 10);
       
       return; // Don't process other triggers
@@ -786,7 +788,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     // Focus back to the textarea
     setTimeout(() => {
       const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
-      if (textarea) {
+      if (textarea && typeof textarea.setSelectionRange === 'function') {
         textarea.focus();
         const newCursorPos = wordStart + condition.length;
         textarea.setSelectionRange(newCursorPos, newCursorPos);
@@ -819,7 +821,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     // Focus back to the textarea
     setTimeout(() => {
       const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
-      if (textarea) {
+      if (textarea && typeof textarea.setSelectionRange === 'function') {
         textarea.focus();
         const newCursorPos = wordStart + allergy.length;
         textarea.setSelectionRange(newCursorPos, newCursorPos);
@@ -870,7 +872,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     // Focus back to the textarea
     setTimeout(() => {
       const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
-      if (textarea) {
+      if (textarea && typeof textarea.setSelectionRange === 'function') {
         textarea.focus();
         const newCursorPos = wordStart + formatted.length;
         textarea.setSelectionRange(newCursorPos, newCursorPos);
@@ -903,7 +905,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     // Focus back to the textarea
     setTimeout(() => {
       const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
-      if (textarea) {
+      if (textarea && typeof textarea.setSelectionRange === 'function') {
         textarea.focus();
         const newCursorPos = wordStart + medication.length;
         textarea.setSelectionRange(newCursorPos, newCursorPos);
@@ -936,7 +938,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     // Focus back to the textarea
     setTimeout(() => {
       const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
-      if (textarea) {
+      if (textarea && typeof textarea.setSelectionRange === 'function') {
         textarea.focus();
         const newCursorPos = wordStart + finding.length;
         textarea.setSelectionRange(newCursorPos, newCursorPos);
