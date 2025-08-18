@@ -1280,23 +1280,30 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     }, 100);
   };
 
+  const getSectionEmojiIcon = (sectionId: string, sectionName?: string, sectionType?: string) => {
+    const name = sectionName?.toLowerCase() || '';
+    const type = sectionType;
+    
+    if (type === 'chiefComplaint' || name.includes('chief complaint') || name.includes('reason') || sectionId === 'reason' || sectionId === 'chief') return '📋';
+    if (type === 'historyPresentIllness' || name.includes('hpi') || name.includes('history of present') || sectionId === 'hpi' || sectionId === 'evolution') return '📖';
+    if (type === 'pastMedicalHistory' || name.includes('past medical') || name.includes('pmh')) return '🏥';
+    if (type === 'medications' || name.includes('medication') || name.includes('meds') || sectionId === 'medications') return '💊';
+    if (type === 'allergies' || name.includes('allergies') || name.includes('allergy') || sectionId === 'allergies') return '⚠️';
+    if (type === 'socialHistory' || name.includes('social history') || name.includes('social hx')) return '🏠';
+    if (type === 'familyHistory' || name.includes('family history') || name.includes('fhx')) return '👨‍👩‍👧‍👦';
+    if (type === 'reviewOfSystems' || name.includes('review of systems') || name.includes('ros') || sectionId === 'ros') return '🔍';
+    if (type === 'physicalExam' || name.includes('physical') || name.includes('exam')) return '🩺';
+    if (type === 'labs' || name.includes('lab') || name.includes('laboratory')) return '🧪';
+    if (type === 'imaging' || name.includes('imaging') || name.includes('radiology')) return '📷';
+    if (name.includes('assessment') || name.includes('impression')) return '🎯';
+    if (name.includes('plan') || name.includes('management')) return '📝';
+    return '📄';
+  };
+
   const getSectionIcon = (sectionId: string) => {
-    switch (sectionId) {
-      case 'reason':
-      case 'chief':
-        return <Stethoscope className="text-medical-teal" size={16} />;
-      case 'hpi':
-      case 'evolution':
-        return <History className="text-medical-teal" size={16} />;
-      case 'ros':
-        return <CheckSquare className="text-medical-teal" size={16} />;
-      case 'medications':
-        return <Pill className="text-medical-teal" size={16} />;
-      case 'allergies':
-        return <AlertTriangle className="text-medical-red" size={16} />;
-      default:
-        return <FileText className="text-medical-teal" size={16} />;
-    }
+    const section = sections.find(s => s.id === sectionId);
+    const emoji = getSectionEmojiIcon(sectionId, section?.name, section?.type);
+    return <span className="text-base">{emoji}</span>;
   };
 
   if (!isCreating && !note) {
