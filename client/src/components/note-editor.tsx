@@ -20,6 +20,7 @@ import { PertinentNegativesPopup } from "./pertinent-negatives-popup";
 import { PertinentNegativePresetSelector } from "./pertinent-negative-preset-selector";
 import { ImagingAutocomplete } from "./imaging-autocomplete";
 import { ConsultationReasonAutocomplete } from "./consultation-reason-autocomplete";
+import { ClinicalCalculatorPopup } from "./clinical-calculator-popup";
 import { useNotes, useNoteTemplates } from "../hooks/use-notes";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
 import { useToast } from "../hooks/use-toast";
@@ -141,6 +142,11 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     cursorPosition: number;
     wordStart: number;
   } | null>(null);
+  
+  // Clinical calculator popup state
+  const [showClinicalCalculator, setShowClinicalCalculator] = useState(false);
+  const [calculatorTargetSection, setCalculatorTargetSection] = useState<string | null>(null);
+  const [calculatorInsertPosition, setCalculatorInsertPosition] = useState<number>(0);
 
   const { createNote, updateNote, isCreating: isSaving } = useNotes();
   const { templates } = useNoteTemplates();
@@ -237,7 +243,35 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       }
     }));
 
-    // Check for smart phrase trigger
+    // Check for calc command trigger
+    const cursorPosition = textarea.selectionStart;
+    const beforeCursor = content.slice(0, cursorPosition);
+    
+    // Check for /calc command specifically
+    if (beforeCursor.endsWith('/calc')) {
+      setCalculatorTargetSection(sectionId);
+      setCalculatorInsertPosition(cursorPosition - 5); // Remove '/calc' when inserting
+      setShowClinicalCalculator(true);
+      
+      // Remove the /calc text from the content
+      const newContent = content.slice(0, cursorPosition - 5) + content.slice(cursorPosition);
+      setNoteData(prev => ({
+        ...prev,
+        content: {
+          ...prev.content,
+          [sectionId]: newContent
+        }
+      }));
+      
+      // Reset cursor position
+      setTimeout(() => {
+        textarea.setSelectionRange(cursorPosition - 5, cursorPosition - 5);
+      }, 10);
+      
+      return; // Don't process other triggers
+    }
+
+    // Check for smart phrase trigger (excluding calc)
     if (content.endsWith('/')) {
       const rect = textarea.getBoundingClientRect();
       setActiveAutocomplete({
@@ -248,7 +282,12 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     } else if (activeAutocomplete && content.includes('/')) {
       const lastSlashIndex = content.lastIndexOf('/');
       const query = content.slice(lastSlashIndex + 1);
-      setActiveAutocomplete(prev => prev ? { ...prev, query } : null);
+      // Don't show autocomplete for /calc command
+      if (query === 'calc') {
+        setActiveAutocomplete(null);
+      } else {
+        setActiveAutocomplete(prev => prev ? { ...prev, query } : null);
+      }
     } else if (activeAutocomplete && !content.includes('/')) {
       setActiveAutocomplete(null);
     }
@@ -1015,6 +1054,32 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     setLabParsingSectionId(null);
   };
 
+  const handleCalculatorComplete = (resultText: string) => {
+    if (calculatorTargetSection) {
+      const currentContent = noteData.content[calculatorTargetSection] || '';
+      const beforeInsert = currentContent.slice(0, calculatorInsertPosition);
+      const afterInsert = currentContent.slice(calculatorInsertPosition);
+      const newContent = beforeInsert + resultText + afterInsert;
+      
+      setNoteData(prev => ({
+        ...prev,
+        content: {
+          ...prev.content,
+          [calculatorTargetSection]: newContent
+        }
+      }));
+      
+      toast({
+        title: "Calculator result inserted",
+        description: "Clinical calculation has been added to your note.",
+      });
+    }
+    
+    setShowClinicalCalculator(false);
+    setCalculatorTargetSection(null);
+    setCalculatorInsertPosition(0);
+  };
+
   const handleSave = async () => {
     try {
       const notePayload = {
@@ -1560,8 +1625,8 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                     value={noteData.content[section.id] || ''}
                     onChange={(e) => handleSectionContentChange(section.id, e.target.value, e.target)}
                     placeholder={selectedTemplate?.type === 'blank' 
-                      ? "Start typing your note here... (Type '/' for smart phrases)"
-                      : `Document the ${section.name.toLowerCase()}... (Type '/' for smart phrases${
+                      ? "Start typing your note here... (Type '/' for smart phrases, '/calc' for clinical calculators)"
+                      : `Document the ${section.name.toLowerCase()}... (Type '/' for smart phrases, '/calc' for calculators${
                       section.id === 'reason' || section.id === 'chief' ||
                       section.name.toLowerCase().includes('reason for consultation') ||
                       section.name.toLowerCase().includes('reason for admission') ||
@@ -1775,6 +1840,13 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
         isOpen={showLabParsingDialog}
         onClose={() => setShowLabParsingDialog(false)}
         onConfirm={handleLabParsingConfirm}
+      />
+
+      {/* Clinical Calculator Popup */}
+      <ClinicalCalculatorPopup
+        isOpen={showClinicalCalculator}
+        onClose={() => setShowClinicalCalculator(false)}
+        onCalculationComplete={handleCalculatorComplete}
       />
     </div>
   );
