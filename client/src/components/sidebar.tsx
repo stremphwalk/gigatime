@@ -16,6 +16,7 @@ import {
   User
 } from "lucide-react";
 import { Link } from "wouter";
+import logoImage from '@assets/Arinote_logo_no_bg_1755506004066.png';
 import { useNoteTemplates } from "../hooks/use-notes";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
 import { useSimpleAuth as useAuth } from "../hooks/useSimpleAuth";
@@ -73,9 +74,11 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
       {/* Header */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-medical-teal dark:bg-blue-600 rounded-lg flex items-center justify-center">
-            <ClipboardList className="text-white" size={16} />
-          </div>
+          <img 
+            src={logoImage} 
+            alt="Arinote Logo" 
+            className="w-8 h-8 object-contain"
+          />
           <h1 className="text-xl font-semibold text-medical-teal dark:text-blue-400">Arinote</h1>
         </div>
       </div>
