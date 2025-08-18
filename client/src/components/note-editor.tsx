@@ -152,6 +152,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
   // Section navigator state
   const [showSectionNavigator, setShowSectionNavigator] = useState(false);
   const [currentActiveSection, setCurrentActiveSection] = useState<string | null>(null);
+  const [navigatorMode, setNavigatorMode] = useState<'hidden' | 'icons' | 'full'>('icons');
 
   const { createNote, updateNote, isCreating: isSaving } = useNotes();
   const { templates } = useNoteTemplates();
@@ -1368,17 +1369,15 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       <div className="flex-1 overflow-y-auto p-6">
         <div className="flex gap-6">
           {/* Section Navigator */}
-          <div className="w-64 flex-shrink-0">
-            <div className="sticky top-6">
-              <SectionNavigator
-                sections={sections}
-                isOpen={true}
-                onToggle={() => {}} // Always open in this layout
-                onSectionSelect={handleSectionSelect}
-                currentSection={currentActiveSection || undefined}
-              />
-            </div>
-          </div>
+          <SectionNavigator
+            sections={sections}
+            isOpen={true}
+            onToggle={() => {}} // Always open in this layout
+            onSectionSelect={handleSectionSelect}
+            currentSection={currentActiveSection || undefined}
+            mode={navigatorMode}
+            onModeChange={setNavigatorMode}
+          />
           
           {/* Note Content */}
           <div className="flex-1 max-w-4xl space-y-6">

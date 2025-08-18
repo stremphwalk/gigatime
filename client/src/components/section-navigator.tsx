@@ -16,6 +16,8 @@ interface SectionNavigatorProps {
   onToggle: () => void;
   onSectionSelect: (sectionId: string) => void;
   currentSection?: string;
+  mode?: 'hidden' | 'icons' | 'full';
+  onModeChange?: (mode: 'hidden' | 'icons' | 'full') => void;
 }
 
 export function SectionNavigator({ 
@@ -23,13 +25,15 @@ export function SectionNavigator({
   isOpen, 
   onToggle, 
   onSectionSelect, 
-  currentSection 
+  currentSection,
+  mode = 'full',
+  onModeChange
 }: SectionNavigatorProps) {
   const [activeSection, setActiveSection] = useState<string | null>(null);
 
   // Auto-detect which section is currently in view
   useEffect(() => {
-    if (!isOpen) return;
+    if (mode === 'hidden') return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -50,7 +54,7 @@ export function SectionNavigator({
     sectionElements.forEach((el) => observer.observe(el.closest('.section-card') || el));
 
     return () => observer.disconnect();
-  }, [isOpen, sections]);
+  }, [mode, sections]);
 
   const handleSectionClick = (sectionId: string) => {
     onSectionSelect(sectionId);
@@ -90,59 +94,151 @@ export function SectionNavigator({
     return '📄';
   };
 
-  // Always show in sidebar layout
-  return (
-    <div className="w-full">
-      <Card className="shadow-lg border-medical-teal/20 bg-white dark:bg-gray-800">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <ScrollText size={16} className="text-medical-teal" />
-            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Sections</span>
-          </div>
-          
-          <div className="space-y-1 max-h-[70vh] overflow-y-auto">
-            {sections.map((section, index) => {
-              const isActive = activeSection === section.id || currentSection === section.id;
+  const toggleMode = () => {
+    if (!onModeChange) return;
+    
+    if (mode === 'hidden') {
+      onModeChange('icons');
+    } else if (mode === 'icons') {
+      onModeChange('full');
+    } else {
+      onModeChange('hidden');
+    }
+  };
+
+  // Hidden mode - completely collapsed
+  if (mode === 'hidden') {
+    return (
+      <div className="w-8 flex-shrink-0">
+        <div className="sticky top-6">
+          <Button
+            onClick={toggleMode}
+            variant="ghost"
+            size="sm"
+            className="w-8 h-8 p-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+            data-testid="button-section-navigator-show"
+          >
+            <ChevronDown size={14} className="rotate-[-90deg]" />
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Icons mode - slim sidebar with just emojis
+  if (mode === 'icons') {
+    return (
+      <div className="w-12 flex-shrink-0">
+        <div className="sticky top-6">
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-sm">
+            <div className="p-2">
+              <Button
+                onClick={toggleMode}
+                variant="ghost"
+                size="sm"
+                className="w-8 h-8 p-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 mb-2"
+                data-testid="button-section-navigator-expand"
+              >
+                <ChevronDown size={12} className="rotate-90" />
+              </Button>
               
-              return (
-                <Button
-                  key={section.id}
-                  onClick={() => handleSectionClick(section.id)}
-                  variant="ghost"
-                  className={cn(
-                    "w-full justify-start text-left p-2 h-auto min-h-[2.5rem] transition-all duration-150",
-                    isActive 
-                      ? "bg-medical-teal/10 text-medical-teal border-l-2 border-medical-teal" 
-                      : "hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-200"
-                  )}
-                  data-testid={`button-navigate-section-${section.id}`}
-                >
-                  <div className="flex items-center gap-2 w-full">
-                    <span className="text-sm">{getSectionIcon(section)}</span>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium truncate">
-                        {section.name}
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        Section {index + 1}
-                      </div>
-                    </div>
-                    {isActive && (
-                      <ChevronDown size={14} className="text-medical-teal flex-shrink-0" />
-                    )}
-                  </div>
-                </Button>
-              );
-            })}
-          </div>
-          
-          <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
-            <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
-              {sections.length} sections • Click to navigate
+              <div className="space-y-1 max-h-[60vh] overflow-y-auto">
+                {sections.map((section, index) => {
+                  const isActive = activeSection === section.id || currentSection === section.id;
+                  
+                  return (
+                    <Button
+                      key={section.id}
+                      onClick={() => handleSectionClick(section.id)}
+                      variant="ghost"
+                      size="sm"
+                      className={cn(
+                        "w-8 h-8 p-0 transition-all duration-150",
+                        isActive 
+                          ? "bg-medical-teal/15 text-medical-teal border border-medical-teal/30" 
+                          : "hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+                      )}
+                      title={`${section.name} (Section ${index + 1})`}
+                      data-testid={`button-navigate-section-icon-${section.id}`}
+                    >
+                      <span className="text-sm">{getSectionIcon(section)}</span>
+                    </Button>
+                  );
+                })}
+              </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+    );
+  }
+
+  // Full mode - complete details but more subtle
+  return (
+    <div className="w-64 flex-shrink-0">
+      <div className="sticky top-6">
+        <div className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm border border-gray-200/60 dark:border-gray-700/60 rounded-lg shadow-sm">
+          <div className="p-3">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <ScrollText size={14} className="text-gray-400" />
+                <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Sections</span>
+              </div>
+              <Button
+                onClick={toggleMode}
+                variant="ghost"
+                size="sm"
+                className="w-6 h-6 p-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                data-testid="button-section-navigator-collapse"
+              >
+                <X size={12} />
+              </Button>
+            </div>
+            
+            <div className="space-y-0.5 max-h-[65vh] overflow-y-auto">
+              {sections.map((section, index) => {
+                const isActive = activeSection === section.id || currentSection === section.id;
+                
+                return (
+                  <Button
+                    key={section.id}
+                    onClick={() => handleSectionClick(section.id)}
+                    variant="ghost"
+                    className={cn(
+                      "w-full justify-start text-left p-2 h-auto min-h-[2rem] transition-all duration-150 rounded-md",
+                      isActive 
+                        ? "bg-medical-teal/8 text-medical-teal border-l-2 border-medical-teal/60" 
+                        : "hover:bg-gray-50/80 dark:hover:bg-gray-800/50 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                    )}
+                    data-testid={`button-navigate-section-${section.id}`}
+                  >
+                    <div className="flex items-center gap-2 w-full">
+                      <span className="text-xs">{getSectionIcon(section)}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium truncate">
+                          {section.name}
+                        </div>
+                        <div className="text-[10px] text-gray-400 dark:text-gray-500">
+                          Section {index + 1}
+                        </div>
+                      </div>
+                      {isActive && (
+                        <ChevronDown size={10} className="text-medical-teal/60 flex-shrink-0" />
+                      )}
+                    </div>
+                  </Button>
+                );
+              })}
+            </div>
+            
+            <div className="mt-2 pt-2 border-t border-gray-100/60 dark:border-gray-700/60">
+              <div className="text-[10px] text-gray-400 dark:text-gray-500 text-center">
+                {sections.length} sections
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
