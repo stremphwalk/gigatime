@@ -1348,7 +1348,6 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
           </Button>
         </div>
       </div>
-
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-4xl mx-auto space-y-6">
@@ -1664,10 +1663,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                         ? ', start typing consultation/admission reasons for autocomplete'
                         : ''
                     })`}
-                    className={cn(
-                      "resize-none",
-                      selectedTemplate?.type === 'blank' ? "min-h-[400px]" : "min-h-[100px]"
-                    )}
+                    className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm resize-none min-h-[400px] mt-[24px] mb-[24px] pl-[15px] pr-[15px] pt-[15px] pb-[15px]"
                     data-testid={`textarea-${section.id}`}
                     data-section-id={section.id}
                   />
@@ -1788,7 +1784,6 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
           </div>
         </div>
       </div>
-      
       {/* Pertinent Negatives Popup */}
       <PertinentNegativesPopup
         isOpen={showPertinentNegatives}
@@ -1798,7 +1793,6 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
         }}
         onConfirm={(negativeText: string) => handlePertinentNegativesConfirm(negativeText)}
       />
-
       {/* Lab Values Popup */}
       {activeLabValuesPopup && (
         <LabValuesPopup
@@ -1826,7 +1820,6 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
           }}
         />
       )}
-
       {/* Medication Reorder Dialog */}
       <MedicationReorderDialog
         isOpen={showMedicationReorderDialog}
@@ -1834,14 +1827,12 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
         medicationText={medicationReorderSectionId ? (noteData.content[medicationReorderSectionId] || '') : ''}
         onReorder={handleMedicationReorderConfirm}
       />
-
       {/* Lab Parsing Dialog */}
       <LabParsingDialog
         isOpen={showLabParsingDialog}
         onClose={() => setShowLabParsingDialog(false)}
         onConfirm={handleLabParsingConfirm}
       />
-
       {/* Clinical Calculator Popup */}
       <ClinicalCalculatorPopup
         isOpen={showClinicalCalculator}
