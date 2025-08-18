@@ -1366,7 +1366,22 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       </div>
       {/* Main Content Area */}
       <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-4xl mx-auto space-y-6">
+        <div className="flex gap-6">
+          {/* Section Navigator */}
+          <div className="w-64 flex-shrink-0">
+            <div className="sticky top-6">
+              <SectionNavigator
+                sections={sections}
+                isOpen={true}
+                onToggle={() => {}} // Always open in this layout
+                onSectionSelect={handleSectionSelect}
+                currentSection={currentActiveSection || undefined}
+              />
+            </div>
+          </div>
+          
+          {/* Note Content */}
+          <div className="flex-1 max-w-4xl space-y-6">
           
           {/* Patient Information Header */}
           <Card>
@@ -1799,6 +1814,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
             </div>
           </div>
         </div>
+        </div>
       </div>
       {/* Pertinent Negatives Popup */}
       <PertinentNegativesPopup
@@ -1856,14 +1872,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
         onCalculationComplete={handleCalculatorComplete}
       />
 
-      {/* Section Navigator */}
-      <SectionNavigator
-        sections={sections}
-        isOpen={showSectionNavigator}
-        onToggle={() => setShowSectionNavigator(!showSectionNavigator)}
-        onSectionSelect={handleSectionSelect}
-        currentSection={currentActiveSection || undefined}
-      />
+
     </div>
   );
 }

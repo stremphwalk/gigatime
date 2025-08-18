@@ -90,43 +90,17 @@ export function SectionNavigator({
     return '📄';
   };
 
-  if (!isOpen) {
-    return (
-      <div className="fixed right-6 top-1/2 transform -translate-y-1/2 z-50">
-        <Button
-          onClick={onToggle}
-          variant="outline"
-          size="sm"
-          className="bg-white shadow-lg hover:shadow-xl transition-all duration-200 border-medical-teal/20 hover:border-medical-teal/40"
-          data-testid="button-section-navigator-open"
-        >
-          <ScrollText size={16} className="text-medical-teal" />
-        </Button>
-      </div>
-    );
-  }
-
+  // Always show in sidebar layout
   return (
-    <div className="fixed right-6 top-1/2 transform -translate-y-1/2 z-50 max-h-[70vh] w-64">
-      <Card className="shadow-xl border-medical-teal/20 bg-white/95 backdrop-blur-sm">
+    <div className="w-full">
+      <Card className="shadow-lg border-medical-teal/20 bg-white dark:bg-gray-800">
         <CardContent className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <ScrollText size={16} className="text-medical-teal" />
-              <span className="text-sm font-medium text-gray-700">Sections</span>
-            </div>
-            <Button
-              onClick={onToggle}
-              variant="ghost"
-              size="sm"
-              className="h-6 w-6 p-0 hover:bg-gray-100"
-              data-testid="button-section-navigator-close"
-            >
-              <X size={14} />
-            </Button>
+          <div className="flex items-center gap-2 mb-3">
+            <ScrollText size={16} className="text-medical-teal" />
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Sections</span>
           </div>
           
-          <div className="space-y-1 max-h-[50vh] overflow-y-auto">
+          <div className="space-y-1 max-h-[70vh] overflow-y-auto">
             {sections.map((section, index) => {
               const isActive = activeSection === section.id || currentSection === section.id;
               
@@ -139,7 +113,7 @@ export function SectionNavigator({
                     "w-full justify-start text-left p-2 h-auto min-h-[2.5rem] transition-all duration-150",
                     isActive 
                       ? "bg-medical-teal/10 text-medical-teal border-l-2 border-medical-teal" 
-                      : "hover:bg-gray-50 text-gray-600 hover:text-gray-800"
+                      : "hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 hover:text-gray-800 dark:hover:text-gray-200"
                   )}
                   data-testid={`button-navigate-section-${section.id}`}
                 >
@@ -149,7 +123,7 @@ export function SectionNavigator({
                       <div className="text-sm font-medium truncate">
                         {section.name}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
                         Section {index + 1}
                       </div>
                     </div>
@@ -162,8 +136,8 @@ export function SectionNavigator({
             })}
           </div>
           
-          <div className="mt-3 pt-3 border-t border-gray-100">
-            <div className="text-xs text-gray-500 text-center">
+          <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+            <div className="text-xs text-gray-500 dark:text-gray-400 text-center">
               {sections.length} sections • Click to navigate
             </div>
           </div>
