@@ -969,7 +969,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     // Focus back to the textarea
     setTimeout(() => {
       const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
-      if (textarea) {
+      if (textarea && typeof textarea.setSelectionRange === 'function') {
         textarea.focus();
         const newCursorPos = wordStart + reason.length;
         textarea.setSelectionRange(newCursorPos, newCursorPos);
