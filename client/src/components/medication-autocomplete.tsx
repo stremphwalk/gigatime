@@ -110,6 +110,11 @@ function DosageFrequencyPopup({ medication, position, onSelect, onClose }: Dosag
             {medication.genericName && (
               <div className="text-xs text-gray-400 italic mb-1">{medication.genericName}</div>
             )}
+            {medication.brandNames && medication.brandNames.length > 0 && (
+              <div className="text-xs text-blue-600 mb-1">
+                Brand names: {medication.brandNames.join(', ')}
+              </div>
+            )}
             {medication.indication && (
               <div className="text-xs text-gray-600 mb-2">For: {medication.indication}</div>
             )}
@@ -295,6 +300,11 @@ export function MedicationAutocomplete({
                       <span className="font-medium text-sm">{medication.name}</span>
                       {medication.genericName && (
                         <span className="text-xs text-gray-400 italic">{medication.genericName}</span>
+                      )}
+                      {medication.brandNames && medication.brandNames.length > 0 && (
+                        <span className="text-xs text-blue-600">
+                          Brand: {medication.brandNames.slice(0, 2).join(', ')}{medication.brandNames.length > 2 ? '...' : ''}
+                        </span>
                       )}
                       <div className="flex items-center gap-1 flex-wrap">
                         <Badge variant="outline" className="text-xs px-1 py-0 bg-blue-50 text-blue-700 border-blue-200">

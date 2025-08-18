@@ -37,6 +37,9 @@ export const LAB_NAME_MAPPING: { [key: string]: { name: string; unit: string; ca
   'MCV': { name: 'Mean Corpuscular Volume', unit: 'fL', category: 'Hematology', referenceRange: '80-100 fL' },
   'HCT': { name: 'Hematocrit', unit: '%', category: 'Hematology', referenceRange: '36-46%' },
   'RBC': { name: 'Red Blood Cells', unit: '×10¹²/L', category: 'Hematology', referenceRange: '4.2-5.4 ×10¹²/L' },
+  'NEUT': { name: 'Neutrophils', unit: '×10⁹/L', category: 'Hematology', referenceRange: '2.0-7.5 ×10⁹/L' },
+  'LYMP': { name: 'Lymphocytes', unit: '×10⁹/L', category: 'Hematology', referenceRange: '1.5-4.0 ×10⁹/L' },
+  'RNI': { name: 'Reticulocyte Index', unit: '', category: 'Hematology', referenceRange: '0.5-2.5' },
   
   // Chemistry
   'Créat': { name: 'Creatinine', unit: 'µmol/L', category: 'Chemistry', referenceRange: '60-110 µmol/L' },
@@ -47,9 +50,14 @@ export const LAB_NAME_MAPPING: { [key: string]: { name: string; unit: string; ca
   'NA': { name: 'Sodium', unit: 'mmol/L', category: 'Chemistry', referenceRange: '135-145 mmol/L' },
   'K': { name: 'Potassium', unit: 'mmol/L', category: 'Chemistry', referenceRange: '3.5-5.0 mmol/L' },
   'CL': { name: 'Chloride', unit: 'mmol/L', category: 'Chemistry', referenceRange: '98-107 mmol/L' },
+  'Cl': { name: 'Chloride', unit: 'mmol/L', category: 'Chemistry', referenceRange: '98-107 mmol/L' },
   'CO2': { name: 'Carbon Dioxide', unit: 'mmol/L', category: 'Chemistry', referenceRange: '22-28 mmol/L' },
   'GLUC': { name: 'Glucose', unit: 'mmol/L', category: 'Chemistry', referenceRange: '3.9-6.1 mmol/L' },
   'GLUCOSE': { name: 'Glucose', unit: 'mmol/L', category: 'Chemistry', referenceRange: '3.9-6.1 mmol/L' },
+  'Gluc': { name: 'Glucose', unit: 'mmol/L', category: 'Chemistry', referenceRange: '3.9-6.1 mmol/L' },
+  'PHOSP': { name: 'Phosphate', unit: 'mmol/L', category: 'Chemistry', referenceRange: '0.8-1.5 mmol/L' },
+  'Ca': { name: 'Calcium', unit: 'mmol/L', category: 'Chemistry', referenceRange: '2.2-2.6 mmol/L' },
+  'Mg': { name: 'Magnesium', unit: 'mmol/L', category: 'Chemistry', referenceRange: '0.7-1.0 mmol/L' },
   
   // Liver Function
   'ALT': { name: 'Alanine Aminotransferase', unit: 'U/L', category: 'Liver Function', referenceRange: '10-40 U/L' },
@@ -74,6 +82,11 @@ export const LAB_NAME_MAPPING: { [key: string]: { name: string; unit: string; ca
   'CRP': { name: 'C-Reactive Protein', unit: 'mg/L', category: 'Inflammatory', referenceRange: '<3 mg/L' },
   'ESR': { name: 'Erythrocyte Sedimentation Rate', unit: 'mm/hr', category: 'Inflammatory', referenceRange: '<20 mm/hr' },
   'PCT': { name: 'Procalcitonin', unit: 'ng/mL', category: 'Inflammatory', referenceRange: '<0.25 ng/mL' },
+  
+  // Coagulation
+  'TTPA': { name: 'aPTT', unit: 's', category: 'Coagulation', referenceRange: '25-35 s' },
+  'PTT': { name: 'aPTT', unit: 's', category: 'Coagulation', referenceRange: '25-35 s' },
+  'INR': { name: 'INR', unit: '', category: 'Coagulation', referenceRange: '0.9-1.1' },
   
   // Blood Gas
   'PHV': { name: 'pH', unit: '', category: 'Blood Gas', referenceRange: '7.35-7.45' },
@@ -157,15 +170,72 @@ export function parseLabText(rawText: string): ParsedLabValue[] {
 
   const parsedLabs: ParsedLabValue[] = [];
   
-  // Split by lines and then by tabs to handle the format
-  const lines = rawText.trim().split('\n');
+  // First, normalize the text by replacing various separators
+  const normalizedText = rawText
+    .replace(/\r\n/g, '\n')  // Normalize line endings
+    .replace(/\r/g, '\n');    // Handle Mac line endings
   
-  for (const line of lines) {
-    // Split by tabs to separate different lab values on the same line
-    const labEntries = line.split('\t').filter(entry => entry.trim());
+  // Split by lines
+  const lines = normalizedText.trim().split('\n');
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (!line) continue; // Skip empty lines
+    
+    // Try different splitting strategies
+    let labEntries: string[] = [];
+    
+    // First try: split by tabs and recombine lab name with value
+    if (line.includes('\t')) {
+      const tabSeparated = line.split('\t').filter(entry => entry.trim());
+      
+      labEntries = [];
+      for (let i = 0; i < tabSeparated.length; i++) {
+        const current = tabSeparated[i].trim();
+        
+        // If current entry ends with ':' and next entry looks like a value with parentheses
+        if (current.endsWith(':') && i + 1 < tabSeparated.length) {
+          const next = tabSeparated[i + 1].trim();
+          if (next.match(/^[<>]?[\d.]+\(/)) { // Looks like "VALUE(" format
+            // Combine lab name with its value
+            labEntries.push(`${current}    ${next}`);
+            i++; // Skip the next entry since we've combined it
+            continue;
+          }
+        }
+        
+        // Otherwise, keep the entry as is
+        labEntries.push(current);
+      }
+    }
+    // Second try: split by pattern that matches "LAB:    VALUE(TRENDS)    " followed by multiple spaces
+    else if (line.match(/[A-Za-z][^:]*:\s+[^(]*\([^)]*\)\s{3,}/)) {
+      // Use regex to find all matches of the pattern "LAB_NAME:    VALUE(TRENDS)    "
+      const matches = line.match(/[A-Za-z][^:]*:\s+[^(]*\([^)]*\)\s*/g);
+      if (matches) {
+        labEntries = matches.map(m => m.trim());
+      } else {
+        labEntries = [line];
+      }
+    }
+    // Third try: split by multiple spaces (4 or more) for lab data
+    else if (line.match(/\s{4,}/)) {
+      labEntries = line.split(/\s{4,}/).filter(entry => entry.trim());
+    }
+    // Fourth try: split by commas
+    else if (line.includes(',')) {
+      labEntries = line.split(',').filter(entry => entry.trim());
+    }
+    // Otherwise treat the whole line as one entry
+    else {
+      labEntries = [line];
+    }
     
     for (const entry of labEntries) {
-      const parsed = parseLabEntry(entry.trim());
+      const trimmedEntry = entry.trim();
+      if (!trimmedEntry) continue;
+      
+      const parsed = parseLabEntry(trimmedEntry);
       if (parsed) {
         parsedLabs.push(parsed);
       }
@@ -176,11 +246,72 @@ export function parseLabText(rawText: string): ParsedLabValue[] {
 }
 
 /**
- * Parse a single lab entry like "HB: 68(63 67 68 71 74...)"
+ * Parse a single lab entry with flexible format support
+ * Supports formats like:
+ * - "HB:    68(63 67 68 71 74...)" (multiple spaces, value concatenated with parenthesis)
+ * - "HB: 68 (63 67 68 71 74)"
+ * - "Hemoglobin: 12.5 g/dL"
+ * - "WBC 4.5"
  */
 function parseLabEntry(entry: string): ParsedLabValue | null {
-  // Match pattern: "LAB_NAME: CURRENT_VALUE(TREND_VALUES)"
-  const match = entry.match(/^([^:]+):\s*([^(]+)(?:\(([^)]*)\))?/);
+  // Special pattern for the exact format: "LAB_NAME:    VALUE(TRENDS )"
+  // This handles multiple spaces and value directly concatenated with parenthesis
+  const specialMatch = entry.match(/^([^:]+):\s+([^(\s]+)\(([^)]*)\s*\)/);
+  
+  if (specialMatch) {
+    const originalKey = specialMatch[1].trim();
+    const currentValue = specialMatch[2].trim();
+    const trendString = specialMatch[3] || '';
+    
+    // Parse trended values
+    const trendedValues = trendString
+      .split(/\s+/)
+      .filter(val => val.trim() && val !== currentValue && val !== '')
+      .slice(0, 10); // Limit to 10 trended values max
+    
+    // Standardize the lab name
+    const standardizedInfo = findLabMapping(originalKey);
+    
+    if (!standardizedInfo) {
+      return {
+        originalKey,
+        standardizedName: originalKey,
+        currentValue,
+        trendedValues,
+        category: 'Other',
+        isAbnormal: false
+      };
+    }
+    
+    return {
+      originalKey,
+      standardizedName: standardizedInfo.name,
+      currentValue,
+      trendedValues,
+      unit: standardizedInfo.unit,
+      category: standardizedInfo.category,
+      referenceRange: standardizedInfo.referenceRange,
+      isAbnormal: determineIfAbnormal(currentValue, standardizedInfo.referenceRange)
+    };
+  }
+  
+  // Try other patterns if special format doesn't match
+  const patterns = [
+    // Pattern 1: "LAB_NAME: CURRENT_VALUE" (no trends)
+    /^([^:]+):\s*([^(]+?)$/,
+    // Pattern 2: "LAB_NAME: CURRENT_VALUE (TREND_VALUES)"
+    /^([^:]+):\s*([^(]+?)\s*\(([^)]*)\)$/,
+    // Pattern 3: "LAB_NAME CURRENT_VALUE (TREND_VALUES)" - no colon
+    /^(\S+)\s+([^(]+?)(?:\s*\(([^)]*)\))?$/
+  ];
+  
+  let match = null;
+  for (const pattern of patterns) {
+    match = entry.match(pattern);
+    if (match) {
+      break;
+    }
+  }
   
   if (!match) {
     return null;
@@ -193,11 +324,12 @@ function parseLabEntry(entry: string): ParsedLabValue | null {
   // Parse trended values
   const trendedValues = trendString
     .split(/\s+/)
-    .filter(val => val.trim() && val !== currentValue)
+    .filter(val => val.trim() && val !== currentValue && val !== '')
     .slice(0, 10); // Limit to 10 trended values max
   
   // Standardize the lab name
-  const standardizedInfo = LAB_NAME_MAPPING[originalKey];
+  const standardizedInfo = findLabMapping(originalKey);
+  
   if (!standardizedInfo) {
     // If not in mapping, use original name but still parse
     return {
@@ -206,6 +338,7 @@ function parseLabEntry(entry: string): ParsedLabValue | null {
       currentValue,
       trendedValues,
       category: 'Other',
+      isAbnormal: false
     };
   }
   
@@ -219,6 +352,47 @@ function parseLabEntry(entry: string): ParsedLabValue | null {
     referenceRange: standardizedInfo.referenceRange,
     isAbnormal: determineIfAbnormal(currentValue, standardizedInfo.referenceRange),
   };
+}
+
+/**
+ * Find lab mapping for a given lab name
+ */
+function findLabMapping(labName: string): typeof LAB_NAME_MAPPING[string] | null {
+  // Direct match (including multi-word names like "HCO3 V")
+  if (LAB_NAME_MAPPING[labName]) {
+    return LAB_NAME_MAPPING[labName];
+  }
+  
+  // Try uppercase
+  const upperName = labName.toUpperCase();
+  if (LAB_NAME_MAPPING[upperName]) {
+    return LAB_NAME_MAPPING[upperName];
+  }
+  
+  // Try without spaces (for cases like "HCO3V" vs "HCO3 V")
+  const nameNoSpaces = labName.replace(/\s+/g, '');
+  if (LAB_NAME_MAPPING[nameNoSpaces]) {
+    return LAB_NAME_MAPPING[nameNoSpaces];
+  }
+  
+  // Try with space before last character (for "HCO3V" -> "HCO3 V")
+  if (labName.match(/^[A-Z]+\d+[A-Z]$/i)) {
+    const withSpace = labName.slice(0, -1) + ' ' + labName.slice(-1);
+    if (LAB_NAME_MAPPING[withSpace]) {
+      return LAB_NAME_MAPPING[withSpace];
+    }
+  }
+  
+  // Try to find partial matches
+  for (const [key, info] of Object.entries(LAB_NAME_MAPPING)) {
+    if (key.toUpperCase() === upperName || 
+        info.name.toUpperCase().includes(upperName) ||
+        upperName.includes(key.toUpperCase())) {
+      return info;
+    }
+  }
+  
+  return null;
 }
 
 /**

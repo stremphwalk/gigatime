@@ -1329,6 +1329,13 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                       <SelectValue placeholder="Select template" />
                     </SelectTrigger>
                     <SelectContent>
+                      {/* Local templates */}
+                      {noteTemplates.map((template) => (
+                        <SelectItem key={`local-${template.id}`} value={template.type}>
+                          {template.name}
+                        </SelectItem>
+                      ))}
+                      {/* Database templates */}
                       {templates?.map((template) => (
                         <SelectItem key={template.id} value={template.type}>
                           {template.name}
@@ -1344,13 +1351,15 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
           {/* Note Sections */}
           {sections.map((section) => (
             <Card key={section.id}>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-text-primary flex items-center space-x-2">
-                    {getSectionIcon(section.id)}
-                    <span>{section.name}</span>
-                    {section.required && <span className="text-medical-red text-xs">*</span>}
-                  </h3>
+              {/* Hide header for blank note template */}
+              {selectedTemplate?.type !== 'blank' && (
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-text-primary flex items-center space-x-2">
+                      {getSectionIcon(section.id)}
+                      <span>{section.name}</span>
+                      {section.required && <span className="text-medical-red text-xs">*</span>}
+                    </h3>
                   <div className="flex items-center space-x-2">
                     {/* Imaging Autocomplete Button - Show for imaging or radiology sections */}
                     {(section.type === 'imaging' || 
@@ -1543,13 +1552,16 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                     ))}
                   </div>
                 )}
-              </CardHeader>
+                </CardHeader>
+              )}
               <CardContent className="pt-0">
                 <div className="relative">
                   <Textarea
                     value={noteData.content[section.id] || ''}
                     onChange={(e) => handleSectionContentChange(section.id, e.target.value, e.target)}
-                    placeholder={`Document the ${section.name.toLowerCase()}... (Type '/' for smart phrases${
+                    placeholder={selectedTemplate?.type === 'blank' 
+                      ? "Start typing your note here... (Type '/' for smart phrases)"
+                      : `Document the ${section.name.toLowerCase()}... (Type '/' for smart phrases${
                       section.id === 'reason' || section.id === 'chief' ||
                       section.name.toLowerCase().includes('reason for consultation') ||
                       section.name.toLowerCase().includes('reason for admission') ||
@@ -1587,7 +1599,10 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                         ? ', start typing consultation/admission reasons for autocomplete'
                         : ''
                     })`}
-                    className="min-h-[100px] resize-none"
+                    className={cn(
+                      "resize-none",
+                      selectedTemplate?.type === 'blank' ? "min-h-[400px]" : "min-h-[100px]"
+                    )}
                     data-testid={`textarea-${section.id}`}
                     data-section-id={section.id}
                   />

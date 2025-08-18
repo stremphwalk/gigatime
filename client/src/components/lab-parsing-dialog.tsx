@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +20,7 @@ import {
   groupLabsByPanel, 
   getAvailableLabsForPanel,
   DEFAULT_LAB_PREFERENCES,
+  LAB_NAME_MAPPING,
   type ParsedLabValue,
   type UserLabPreferences 
 } from "@/lib/lab-parsing";
@@ -36,6 +38,7 @@ export function LabParsingDialog({ isOpen, onClose, onConfirm }: LabParsingDialo
   const [customVisibility, setCustomVisibility] = useState<{ [labName: string]: boolean }>({});
   const [customTrendCounts, setCustomTrendCounts] = useState<{ [labName: string]: number }>({});
   const [activeTab, setActiveTab] = useState<string>('paste');
+  const [globalSearchFilter, setGlobalSearchFilter] = useState<string>('');
   
   const queryClient = useQueryClient();
   
@@ -48,34 +51,32 @@ export function LabParsingDialog({ isOpen, onClose, onConfirm }: LabParsingDialo
   // Mutation to save lab settings
   const saveLabSettingMutation = useMutation({
     mutationFn: async (setting: any) => {
-      return fetch('/api/user-lab-settings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(setting),
-      }).then(res => res.json());
+      const response = await apiRequest('POST', '/api/user-lab-settings', setting);
+      return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/user-lab-settings'] });
     },
   });
 
-  // Load saved user settings when dialog opens
+  // Load saved user settings when dialog opens or settings change
   useEffect(() => {
     if (Array.isArray(userLabSettings) && userLabSettings.length > 0) {
-      const loadedPreferences = { ...DEFAULT_LAB_PREFERENCES };
       const loadedVisibility: { [labName: string]: boolean } = {};
       const loadedTrendCounts: { [labName: string]: number } = {};
       
       userLabSettings.forEach((setting: any) => {
-        // Since we're working with panel-based preferences, we need to ensure compatibility
         loadedVisibility[setting.labId] = setting.isVisible;
         loadedTrendCounts[setting.labId] = setting.trendingCount;
       });
       
-      setCustomVisibility(loadedVisibility);
-      setCustomTrendCounts(loadedTrendCounts);
+      // Only update if different to avoid infinite loops
+      if (JSON.stringify(loadedVisibility) !== JSON.stringify(customVisibility)) {
+        setCustomVisibility(loadedVisibility);
+      }
+      if (JSON.stringify(loadedTrendCounts) !== JSON.stringify(customTrendCounts)) {
+        setCustomTrendCounts(loadedTrendCounts);
+      }
     }
   }, [userLabSettings]);
 
@@ -83,12 +84,7 @@ export function LabParsingDialog({ isOpen, onClose, onConfirm }: LabParsingDialo
     if (rawLabText.trim()) {
       const parsed = parseLabText(rawLabText);
       setParsedLabs(parsed);
-      
-      // Don't reset custom settings when user has saved preferences
-      if (!Array.isArray(userLabSettings) || userLabSettings.length === 0) {
-        setCustomVisibility({});
-        setCustomTrendCounts({});
-      }
+      // Settings are now maintained separately and applied when formatting
     } else {
       setParsedLabs([]);
     }
@@ -97,8 +93,8 @@ export function LabParsingDialog({ isOpen, onClose, onConfirm }: LabParsingDialo
   const handleReset = () => {
     setRawLabText('');
     setParsedLabs([]);
-    setCustomVisibility({});
-    setCustomTrendCounts({});
+    setGlobalSearchFilter('');
+    // Don't reset custom settings - they should persist
     setActiveTab('paste');
   };
 
@@ -107,16 +103,20 @@ export function LabParsingDialog({ isOpen, onClose, onConfirm }: LabParsingDialo
       return;
     }
 
-    const formattedLabs = formatLabsForNote(
-      parsedLabs, 
-      preferences, 
-      customVisibility, 
-      customTrendCounts
-    );
-    
-    onConfirm(formattedLabs);
-    onClose();
-    handleReset();
+    try {
+      const formattedLabs = formatLabsForNote(
+        parsedLabs, 
+        preferences, 
+        customVisibility, 
+        customTrendCounts
+      );
+      
+      onConfirm(formattedLabs);
+      onClose();
+      handleReset();
+    } catch (error) {
+      console.error('Error formatting labs:', error);
+    }
   };
 
   const toggleLabVisibility = (labName: string, currentlyVisible: boolean) => {
@@ -127,13 +127,14 @@ export function LabParsingDialog({ isOpen, onClose, onConfirm }: LabParsingDialo
     }));
     
     // Save to backend - try to find panel for this lab
-    const panel = Object.entries(panels).find(([_, labs]) => 
-      labs.some(lab => lab.standardizedName === labName)
+    const panelArray = groupLabsByPanel(parsedLabs);
+    const panel = panelArray.find(p => 
+      p.labs.some(lab => lab.standardizedName === labName)
     );
     
     if (panel) {
       saveLabSettingMutation.mutate({
-        panelId: panel[0],
+        panelId: panel.name,
         labId: labName,
         isVisible: newVisibility,
         trendingCount: getCurrentTrendCount(labName)
@@ -154,15 +155,16 @@ export function LabParsingDialog({ isOpen, onClose, onConfirm }: LabParsingDialo
     }));
     
     // Save to backend - try to find panel for this lab
-    const panel = Object.entries(panels).find(([_, labs]) => 
-      labs.some(l => l.standardizedName === labName)
+    const panelArray = groupLabsByPanel(parsedLabs);
+    const panel = panelArray.find(p => 
+      p.labs.some(l => l.standardizedName === labName)
     );
     
     if (panel) {
       saveLabSettingMutation.mutate({
-        panelId: panel[0],
+        panelId: panel.name,
         labId: labName,
-        isVisible: isLabVisible(labName, panel[0]),
+        isVisible: isLabVisible(labName, panel.name),
         trendingCount: newCount
       });
     }
@@ -200,14 +202,18 @@ export function LabParsingDialog({ isOpen, onClose, onConfirm }: LabParsingDialo
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="paste" className="flex items-center gap-2">
               <FileText size={14} />
               Paste Labs
             </TabsTrigger>
             <TabsTrigger value="customize" className="flex items-center gap-2" disabled={parsedLabs.length === 0}>
               <Settings size={14} />
-              Customize
+              Customize Current
+            </TabsTrigger>
+            <TabsTrigger value="global-settings" className="flex items-center gap-2">
+              <Settings size={14} />
+              Global Settings
             </TabsTrigger>
             <TabsTrigger value="preview" className="flex items-center gap-2" disabled={parsedLabs.length === 0}>
               <Eye size={14} />
@@ -351,6 +357,141 @@ export function LabParsingDialog({ isOpen, onClose, onConfirm }: LabParsingDialo
                     </Card>
                   );
                 })}
+              </div>
+            </ScrollArea>
+          </TabsContent>
+
+          <TabsContent value="global-settings" className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-base font-semibold">Global Lab Preferences</Label>
+              <p className="text-sm text-gray-600 dark:text-gray-400">
+                Configure default visibility and trending settings for all standardized lab values. These settings will apply to all future lab parsing sessions.
+              </p>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="global-search">Search Labs</Label>
+              <Input
+                id="global-search"
+                value={globalSearchFilter}
+                onChange={(e) => setGlobalSearchFilter(e.target.value)}
+                placeholder="Search by lab name, abbreviation, or category..."
+                className="w-full"
+              />
+            </div>
+            
+            <ScrollArea className="h-[400px]">
+              <div className="space-y-4">
+                {Object.entries(
+                  Object.entries(LAB_NAME_MAPPING)
+                    .filter(([key, labInfo]) => {
+                      if (!globalSearchFilter) return true;
+                      const searchLower = globalSearchFilter.toLowerCase();
+                      return (
+                        key.toLowerCase().includes(searchLower) ||
+                        labInfo.name.toLowerCase().includes(searchLower) ||
+                        labInfo.category.toLowerCase().includes(searchLower)
+                      );
+                    })
+                    .reduce((acc, [key, labInfo]) => {
+                      const category = labInfo.category;
+                      if (!acc[category]) acc[category] = [];
+                      acc[category].push({ key, ...labInfo });
+                      return acc;
+                    }, {} as Record<string, Array<{key: string, name: string, unit: string, category: string, referenceRange?: string}>>)
+                ).map(([category, labs]) => (
+                  <Card key={category}>
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-base">{category}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {labs.map(lab => {
+                        const isVisible = customVisibility[lab.name] !== false; // Default to visible
+                        const trendCount = customTrendCounts[lab.name] || DEFAULT_LAB_PREFERENCES.defaultTrendCount;
+                        
+                        return (
+                          <div key={lab.key} className="flex items-center justify-between p-2 border rounded-lg">
+                            <div className="flex items-center gap-3">
+                              <Switch
+                                checked={isVisible}
+                                onCheckedChange={(checked) => {
+                                  setCustomVisibility(prev => ({
+                                    ...prev,
+                                    [lab.name]: checked
+                                  }));
+                                  
+                                  // Save to backend
+                                  saveLabSettingMutation.mutate({
+                                    panelId: category,
+                                    labId: lab.name,
+                                    isVisible: checked,
+                                    trendingCount: trendCount
+                                  });
+                                }}
+                                data-testid={`global-switch-${lab.key}`}
+                              />
+                              <div>
+                                <div className="font-medium text-sm">{lab.name}</div>
+                                <div className="text-xs text-gray-500">
+                                  {lab.key} • {lab.unit} • {lab.referenceRange || 'No reference range'}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Label className="text-xs">Default Trends:</Label>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={() => {
+                                  const newCount = Math.max(0, trendCount - 1);
+                                  setCustomTrendCounts(prev => ({
+                                    ...prev,
+                                    [lab.name]: newCount
+                                  }));
+                                  
+                                  saveLabSettingMutation.mutate({
+                                    panelId: category,
+                                    labId: lab.name,
+                                    isVisible: isVisible,
+                                    trendingCount: newCount
+                                  });
+                                }}
+                                disabled={trendCount <= 0}
+                              >
+                                <ChevronDown size={12} />
+                              </Button>
+                              <span className="text-sm font-medium min-w-[20px] text-center">{trendCount}</span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-6 w-6 p-0"
+                                onClick={() => {
+                                  const newCount = Math.min(10, trendCount + 1); // Max 10 trends
+                                  setCustomTrendCounts(prev => ({
+                                    ...prev,
+                                    [lab.name]: newCount
+                                  }));
+                                  
+                                  saveLabSettingMutation.mutate({
+                                    panelId: category,
+                                    labId: lab.name,
+                                    isVisible: isVisible,
+                                    trendingCount: newCount
+                                  });
+                                }}
+                                disabled={trendCount >= 10}
+                              >
+                                <ChevronUp size={12} />
+                              </Button>
+                              <span className="text-xs text-gray-500">/10</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             </ScrollArea>
           </TabsContent>

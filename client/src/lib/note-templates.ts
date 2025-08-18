@@ -1,5 +1,19 @@
 export const noteTemplates = [
   {
+    id: "blank-note",
+    name: "Blank Note",
+    type: "blank",
+    description: "A blank note with a single large text area for free-form documentation",
+    sections: [
+      {
+        id: "content",
+        name: "Content",
+        type: "textarea",
+        required: false
+      }
+    ]
+  },
+  {
     id: "radiology-report",
     name: "Radiology/Imaging Report",
     type: "radiology",

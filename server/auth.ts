@@ -1,5 +1,13 @@
 import type { RequestHandler } from "express";
-import { isAuthenticated as replitIsAuthenticated } from "./replitAuth";
+
+let replitIsAuthenticated: RequestHandler | undefined;
+
+// Only import Replit auth in production
+if (process.env.NODE_ENV !== 'development') {
+  import("./replitAuth").then(module => {
+    replitIsAuthenticated = module.isAuthenticated;
+  });
+}
 
 export const requireAuth: RequestHandler = async (req: any, res, next) => {
   // In development mode, allow access with mock user unless explicitly logged out
@@ -30,7 +38,11 @@ export const requireAuth: RequestHandler = async (req: any, res, next) => {
   }
   
   // In production, use Replit authentication
-  return replitIsAuthenticated(req, res, next);
+  if (replitIsAuthenticated) {
+    return replitIsAuthenticated(req, res, next);
+  }
+  
+  return res.status(401).json({ message: "Authentication not configured" });
 };
 
 export const optionalAuth: RequestHandler = async (req: any, res, next) => {
@@ -55,7 +67,7 @@ export const optionalAuth: RequestHandler = async (req: any, res, next) => {
   }
   
   // In production, check if authenticated but don't require it
-  if (req.isAuthenticated && req.isAuthenticated()) {
+  if (req.isAuthenticated && req.isAuthenticated() && replitIsAuthenticated) {
     return replitIsAuthenticated(req, res, next);
   }
   

@@ -1,8 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { setupAuth } from "./replitAuth";
 import { requireAuth, optionalAuth, getCurrentUserId } from "./auth";
+import { verifyClerkToken, syncClerkUser, getClerkUserId } from "./clerkAuth";
 import session from "express-session";
 import { 
   insertNoteSchema, 
@@ -28,11 +28,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         maxAge: 7 * 24 * 60 * 60 * 1000 // 1 week
       }
     }));
+  } else {
+    // Set up proper authentication only in production
+    const { setupAuth } = await import("./replitAuth");
+    await setupAuth(app);
   }
-  
-  // Set up proper authentication
-  await setupAuth(app);
 
+
+  // Clerk sync endpoint (when Clerk is configured)
+  app.post('/api/auth/sync', verifyClerkToken, syncClerkUser);
 
   // Auth routes with proper authentication
   app.get('/api/auth/user', optionalAuth, async (req: any, res) => {

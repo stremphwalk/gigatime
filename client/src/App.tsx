@@ -4,12 +4,17 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/components/theme-provider";
-import { useSimpleAuth as useAuth } from "@/hooks/useSimpleAuth";
+import { useClerkAuth as useAuth } from "@/hooks/useClerkAuth";
 import { GlobalDictation } from "@/components/global-dictation";
+import { ClerkProvider } from "@clerk/clerk-react";
 import Home from "./pages/home";
 import { Teams } from "./pages/teams";
 import { LoginPage } from "./pages/login";
 import NotFound from "./pages/not-found";
+
+// Check if Clerk is configured
+const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+const isClerkConfigured = clerkPubKey && clerkPubKey !== 'your_clerk_publishable_key_here';
 
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -47,7 +52,7 @@ function Router() {
 }
 
 function App() {
-  return (
+  const AppContent = (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider defaultTheme="system" storageKey="medical-app-theme">
         <TooltipProvider>
@@ -58,6 +63,17 @@ function App() {
       </ThemeProvider>
     </QueryClientProvider>
   );
+
+  // Wrap with ClerkProvider only if configured
+  if (isClerkConfigured) {
+    return (
+      <ClerkProvider publishableKey={clerkPubKey}>
+        {AppContent}
+      </ClerkProvider>
+    );
+  }
+
+  return AppContent;
 }
 
 export default App;

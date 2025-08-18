@@ -2,8 +2,8 @@
 
 export const consultationReasons = [
   // Emergency/Acute Care
-  "Chest pain",
-  "Shortness of breath", 
+"Chest pain",
+  "Shortness of breath",
   "Acute abdominal pain",
   "Fever and chills",
   "Severe headache",
@@ -12,20 +12,48 @@ export const consultationReasons = [
   "Acute back pain",
   "Joint pain and swelling",
   "Skin rash and allergic reaction",
+  "Allergic reaction",
+  "Anaphylaxis",
+  "Generalized weakness",
+  "Dehydration",
+  "Electrolyte abnormality",
+  "Fall assessment",
+  "Wound check",
+  "Suture removal",
+  "Laceration requiring repair",
+  "Epistaxis (nosebleed)",
+  "Heat exhaustion / heat stroke",
+  "Hypothermia",
+  "Foreign body ingestion",
+  "Foreign body in eye",
+  "Eye pain / red eye",
+  "Acute vision changes",
+  "Dental pain / abscess",
+  "Animal bite (dog/cat/human)",
+  "Tick bite / possible Lyme exposure",
+  "Occupational exposure / needlestick",
   
   // Cardiovascular
-  "Hypertension management",
+ "Hypertension management",
+  "Hypertensive urgency",
   "Heart palpitations",
   "Peripheral edema",
   "Cardiac arrhythmia evaluation",
   "Coronary artery disease follow-up",
+  "Syncope",
+  "Claudication / peripheral vascular disease",
+  "Leg swelling",
   
   // Respiratory
   "Chronic cough",
   "Asthma exacerbation",
   "COPD management",
   "Upper respiratory infection",
-  "Pneumonia evaluation",
+  "Pneumonia",
+  "Hemoptysis",
+  "Pleuritic chest pain",
+  "COVID-19",
+  "AECOPD",
   
   // Gastrointestinal
   "Chronic abdominal pain",
@@ -33,20 +61,35 @@ export const consultationReasons = [
   "Inflammatory bowel disease",
   "Liver function abnormalities",
   "Constipation",
+  "Diarrhea",
+  "Dysphagia",
+  "GI bleeding (melena or hematochezia)",
+  "Rectal pain / hemorrhoids",
+  "Pancreatitis evaluation",
+  "Biliary colic / gallstones",
   
   // Endocrine/Metabolic
   "Diabetes management",
+  "Hyperglycemia",
+  "Hypoglycemia",
   "Thyroid disorder evaluation",
   "Weight management",
   "Metabolic syndrome",
   "Hyperlipidemia",
+  "Diabetic ketoacidosis",
+  "Hyperglycemic crisis",
   
   // Neurological
   "Headache evaluation",
-  "Seizure disorder",
+  "Seizure",
   "Memory concerns",
   "Peripheral neuropathy",
   "Sleep disorders",
+  "Transient neurologic symptoms (TIA rule-out)",
+  "Acute confusion / altered mental status",
+  "Dizziness / vertigo",
+  "Post-concussion symptoms",
+  "Stroke",
   
   // Musculoskeletal
   "Arthritis management",
@@ -54,6 +97,10 @@ export const consultationReasons = [
   "Sports injury",
   "Osteoporosis evaluation",
   "Fibromyalgia",
+  "Suspected fracture",
+  "Sprain / strain",
+  "Back strain / sciatica",
+  "Rhabdomyolysis evaluation",
   
   // Mental Health
   "Depression screening",
@@ -69,12 +116,26 @@ export const consultationReasons = [
   "Cancer screening",
   "Occupational health evaluation",
   
+  // Genitourinary / Reproductive
+  "Dysuria / urinary frequency (UTI evaluation)",
+  "Flank pain (renal colic)",
+  "Acute urinary retention",
+  "Gross hematuria",
+  "Testicular pain (torsion rule-out)",
+  "Scrotal swelling",
+  "Priapism",
+
   // Women's Health
   "Gynecological examination",
   "Pregnancy consultation",
   "Menopause management",
   "Contraception counseling",
   "Breast health concerns",
+  "Pelvic pain",
+  "Vaginal bleeding (non-pregnant)",
+  "Early pregnancy bleeding",
+  "Pelvic inflammatory disease evaluation",
+  "Sexually transmitted infection exposure",
   
   // Geriatric
   "Geriatric assessment",
