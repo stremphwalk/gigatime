@@ -1700,7 +1700,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                         ? ', start typing consultation/admission reasons for autocomplete'
                         : ''
                     })`}
-                    className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm resize-none min-h-[120px]"
+                    className={`flex w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm resize-none ${selectedTemplate?.type === 'blank' ? 'min-h-[300px]' : 'min-h-[120px]'}`}
                     data-testid={`textarea-${section.id}`}
                     data-section-id={section.id}
                   />
