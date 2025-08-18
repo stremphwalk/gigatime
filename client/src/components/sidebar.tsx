@@ -86,7 +86,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
           <Button
             variant="ghost"
             className={cn(
-              "w-full p-3 text-left flex items-center space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t-lg"
+              "w-full p-3 text-left flex items-center justify-start space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t-lg"
             )}
             onClick={() => toggleSection('notes')}
             data-testid="toggle-notes-section"
@@ -159,7 +159,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
           <Button
             variant="ghost"
             className={cn(
-              "w-full p-3 text-left flex items-center space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg",
+              "w-full p-3 text-left flex items-center justify-start space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg",
               currentView === 'smart-phrases' && "bg-blue-50 dark:bg-blue-900/50 border border-professional-blue dark:border-blue-600"
             )}
             onClick={() => onViewChange('smart-phrases')}
@@ -167,7 +167,6 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
           >
             <Zap className="text-medical-teal dark:text-blue-400" size={16} />
             <span className="font-medium text-gray-900 dark:text-gray-100">Smart Phrases</span>
-            
           </Button>
         </div>
 
@@ -176,7 +175,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
           <Button
             variant="ghost"
             className={cn(
-              "w-full p-3 text-left flex items-center space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg",
+              "w-full p-3 text-left flex items-center justify-start space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg",
               currentView === 'teams' && "bg-blue-50 dark:bg-blue-900/50 border border-professional-blue dark:border-blue-600"
             )}
             onClick={() => onViewChange('teams')}
@@ -184,7 +183,6 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
           >
             <Users className="text-medical-teal dark:text-blue-400" size={16} />
             <span className="font-medium text-gray-900 dark:text-gray-100">Teams</span>
-            
           </Button>
         </div>
 
