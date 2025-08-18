@@ -21,6 +21,7 @@ import { PertinentNegativePresetSelector } from "./pertinent-negative-preset-sel
 import { ImagingAutocomplete } from "./imaging-autocomplete";
 import { ConsultationReasonAutocomplete } from "./consultation-reason-autocomplete";
 import { ClinicalCalculatorPopup } from "./clinical-calculator-popup";
+import { SectionNavigator } from "./section-navigator";
 import { useNotes, useNoteTemplates } from "../hooks/use-notes";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
 import { useToast } from "../hooks/use-toast";
@@ -147,6 +148,10 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
   const [showClinicalCalculator, setShowClinicalCalculator] = useState(false);
   const [calculatorTargetSection, setCalculatorTargetSection] = useState<string | null>(null);
   const [calculatorInsertPosition, setCalculatorInsertPosition] = useState<number>(0);
+  
+  // Section navigator state
+  const [showSectionNavigator, setShowSectionNavigator] = useState(false);
+  const [currentActiveSection, setCurrentActiveSection] = useState<string | null>(null);
 
   const { createNote, updateNote, isCreating: isSaving } = useNotes();
   const { templates } = useNoteTemplates();
@@ -1263,6 +1268,17 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     });
   };
 
+  const handleSectionSelect = (sectionId: string) => {
+    setCurrentActiveSection(sectionId);
+    // Scroll to section and focus on textarea
+    setTimeout(() => {
+      const sectionElement = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
+      if (sectionElement) {
+        sectionElement.focus();
+      }
+    }, 100);
+  };
+
   const getSectionIcon = (sectionId: string) => {
     switch (sectionId) {
       case 'reason':
@@ -1414,7 +1430,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
 
           {/* Note Sections */}
           {sections.map((section) => (
-            <Card key={section.id}>
+            <Card key={section.id} className="section-card" data-section-id={section.id}>
               {/* Hide header for blank note template */}
               {selectedTemplate?.type !== 'blank' && (
                 <CardHeader className="pb-3">
@@ -1838,6 +1854,15 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
         isOpen={showClinicalCalculator}
         onClose={() => setShowClinicalCalculator(false)}
         onCalculationComplete={handleCalculatorComplete}
+      />
+
+      {/* Section Navigator */}
+      <SectionNavigator
+        sections={sections}
+        isOpen={showSectionNavigator}
+        onToggle={() => setShowSectionNavigator(!showSectionNavigator)}
+        onSectionSelect={handleSectionSelect}
+        currentSection={currentActiveSection || undefined}
       />
     </div>
   );
