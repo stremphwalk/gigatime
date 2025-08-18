@@ -1430,8 +1430,10 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                       <SelectValue placeholder="Select template" />
                     </SelectTrigger>
                     <SelectContent>
-                      {/* Local templates */}
-                      {noteTemplates.map((template) => (
+                      {/* Local templates - only blank note */}
+                      {noteTemplates
+                        .filter(template => template.type === 'blank')
+                        .map((template) => (
                         <SelectItem key={`local-${template.id}`} value={template.type}>
                           {template.name}
                         </SelectItem>
