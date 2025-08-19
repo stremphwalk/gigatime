@@ -18,7 +18,8 @@
       "Bash(git push:*)",
       "Bash(git pull:*)",
       "WebFetch(domain:developers.deepgram.com)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": [],
     "ask": [],
