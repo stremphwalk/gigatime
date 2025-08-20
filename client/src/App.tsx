@@ -12,6 +12,7 @@ import Home from "./pages/home";
 import { Teams } from "./pages/teams";
 import { LoginPage } from "./pages/login";
 import LandingNew from "./pages/landing-new";
+import { AuthCallback } from "./pages/auth-callback";
 import NotFound from "./pages/not-found";
 
 // Check if Clerk is configured
@@ -43,6 +44,7 @@ function Router() {
 
   return (
     <Switch>
+      <Route path="/auth/callback" component={AuthCallback} />
       {shouldShowApp ? (
         <>
           <Route path="/" component={Home} />
