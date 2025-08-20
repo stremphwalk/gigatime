@@ -4,6 +4,18 @@
   "outputDirectory": "dist/public",
   "rewrites": [
     {
+      "source": "/api/auth/simple-login",
+      "destination": "/api/auth/simple-login"
+    },
+    {
+      "source": "/api/auth/simple-callback",
+      "destination": "/api/auth/simple-callback"
+    },
+    {
+      "source": "/api/debug",
+      "destination": "/api/debug"
+    },
+    {
       "source": "/api/auth/callback",
       "destination": "/api/auth/callback"
     },
