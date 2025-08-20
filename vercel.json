@@ -54,8 +54,7 @@
   ],
   "functions": {
     "api/**": {
-      "includeFiles": "{server,shared,migrations}/**",
-      "runtime": "nodejs20.x"
+      "includeFiles": "{server,shared,migrations}/**"
     }
   },
   "env": {
