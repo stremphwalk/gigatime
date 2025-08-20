@@ -54,12 +54,7 @@
   ],
   "functions": {
     "api/**": {
-      "includeFiles": [
-        "server/**",
-        "shared/**",
-        "migrations/**",
-        "drizzle.config.ts"
-      ],
+      "includeFiles": "{server,shared,migrations}/**",
       "runtime": "nodejs20.x"
     }
   },
