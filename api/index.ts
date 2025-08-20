@@ -63,6 +63,16 @@ async function initializeRoutes() {
   // Clerk sync endpoint
   app.post('/api/auth/sync', verifyClerkToken, syncClerkUser);
 
+  // Lightweight logout endpoint to clear our auth cookie
+  app.get('/api/logout', (req, res) => {
+    const isProduction = process.env.NODE_ENV === 'production';
+    const cookieOptions = isProduction 
+      ? 'HttpOnly; Secure; SameSite=Lax; Path=/'
+      : 'HttpOnly; SameSite=Lax; Path=/';
+    res.setHeader('Set-Cookie', `auth0_user=; ${cookieOptions}; Max-Age=0`);
+    res.status(200).json({ ok: true });
+  });
+
   // Auth routes
   app.get('/api/auth/user', optionalAuth, async (req: any, res) => {
     try {

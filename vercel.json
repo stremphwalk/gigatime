@@ -4,6 +4,10 @@
   "outputDirectory": "dist/public",
   "rewrites": [
     {
+      "source": "/api/logout",
+      "destination": "/api/auth/logout"
+    },
+    {
       "source": "/api/auth/login",
       "destination": "/api/auth/login"
     },
@@ -48,6 +52,17 @@
       "destination": "/index.html"
     }
   ],
+  "functions": {
+    "api/**": {
+      "includeFiles": [
+        "server/**",
+        "shared/**",
+        "migrations/**",
+        "drizzle.config.ts"
+      ],
+      "runtime": "nodejs20.x"
+    }
+  },
   "env": {
     "NODE_ENV": "production"
   }
