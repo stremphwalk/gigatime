@@ -198,9 +198,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Auto-initialize default templates if they don't exist
       const existingTemplates = await storage.getNoteTemplates();
-      const defaultTemplates = existingTemplates.filter(t => t.isDefault);
+      const existingDefaultTemplates = existingTemplates.filter(t => t.isDefault);
       
-      if (defaultTemplates.length === 0) {
+      if (existingDefaultTemplates.length === 0) {
         // Create default templates automatically
         const defaultTemplateData = [
           {
@@ -670,8 +670,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Check if default templates already exist
       const existingDefaultTemplates = await storage.getNoteTemplates();
-      const defaultTemplates = existingDefaultTemplates.filter(t => t.isDefault);
-      if (defaultTemplates.length > 0) {
+      const currentDefaultTemplates = existingDefaultTemplates.filter(t => t.isDefault);
+      if (currentDefaultTemplates.length > 0) {
         return res.json({ message: "Default templates already initialized" });
       }
 
