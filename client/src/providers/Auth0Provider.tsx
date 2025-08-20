@@ -8,7 +8,7 @@ interface Auth0ProviderWrapperProps {
 export function Auth0ProviderWrapper({ children }: Auth0ProviderWrapperProps) {
   const domain = import.meta.env.VITE_AUTH0_DOMAIN || '';
   const clientId = import.meta.env.VITE_AUTH0_CLIENT_ID || '';
-  const redirectUri = window.location.origin;
+  const redirectUri = `${window.location.origin}/api/auth/callback`;
 
   // If Auth0 is not configured, just render children
   if (!domain || !clientId) {
