@@ -21,7 +21,9 @@
       "Bash(pkill:*)",
       "Bash(git checkout:*)",
       "Bash(git commit:*)",
-      "Bash(mkdir:*)"
+      "Bash(mkdir:*)",
+      "Bash(npx vercel logs:*)",
+      "Bash(npx vercel:*)"
     ],
     "deny": [],
     "ask": [],
