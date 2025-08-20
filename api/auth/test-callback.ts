@@ -3,11 +3,11 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const { code, state, error } = req.query;
 
-  console.log('Auth0 Callback received:', {
+  console.log('Test Auth0 Callback received:', {
     code: code ? 'RECEIVED' : 'NOT RECEIVED',
     state,
     error,
-    cookies: req.headers.cookie
+    query: req.query
   });
 
   if (error) {
@@ -22,36 +22,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'No authorization code received' });
   }
 
-  // Verify state parameter from cookie
-  const cookies = req.headers.cookie;
-  console.log('Cookie header:', cookies);
-  
-  const stateCookie = cookies?.split(';').find(c => c.trim().startsWith('auth0_state='));
-  const expectedState = stateCookie?.split('=')[1];
-
-  console.log('State verification:', { 
-    expected: expectedState, 
-    received: state,
-    stateCookie: stateCookie 
-  });
-
-  if (!expectedState || expectedState !== state) {
-    console.error('State mismatch details:', { 
-      expected: expectedState, 
-      received: state,
-      cookieHeader: cookies,
-      allCookies: cookies?.split(';').map(c => c.trim())
-    });
-    return res.status(400).json({ 
-      error: 'State parameter mismatch',
-      debug: {
-        expected: expectedState,
-        received: state,
-        hasCookies: !!cookies,
-        cookieCount: cookies?.split(';').length || 0
-      }
-    });
-  }
+  // Skip state verification for testing - just proceed with token exchange
+  console.log('Skipping state verification for testing purposes');
 
   try {
     // Exchange code for tokens
@@ -59,7 +31,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const clientId = process.env.AUTH0_CLIENT_ID;
     const clientSecret = process.env.AUTH0_CLIENT_SECRET;
     const baseUrl = process.env.AUTH0_BASE_URL || 'https://gigatime.vercel.app';
-    const redirectUri = `${baseUrl}/api/auth/callback`;
+    const redirectUri = `${baseUrl}/api/auth/test-callback`;
+
+    console.log('Exchanging code for tokens:', {
+      auth0Domain,
+      clientId: clientId ? 'SET' : 'NOT SET',
+      clientSecret: clientSecret ? 'SET' : 'NOT SET',
+      redirectUri
+    });
 
     const tokenResponse = await fetch(`${auth0Domain}/oauth/token`, {
       method: 'POST',
@@ -85,6 +64,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const tokens = await tokenResponse.json();
+    console.log('Token exchange successful:', {
+      access_token: tokens.access_token ? 'RECEIVED' : 'NOT RECEIVED',
+      id_token: tokens.id_token ? 'RECEIVED' : 'NOT RECEIVED'
+    });
     
     // Get user info
     const userResponse = await fetch(`${auth0Domain}/userinfo`, {
@@ -104,35 +87,36 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const user = await userResponse.json();
     
-    console.log('Auth0 Success:', {
-      user: { sub: user.sub, email: user.email, name: user.name },
-      tokens: { access_token: 'RECEIVED', id_token: tokens.id_token ? 'RECEIVED' : 'NOT RECEIVED' }
+    console.log('Auth0 Test Success:', {
+      user: { sub: user.sub, email: user.email, name: user.name }
     });
 
-    // Set auth cookie with user info (in production, use JWT or secure session)
-    const userCookie = Buffer.from(JSON.stringify({
-      sub: user.sub,
-      email: user.email,
-      name: user.name,
-      picture: user.picture
-    })).toString('base64');
-
-    // Clear state cookie and set user cookie
-    const isProduction = process.env.NODE_ENV === 'production';
-    const cookieOptions = isProduction 
-      ? 'HttpOnly; Secure; SameSite=Lax; Path=/'
-      : 'HttpOnly; SameSite=Lax; Path=/';
-      
-    res.setHeader('Set-Cookie', [
-      `auth0_state=; ${cookieOptions}; Max-Age=0`, // Clear state cookie
-      `auth0_user=${userCookie}; ${cookieOptions}; Max-Age=604800` // 7 days
-    ]);
-
-    // Redirect to home page
-    res.redirect('/');
+    // Return success page instead of redirect for testing
+    res.setHeader('Content-Type', 'text/html');
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head><title>Auth0 Test Success</title></head>
+        <body style="font-family: Arial, sans-serif; padding: 20px;">
+          <h1>✅ Auth0 Test Successful!</h1>
+          <h2>User Info:</h2>
+          <ul>
+            <li><strong>ID:</strong> ${user.sub}</li>
+            <li><strong>Email:</strong> ${user.email}</li>
+            <li><strong>Name:</strong> ${user.name}</li>
+          </ul>
+          <h2>Tokens:</h2>
+          <ul>
+            <li><strong>Access Token:</strong> ${tokens.access_token ? 'Received' : 'Not received'}</li>
+            <li><strong>ID Token:</strong> ${tokens.id_token ? 'Received' : 'Not received'}</li>
+          </ul>
+          <p><a href="/">← Back to home</a></p>
+        </body>
+      </html>
+    `);
 
   } catch (error) {
-    console.error('Auth0 callback error:', error);
+    console.error('Auth0 test callback error:', error);
     res.status(500).json({ error: 'Internal server error', details: error });
   }
 }

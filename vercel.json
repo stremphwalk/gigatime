@@ -32,6 +32,14 @@
       "destination": "/api/debug"
     },
     {
+      "source": "/api/auth/test-login",
+      "destination": "/api/auth/test-login"
+    },
+    {
+      "source": "/api/auth/test-callback",
+      "destination": "/api/auth/test-callback"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/index"
     }
