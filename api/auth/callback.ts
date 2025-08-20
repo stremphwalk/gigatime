@@ -22,34 +22,54 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'No authorization code received' });
   }
 
-  // Verify state parameter from cookie
-  const cookies = req.headers.cookie;
-  console.log('Cookie header:', cookies);
-  
-  const stateCookie = cookies?.split(';').find(c => c.trim().startsWith('auth0_state='));
-  const expectedState = stateCookie?.split('=')[1];
+  // Verify HMAC-signed state parameter (no cookies needed!)
+  if (!state || typeof state !== 'string') {
+    return res.status(400).json({ error: 'Invalid state parameter' });
+  }
 
-  console.log('State verification:', { 
-    expected: expectedState, 
-    received: state,
-    stateCookie: stateCookie 
-  });
-
-  if (!expectedState || expectedState !== state) {
-    console.error('State mismatch details:', { 
-      expected: expectedState, 
-      received: state,
-      cookieHeader: cookies,
-      allCookies: cookies?.split(';').map(c => c.trim())
+  try {
+    const secret = process.env.AUTH0_SECRET || 'fallback-secret';
+    
+    // Decode the base64url state
+    const stateBuffer = Buffer.from(state as string, 'base64url');
+    const stateString = stateBuffer.toString();
+    
+    // Split state data and signature
+    const [stateData, expectedSignature] = stateString.split('.');
+    if (!stateData || !expectedSignature) {
+      throw new Error('Invalid state format');
+    }
+    
+    // Verify HMAC signature
+    const { createHmac } = await import('crypto');
+    const hmac = createHmac('sha256', secret);
+    hmac.update(stateData);
+    const actualSignature = hmac.digest('hex');
+    
+    if (actualSignature !== expectedSignature) {
+      throw new Error('Invalid state signature');
+    }
+    
+    // Parse timestamp and check if state is still valid (10 minutes max)
+    const [timestamp, nonce] = stateData.split('-');
+    const stateAge = Date.now() - parseInt(timestamp);
+    const maxAge = 10 * 60 * 1000; // 10 minutes
+    
+    if (stateAge > maxAge) {
+      throw new Error('State has expired');
+    }
+    
+    console.log('State verification successful:', {
+      timestamp,
+      nonce: nonce?.substring(0, 8) + '...',
+      age: Math.round(stateAge / 1000) + 's'
     });
+    
+  } catch (error) {
+    console.error('State verification failed:', error);
     return res.status(400).json({ 
-      error: 'State parameter mismatch',
-      debug: {
-        expected: expectedState,
-        received: state,
-        hasCookies: !!cookies,
-        cookieCount: cookies?.split(';').length || 0
-      }
+      error: 'Invalid or expired state parameter',
+      details: error instanceof Error ? error.message : 'Unknown error'
     });
   }
 
@@ -117,16 +137,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       picture: user.picture
     })).toString('base64');
 
-    // Clear state cookie and set user cookie
+    // Set user cookie (no state cookie to clear since we don't use cookies for state)
     const isProduction = process.env.NODE_ENV === 'production';
     const cookieOptions = isProduction 
       ? 'HttpOnly; Secure; SameSite=Lax; Path=/'
       : 'HttpOnly; SameSite=Lax; Path=/';
       
-    res.setHeader('Set-Cookie', [
-      `auth0_state=; ${cookieOptions}; Max-Age=0`, // Clear state cookie
-      `auth0_user=${userCookie}; ${cookieOptions}; Max-Age=604800` // 7 days
-    ]);
+    res.setHeader('Set-Cookie', `auth0_user=${userCookie}; ${cookieOptions}; Max-Age=604800`); // 7 days
 
     // Redirect to home page
     res.redirect('/');
