@@ -20,7 +20,8 @@
       "WebFetch(domain:developers.deepgram.com)",
       "Bash(pkill:*)",
       "Bash(git checkout:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(mkdir:*)"
     ],
     "deny": [],
     "ask": [],
