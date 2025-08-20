@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { auth } from 'express-openid-connect';
+import express from 'express';
 
 const auth0Config = {
   authRequired: false,
@@ -19,7 +20,6 @@ const auth0Config = {
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
   // Create temporary express app for this route
-  const express = require('express');
   const app = express();
   
   // Apply Auth0 middleware
