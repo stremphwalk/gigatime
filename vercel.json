@@ -4,6 +4,22 @@
   "outputDirectory": "dist/public",
   "rewrites": [
     {
+      "source": "/api/auth/login",
+      "destination": "/api/auth/login"
+    },
+    {
+      "source": "/api/auth/callback",
+      "destination": "/api/auth/callback"
+    },
+    {
+      "source": "/api/auth/logout",
+      "destination": "/api/auth/logout"
+    },
+    {
+      "source": "/api/auth/user",
+      "destination": "/api/auth/user"
+    },
+    {
       "source": "/api/auth/simple-login",
       "destination": "/api/auth/simple-login"
     },
@@ -14,14 +30,6 @@
     {
       "source": "/api/debug",
       "destination": "/api/debug"
-    },
-    {
-      "source": "/api/auth/callback",
-      "destination": "/api/auth/callback"
-    },
-    {
-      "source": "/api/auth/login",
-      "destination": "/api/auth/login"
     },
     {
       "source": "/api/(.*)",

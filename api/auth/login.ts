@@ -1,43 +1,40 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { auth } from 'express-openid-connect';
-import express from 'express';
-
-const auth0Config = {
-  authRequired: false,
-  auth0Logout: true,
-  secret: process.env.AUTH0_SECRET || 'fallback-secret',
-  baseURL: process.env.AUTH0_BASE_URL || 'https://gigatime.vercel.app',
-  clientID: process.env.AUTH0_CLIENT_ID || '',
-  clientSecret: process.env.AUTH0_CLIENT_SECRET || '',
-  issuerBaseURL: process.env.AUTH0_ISSUER_BASE_URL || '',
-  routes: {
-    login: '/api/auth/login',
-    logout: '/api/auth/logout',
-    callback: '/api/auth/callback',
-    postLogoutRedirect: '/'
-  }
-};
+import { randomBytes } from 'crypto';
 
 export default function handler(req: VercelRequest, res: VercelResponse) {
-  // Create temporary express app for this route
-  const app = express();
+  const auth0Domain = process.env.AUTH0_ISSUER_BASE_URL;
+  const clientId = process.env.AUTH0_CLIENT_ID;
+  const baseUrl = process.env.AUTH0_BASE_URL || 'https://gigatime.vercel.app';
   
-  // Apply Auth0 middleware
-  app.use(auth(auth0Config));
+  if (!auth0Domain || !clientId) {
+    return res.status(500).json({ error: 'Auth0 configuration missing' });
+  }
+
+  // Generate a random state parameter for security
+  const state = randomBytes(32).toString('hex');
   
-  // Handle login
-  app.get('/api/auth/login', (req: any, res: any) => {
-    // Auth0 middleware will handle the login redirect
+  // Build the authorization URL manually
+  const redirectUri = `${baseUrl}/api/auth/callback`;
+  const scope = 'openid profile email';
+  const responseType = 'code';
+
+  const authUrl = `${auth0Domain}/authorize?` + 
+    `response_type=${responseType}&` +
+    `client_id=${clientId}&` +
+    `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+    `scope=${encodeURIComponent(scope)}&` +
+    `state=${state}`;
+
+  console.log('Auth0 Login initiated:', {
+    auth0Domain,
+    clientId: clientId ? 'SET' : 'NOT SET',
+    redirectUri,
+    state
   });
 
-  return new Promise((resolve, reject) => {
-    app(req, res, (err: any) => {
-      if (err) {
-        console.error('Auth0 login error:', err);
-        reject(err);
-      } else {
-        resolve(undefined);
-      }
-    });
-  });
+  // Set state in a cookie for verification in callback
+  res.setHeader('Set-Cookie', `auth0_state=${state}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=600`);
+  
+  // Redirect to Auth0
+  res.redirect(authUrl);
 }
