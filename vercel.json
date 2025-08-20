@@ -4,6 +4,14 @@
   "outputDirectory": "dist/public",
   "rewrites": [
     {
+      "source": "/api/auth/callback",
+      "destination": "/api/auth/callback"
+    },
+    {
+      "source": "/api/auth/login",
+      "destination": "/api/auth/login"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "/api/index"
     }
