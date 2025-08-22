@@ -1275,11 +1275,14 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     setCurrentActiveSection(sectionId);
     // Scroll to section and focus on textarea
     setTimeout(() => {
-      const sectionElement = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
-      if (sectionElement) {
-        sectionElement.focus();
+      const textarea = document.querySelector(`[data-testid="textarea-${sectionId}"]`) as HTMLTextAreaElement;
+      if (textarea) {
+        textarea.focus();
+        // Position cursor at the end of existing content
+        const content = textarea.value || '';
+        textarea.setSelectionRange(content.length, content.length);
       }
-    }, 100);
+    }, 300); // Increased timeout to ensure smooth scroll completes first
   };
 
   const getSectionEmojiIcon = (sectionId: string, sectionName?: string, sectionType?: string) => {
@@ -1432,8 +1435,10 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                       <SelectValue placeholder="Select template" />
                     </SelectTrigger>
                     <SelectContent>
-                      {/* Local templates - show all including default templates */}
-                      {noteTemplates.map((template) => (
+                      {/* Local templates - only blank note */}
+                      {noteTemplates
+                        .filter(template => template.type === 'blank')
+                        .map((template) => (
                         <SelectItem key={`local-${template.id}`} value={template.type}>
                           {template.name}
                         </SelectItem>
@@ -1452,17 +1457,18 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
           </Card>
 
           {/* Note Sections */}
-          {sections.map((section) => (
-            <Card key={section.id} className="section-card" data-section-id={section.id}>
+          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+          {sections.map((section, index) => (
+            <div key={section.id} className={`section-card ${index > 0 ? 'border-t border-gray-100' : ''}`} data-section-id={section.id}>
               {/* Hide header for blank note template */}
               {selectedTemplate?.type !== 'blank' && (
-                <CardHeader className="pb-3">
+                <div className="px-4 py-3 bg-gray-50/50">
                   <div className="flex items-center justify-between">
-                    <h3 className="font-semibold text-text-primary flex items-center space-x-2">
-                      {getSectionIcon(section.id)}
+                    <h4 className="text-sm font-medium text-gray-700 flex items-center space-x-2">
+                      <span className="text-gray-500">{getSectionIcon(section.id)}</span>
                       <span>{section.name}</span>
-                      {section.required && <span className="text-medical-red text-xs">*</span>}
-                    </h3>
+                      {section.required && <span className="text-red-500 text-xs">*</span>}
+                    </h4>
                   <div className="flex items-center space-x-2">
                     {/* Imaging Autocomplete Button - Show for imaging or radiology sections */}
                     {(section.type === 'imaging' || 
@@ -1655,9 +1661,9 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                     ))}
                   </div>
                 )}
-                </CardHeader>
+                </div>
               )}
-              <CardContent className="p-4">
+              <div className="p-4">
                 <div className="relative">
                   <Textarea
                     value={noteData.content[section.id] || ''}
@@ -1789,9 +1795,10 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                     />
                   )}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ))}
+          </div>
 
           {/* Action Buttons */}
           <div className="flex items-center justify-between pt-6 border-t border-gray-200">

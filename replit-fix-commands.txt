@@ -1,0 +1,34 @@
+Run these commands ONE BY ONE in your Replit Shell:
+
+Step 1 - Fix the safe directory:
+git config --global --add safe.directory /home/runner/workspace
+
+Step 2 - Remove lock files:
+rm -f .git/refs/remotes/origin/main.lock
+rm -f .git/index.lock
+
+Step 3 - Stash any local changes:
+git stash
+
+Step 4 - Fetch from GitHub:
+git fetch origin main
+
+Step 5 - Force reset to GitHub version:
+git reset --hard origin/main
+
+Step 6 - Clean untracked files:
+git clean -fd
+
+Step 7 - Remove package lock files:
+rm -f package-lock.json
+rm -f yarn.lock
+rm -f pnpm-lock.yaml
+
+Step 8 - Clear npm cache:
+npm cache clean --force
+
+Step 9 - Install dependencies:
+npm install
+
+Step 10 - Check status:
+git status

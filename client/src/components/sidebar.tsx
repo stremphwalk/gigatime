@@ -13,6 +13,7 @@ import {
   Users, 
   ChevronDown,
   ClipboardList,
+  Target,
   User
 } from "lucide-react";
 import { Link } from "wouter";
@@ -167,6 +168,22 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
           >
             <Zap className="text-medical-teal dark:text-blue-400" size={16} />
             <span className="font-medium text-gray-900 dark:text-gray-100">Smart Phrases</span>
+          </Button>
+        </div>
+
+        {/* Autocomplete Builder Section */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
+          <Button
+            variant="ghost"
+            className={cn(
+              "w-full p-3 text-left flex items-center justify-start space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg",
+              currentView === 'autocomplete-builder' && "bg-blue-50 dark:bg-blue-900/50 border border-professional-blue dark:border-blue-600"
+            )}
+            onClick={() => onViewChange('autocomplete-builder')}
+            data-testid="autocomplete-builder-menu-button"
+          >
+            <Target className="text-medical-teal dark:text-blue-400" size={16} />
+            <span className="font-medium text-gray-900 dark:text-gray-100">Autocomplete Builder</span>
           </Button>
         </div>
 
