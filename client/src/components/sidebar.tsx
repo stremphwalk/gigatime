@@ -29,13 +29,14 @@ interface SidebarProps {
   selectedNote: Note | null;
   isLoading: boolean;
   notes: Note[];
-  currentView: 'notes' | 'teams' | 'smart-phrases' | 'template-builder';
-  onViewChange: (view: 'notes' | 'teams' | 'smart-phrases' | 'template-builder') => void;
+  currentView: 'notes' | 'teams' | 'smart-phrases' | 'template-builder' | 'autocomplete-builder';
+  onViewChange: (view: 'notes' | 'teams' | 'smart-phrases' | 'template-builder' | 'autocomplete-builder') => void;
 }
 
 export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, notes, currentView, onViewChange }: SidebarProps) {
   const [expandedSections, setExpandedSections] = useState({
-    notes: true
+    notes: true,
+    smartPhrases: false
   });
   
   const { templates } = useNoteTemplates();
@@ -159,15 +160,57 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
           <Button
             variant="ghost"
             className={cn(
-              "w-full p-3 text-left flex items-center justify-start space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg",
-              currentView === 'smart-phrases' && "bg-blue-50 dark:bg-blue-900/50 border border-professional-blue dark:border-blue-600"
+              "w-full p-3 text-left flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t-lg"
             )}
-            onClick={() => onViewChange('smart-phrases')}
-            data-testid="smart-phrases-menu-button"
+            onClick={() => toggleSection('smartPhrases')}
+            data-testid="toggle-smart-phrases-section"
           >
-            <Zap className="text-medical-teal dark:text-blue-400" size={16} />
-            <span className="font-medium text-gray-900 dark:text-gray-100">Smart Phrases</span>
+            <div className="flex items-center space-x-3">
+              <Zap className="text-medical-teal dark:text-blue-400" size={16} />
+              <span className="font-medium text-gray-900 dark:text-gray-100">Smart Phrases</span>
+            </div>
+            <ChevronDown 
+              className={cn(
+                "h-4 w-4 text-gray-400 transition-transform",
+                expandedSections.smartPhrases && "rotate-180"
+              )}
+            />
           </Button>
+          
+          {expandedSections.smartPhrases && (
+            <div className="border-t border-gray-100 dark:border-gray-700 p-2 space-y-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "w-full justify-start text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300",
+                  currentView === 'smart-phrases' && "bg-blue-50 dark:bg-blue-900/50 border border-professional-blue dark:border-blue-600"
+                )}
+                onClick={() => onViewChange('smart-phrases')}
+                data-testid="button-smart-phrases-library"
+              >
+                <Zap size={12} className="mr-2" />
+                Create New Smart Phrase
+                <Badge variant="secondary" className="ml-auto text-xs dark:bg-gray-600 dark:text-gray-200">
+                  {phrases?.length || 0}
+                </Badge>
+              </Button>
+              
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "w-full justify-start text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300",
+                  currentView === 'autocomplete-builder' && "bg-blue-50 dark:bg-blue-900/50 border border-professional-blue dark:border-blue-600"
+                )}
+                onClick={() => onViewChange('autocomplete-builder')}
+                data-testid="button-autocomplete-builder"
+              >
+                <Settings size={12} className="mr-2" />
+                Create New Auto-complete
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Teams Section */}

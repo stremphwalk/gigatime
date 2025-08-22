@@ -4,6 +4,7 @@ import { NoteEditor } from "../components/note-editor";
 import { TeamCollaboration } from "../components/team-collaboration";
 import { SmartPhrasesManager } from "../components/smart-phrases-manager-v2";
 import { TemplateBuilderManager } from "../components/template-builder-manager";
+import { AutocompleteBuilder } from "../components/autocomplete-builder";
 import { useNotes } from "../hooks/use-notes";
 import { apiRequest } from "@/lib/queryClient";
 import type { Note } from "@shared/schema";
@@ -11,7 +12,7 @@ import type { Note } from "@shared/schema";
 export default function Home() {
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [isCreatingNote, setIsCreatingNote] = useState(false);
-  const [currentView, setCurrentView] = useState<'notes' | 'teams' | 'smart-phrases' | 'template-builder'>('notes');
+  const [currentView, setCurrentView] = useState<'notes' | 'teams' | 'smart-phrases' | 'template-builder' | 'autocomplete-builder'>('notes');
   const { notes, isLoading } = useNotes();
 
   // Initialize default templates and phrases on first load
@@ -44,9 +45,9 @@ export default function Home() {
     setIsCreatingNote(false);
   };
 
-  const handleViewChange = (view: 'notes' | 'teams' | 'smart-phrases' | 'template-builder') => {
+  const handleViewChange = (view: 'notes' | 'teams' | 'smart-phrases' | 'template-builder' | 'autocomplete-builder') => {
     setCurrentView(view);
-    if (view === 'teams' || view === 'smart-phrases' || view === 'template-builder') {
+    if (view === 'teams' || view === 'smart-phrases' || view === 'template-builder' || view === 'autocomplete-builder') {
       setSelectedNote(null);
       setIsCreatingNote(false);
     }
@@ -81,6 +82,8 @@ export default function Home() {
           <SmartPhrasesManager />
         ) : currentView === 'template-builder' ? (
           <TemplateBuilderManager />
+        ) : currentView === 'autocomplete-builder' ? (
+          <AutocompleteBuilder />
         ) : null}
       </div>
     </div>
