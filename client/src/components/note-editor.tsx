@@ -1275,11 +1275,14 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     setCurrentActiveSection(sectionId);
     // Scroll to section and focus on textarea
     setTimeout(() => {
-      const sectionElement = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
-      if (sectionElement) {
-        sectionElement.focus();
+      const textarea = document.querySelector(`[data-testid="textarea-${sectionId}"]`) as HTMLTextAreaElement;
+      if (textarea) {
+        textarea.focus();
+        // Position cursor at the end of existing content
+        const content = textarea.value || '';
+        textarea.setSelectionRange(content.length, content.length);
       }
-    }, 100);
+    }, 300); // Increased timeout to ensure smooth scroll completes first
   };
 
   const getSectionEmojiIcon = (sectionId: string, sectionName?: string, sectionType?: string) => {
