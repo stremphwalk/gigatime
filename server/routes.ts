@@ -12,16 +12,12 @@ import {
   insertTeamCalendarEventSchema,
   insertUserSchema,
   insertUserLabSettingSchema
-} from "../shared/schema";
+} from "@shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Set up Auth0 if configured, otherwise use session for development
-  if (process.env.AUTH0_CLIENT_ID) {
-    const { setupAuth0 } = await import('./auth0');
-    setupAuth0(app);
-  } else if (process.env.NODE_ENV === 'development') {
-    // Fallback to session for development without Auth0
+  // Set up session for development mode
+  if (process.env.NODE_ENV === 'development') {
     app.use(session({
       secret: process.env.SESSION_SECRET || 'dev-secret-key-replace-in-production',
       resave: false,
@@ -32,7 +28,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         maxAge: 7 * 24 * 60 * 60 * 1000 // 1 week
       }
     }));
+  } else {
+    // Set up proper authentication only in production
+    const { setupAuth } = await import("./replitAuth");
+    await setupAuth(app);
   }
+
 
   // Clerk sync endpoint (when Clerk is configured)
   app.post('/api/auth/sync', verifyClerkToken, syncClerkUser);
@@ -103,17 +104,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error fetching user:", error);
       res.status(500).json({ message: "Failed to fetch user" });
     }
-  });
-
-  // Development login route (when Auth0 is not configured)
-  app.get('/api/auth/login', (req: any, res) => {
-    if (!req.session) {
-      req.session = {};
-    }
-    // Clear logout flag
-    req.session.loggedOut = false;
-    // Redirect to home
-    res.redirect('/');
   });
 
   // Logout route
@@ -195,73 +185,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/note-templates", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
-      
-      // Auto-initialize default templates if they don't exist
-      const existingTemplates = await storage.getNoteTemplates();
-      const existingDefaultTemplates = existingTemplates.filter(t => t.isDefault);
-      
-      if (existingDefaultTemplates.length === 0) {
-        // Create default templates automatically
-        const defaultTemplateData = [
-          {
-            name: "Admission Note",
-            type: "admission",
-            isDefault: true,
-            userId: null,
-            sections: [
-              { id: "reason", name: "Reason for Admission", type: "textarea", required: true },
-              { id: "hpi", name: "History of Present Illness", type: "textarea", required: true },
-              { id: "pmh", name: "Past Medical History", type: "textarea", required: false },
-              { id: "allergies", name: "Allergies", type: "textarea", required: true },
-              { id: "social", name: "Social History", type: "textarea", required: false },
-              { id: "medications", name: "Medications", type: "textarea", required: true },
-              { id: "physical", name: "Physical Exam", type: "textarea", required: true },
-              { id: "labs", name: "Labs", type: "textarea", required: false },
-              { id: "imaging", name: "Imaging", type: "textarea", required: false },
-              { id: "impression", name: "Impression", type: "textarea", required: true },
-              { id: "plan", name: "Plan", type: "textarea", required: true }
-            ]
-          },
-          {
-            name: "Progress Note",
-            type: "progress",
-            isDefault: true,
-            userId: null,
-            sections: [
-              { id: "evolution", name: "Evolution", type: "textarea", required: true },
-              { id: "physical", name: "Physical Exam", type: "textarea", required: true },
-              { id: "labs", name: "Labs", type: "textarea", required: false },
-              { id: "imaging", name: "Imaging", type: "textarea", required: false },
-              { id: "impression", name: "Impression", type: "textarea", required: true },
-              { id: "plan", name: "Plan", type: "textarea", required: true }
-            ]
-          },
-          {
-            name: "Consult Note",
-            type: "consult",
-            isDefault: true,
-            userId: null,
-            sections: [
-              { id: "reason", name: "Reason for Consultation", type: "textarea", required: true },
-              { id: "hpi", name: "History of Present Illness", type: "textarea", required: true },
-              { id: "pmh", name: "Past Medical History", type: "textarea", required: false },
-              { id: "allergies", name: "Allergies", type: "textarea", required: true },
-              { id: "social", name: "Social History", type: "textarea", required: false },
-              { id: "medications", name: "Medications", type: "textarea", required: true },
-              { id: "physical", name: "Physical Exam", type: "textarea", required: true },
-              { id: "labs", name: "Labs", type: "textarea", required: false },
-              { id: "imaging", name: "Imaging", type: "textarea", required: false },
-              { id: "impression", name: "Impression", type: "textarea", required: true },
-              { id: "plan", name: "Plan", type: "textarea", required: true }
-            ]
-          }
-        ];
-
-        for (const template of defaultTemplateData) {
-          await storage.createNoteTemplate(template);
-        }
-      }
-      
       const templates = await storage.getNoteTemplates(userId);
       res.json(templates);
     } catch (error) {
@@ -398,51 +321,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/smart-phrases", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
-      
-      // Ensure user exists
-      let user = await storage.getUser(userId);
-      if (!user) {
-        user = await storage.createUser({
-          id: userId,
-          email: "doctor@hospital.com",
-          firstName: "Dr. Sarah",
-          lastName: "Mitchell",
-          specialty: "Emergency Medicine"
-        });
-      }
-      
       const query = req.query.q as string;
       
-      // Helper to project DB elements into client-friendly type/options
-      const mapElementsToClient = (phrase: any) => {
-        const base = { ...phrase };
-        const elements = Array.isArray(phrase?.elements) ? phrase.elements : [];
-        if (elements.length === 0) {
-          return { ...base, type: 'text', options: null };
-        }
-        if (elements.length === 1) {
-          const el: any = elements[0];
-          if (el.type === 'date') {
-            return { ...base, type: 'date', options: null };
-          }
-          if (el.type === 'multipicker' || el.type === 'nested_multipicker') {
-            return { ...base, type: el.type, options: { choices: Array.isArray(el.options) ? el.options : [] } };
-          }
-        }
-        // Fallback when multiple/mixed elements exist
-        return { ...base, type: 'text', options: null };
-      };
-
       let phrases;
       if (query) {
         phrases = await storage.searchSmartPhrases(userId, query);
       } else {
         phrases = await storage.getSmartPhrases(userId);
       }
-
-      // Enrich with computed fields for the current UI
-      const enriched = (phrases || []).map(mapElementsToClient);
-      res.json(enriched);
+      
+      res.json(phrases);
     } catch (error) {
       console.error("Error fetching smart phrases:", error);
       res.status(500).json({ message: "Failed to fetch smart phrases" });
@@ -452,62 +340,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/smart-phrases", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
-      
-      // Ensure user exists
-      let user = await storage.getUser(userId);
-      if (!user) {
-        user = await storage.createUser({
-          id: userId,
-          email: "doctor@hospital.com",
-          firstName: "Dr. Sarah",
-          lastName: "Mitchell",
-          specialty: "Emergency Medicine"
-        });
-      }
-      
-      // Accept client payload with type/options and convert to elements
-      const body = { ...req.body } as any;
-      if (!body.elements && body.type) {
-        if (body.type === 'text') {
-          body.elements = [];
-        } else if (body.type === 'date') {
-          body.elements = [
-            {
-              id: 'date',
-              type: 'date',
-              label: 'Date',
-              placeholder: '{date}',
-            },
-          ];
-        } else if (body.type === 'multipicker' || body.type === 'nested_multipicker') {
-          body.elements = [
-            {
-              id: 'option',
-              type: body.type,
-              label: 'Options',
-              placeholder: '{option}',
-              options: body.options?.choices || [],
-            },
-          ];
-        }
-        delete body.type;
-        delete body.options;
-      }
-      const phraseData = insertSmartPhraseSchema.parse({ ...body, userId });
+      const phraseData = insertSmartPhraseSchema.parse({ ...req.body, userId });
       const phrase = await storage.createSmartPhrase(phraseData);
-      // Respond enriched for UI based on stored elements
-      const elements = Array.isArray((phrase as any)?.elements) ? (phrase as any).elements : [];
-      let type: any = 'text';
-      let options: any = null;
-      if (elements.length === 1) {
-        const el: any = elements[0];
-        if (el?.type === 'date') type = 'date';
-        if (el?.type === 'multipicker' || el?.type === 'nested_multipicker') {
-          type = el.type;
-          options = { choices: Array.isArray(el.options) ? el.options : [] };
-        }
-      }
-      res.json({ ...phrase, type, options });
+      res.json(phrase);
     } catch (error) {
       console.error("Error creating smart phrase:", error);
       res.status(500).json({ message: "Failed to create smart phrase" });
@@ -516,63 +351,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/smart-phrases/:id", requireAuth, async (req, res) => {
     try {
-      const userId = getCurrentUserId(req);
-      
-      // Ensure user exists
-      let user = await storage.getUser(userId);
-      if (!user) {
-        user = await storage.createUser({
-          id: userId,
-          email: "doctor@hospital.com",
-          firstName: "Dr. Sarah",
-          lastName: "Mitchell",
-          specialty: "Emergency Medicine"
-        });
-      }
-      
       const { id } = req.params;
-      // Accept client payload with type/options and convert to elements when present
-      const body = { ...req.body } as any;
-      if (!body.elements && (body.type || body.options)) {
-        if (body.type === 'text') {
-          body.elements = [];
-        } else if (body.type === 'date') {
-          body.elements = [
-            {
-              id: 'date',
-              type: 'date',
-              label: 'Date',
-              placeholder: '{date}',
-            },
-          ];
-        } else if (body.type === 'multipicker' || body.type === 'nested_multipicker') {
-          body.elements = [
-            {
-              id: 'option',
-              type: body.type,
-              label: 'Options',
-              placeholder: '{option}',
-              options: body.options?.choices || [],
-            },
-          ];
-        }
-        delete body.type;
-        delete body.options;
-      }
-      const phraseData = insertSmartPhraseSchema.partial().parse(body);
+      const phraseData = insertSmartPhraseSchema.partial().parse(req.body);
       const phrase = await storage.updateSmartPhrase(id, phraseData);
-      const elements = Array.isArray((phrase as any)?.elements) ? (phrase as any).elements : [];
-      let type: any = 'text';
-      let options: any = null;
-      if (elements.length === 1) {
-        const el: any = elements[0];
-        if (el?.type === 'date') type = 'date';
-        if (el?.type === 'multipicker' || el?.type === 'nested_multipicker') {
-          type = el.type;
-          options = { choices: Array.isArray(el.options) ? el.options : [] };
-        }
-      }
-      res.json({ ...phrase, type, options });
+      res.json(phrase);
     } catch (error) {
       console.error("Error updating smart phrase:", error);
       res.status(500).json({ message: "Failed to update smart phrase" });
@@ -581,20 +363,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/smart-phrases/:id", requireAuth, async (req, res) => {
     try {
-      const userId = getCurrentUserId(req);
-      
-      // Ensure user exists
-      let user = await storage.getUser(userId);
-      if (!user) {
-        user = await storage.createUser({
-          id: userId,
-          email: "doctor@hospital.com",
-          firstName: "Dr. Sarah",
-          lastName: "Mitchell",
-          specialty: "Emergency Medicine"
-        });
-      }
-      
       const { id } = req.params;
       await storage.deleteSmartPhrase(id);
       res.json({ message: "Smart phrase deleted successfully" });
@@ -607,19 +375,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/smart-phrases/import/:shareableId", requireAuth, async (req: any, res) => {
     try {
       const userId = getCurrentUserId(req);
-      
-      // Ensure user exists
-      let user = await storage.getUser(userId);
-      if (!user) {
-        user = await storage.createUser({
-          id: userId,
-          email: "doctor@hospital.com",
-          firstName: "Dr. Sarah",
-          lastName: "Mitchell",
-          specialty: "Emergency Medicine"
-        });
-      }
-      
       const { shareableId } = req.params;
 
       if (!shareableId || !shareableId.trim()) {
@@ -836,11 +591,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = getCurrentUserId(req);
       
-      // Check if default templates already exist
-      const existingDefaultTemplates = await storage.getNoteTemplates();
-      const currentDefaultTemplates = existingDefaultTemplates.filter(t => t.isDefault);
-      if (currentDefaultTemplates.length > 0) {
-        return res.json({ message: "Default templates already initialized" });
+      // Check if templates already exist
+      const existingTemplates = await storage.getNoteTemplates();
+      if (existingTemplates.length > 0) {
+        return res.json({ message: "Templates already initialized" });
       }
 
       // Create default templates
@@ -849,7 +603,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           name: "Admission Note",
           type: "admission",
           isDefault: true,
-          userId: null, // Global template
           sections: [
             { id: "reason", name: "Reason for Admission", type: "textarea", required: true },
             { id: "hpi", name: "History of Present Illness", type: "textarea", required: true },
@@ -868,7 +621,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           name: "Progress Note",
           type: "progress",
           isDefault: true,
-          userId: null, // Global template
           sections: [
             { id: "evolution", name: "Evolution", type: "textarea", required: true },
             { id: "physical", name: "Physical Exam", type: "textarea", required: true },
@@ -882,7 +634,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           name: "Consult Note",
           type: "consult",
           isDefault: true,
-          userId: null, // Global template
           sections: [
             { id: "reason", name: "Reason for Consultation", type: "textarea", required: true },
             { id: "hpi", name: "History of Present Illness", type: "textarea", required: true },

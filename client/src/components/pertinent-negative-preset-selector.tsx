@@ -91,7 +91,7 @@ export function PertinentNegativePresetSelector({ onSelectPreset }: PertinentNeg
   };
 
   // Don't render if no presets available
-  if (isLoading || !presets || (presets as PertinentNegativePreset[]).length === 0) {
+  if (isLoading || (presets as PertinentNegativePreset[]).length === 0) {
     return null;
   }
 
