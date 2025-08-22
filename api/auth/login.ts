@@ -25,7 +25,7 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
   const state = Buffer.from(`${stateData}.${signature}`).toString('base64url');
   
   // Build the authorization URL manually
-  const redirectUri = `${baseUrl}/api/auth/callback`;
+  const redirectUri = `${baseUrl}/auth/callback`;
   const scope = 'openid profile email';
   const responseType = 'code';
 

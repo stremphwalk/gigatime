@@ -53,7 +53,7 @@ export function UserProfile() {
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem 
-          onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
+          onClick={() => { window.location.href = '/api/auth/logout'; }}
           className="text-red-600"
         >
           <LogOut className="mr-2 h-4 w-4" />

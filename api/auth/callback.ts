@@ -102,7 +102,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const clientId = process.env.AUTH0_CLIENT_ID;
     const clientSecret = process.env.AUTH0_CLIENT_SECRET;
     const baseUrl = process.env.AUTH0_BASE_URL || 'https://gigatime.vercel.app';
-    const redirectUri = `${baseUrl}/api/auth/callback`;
+    const redirectUri = `${baseUrl}/auth/callback`;
 
     const tokenResponse = await fetch(`${auth0Domain}/oauth/token`, {
       method: 'POST',

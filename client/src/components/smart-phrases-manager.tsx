@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { useSmartPhrases } from "../hooks/use-smart-phrases";
+import { useSmartPhrases, type UISmartPhrase } from "../hooks/use-smart-phrases";
 import { useToast } from "../hooks/use-toast";
 import { Plus, Edit2, Trash2, Search, Zap, X, Calendar, MousePointer, ChevronRight, Save } from "lucide-react";
 import type { SmartPhrase } from "@shared/schema";
@@ -19,7 +19,7 @@ interface MultipickerOption {
 
 export function SmartPhrasesManager() {
   const [activeTab, setActiveTab] = useState<'library' | 'create' | 'edit'>('library');
-  const [editingPhrase, setEditingPhrase] = useState<SmartPhrase | null>(null);
+  const [editingPhrase, setEditingPhrase] = useState<UISmartPhrase | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [formData, setFormData] = useState({
     trigger: "",
@@ -129,10 +129,10 @@ export function SmartPhrasesManager() {
     "hematology"
   ];
 
-  const filteredPhrases = phrases?.filter(phrase => 
+  const filteredPhrases = phrases?.filter((phrase: UISmartPhrase) => 
     phrase.trigger.toLowerCase().includes(searchQuery.toLowerCase()) ||
     phrase.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    phrase.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    (phrase.description ? phrase.description.toLowerCase().includes(searchQuery.toLowerCase()) : false)
   ) || [];
 
   const handleCreateNew = () => {
@@ -148,7 +148,7 @@ export function SmartPhrasesManager() {
     setActiveTab('create');
   };
 
-  const handleEdit = (phrase: SmartPhrase) => {
+  const handleEdit = (phrase: UISmartPhrase) => {
     setFormData({
       trigger: phrase.trigger,
       content: phrase.content,

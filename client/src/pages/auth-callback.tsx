@@ -1,40 +1,38 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import { useEffect } from 'react';
 import { useLocation } from 'wouter';
 
 export function AuthCallback() {
-  const { isLoading, error, isAuthenticated } = useAuth0();
   const [, navigate] = useLocation();
 
   useEffect(() => {
-    if (!isLoading) {
-      if (isAuthenticated) {
-        console.log('Auth0 callback successful, redirecting to home');
-        navigate('/');
-      } else if (error) {
-        console.error('Auth0 callback error:', error);
-        // Still redirect to home with error state
-        navigate('/?error=auth');
-      }
-    }
-  }, [isLoading, isAuthenticated, error, navigate]);
+    const url = new URL(window.location.href);
+    const searchParams = url.searchParams;
+    const code = searchParams.get('code');
+    const state = searchParams.get('state');
+    const error = searchParams.get('error');
 
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-red-500 text-xl mb-4">Authentication Error</div>
-          <p className="text-gray-600 mb-4">{error.message}</p>
-          <button 
-            onClick={() => navigate('/')}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-          >
-            Go to Home
-          </button>
-        </div>
-      </div>
-    );
-  }
+    async function handleCallback() {
+      if (error) {
+        navigate('/?error=auth');
+        return;
+      }
+      if (code && state) {
+        try {
+          // Delegate to server callback which sets the cookie
+          const res = await fetch(`/api/auth/callback?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`, {
+            credentials: 'include'
+          });
+          if (res.redirected) {
+            window.location.href = res.url;
+            return;
+          }
+        } catch (_) {}
+      }
+      navigate('/');
+    }
+
+    handleCallback();
+  }, [navigate]);
 
   return (
     <div className="min-h-screen flex items-center justify-center">

@@ -56,7 +56,7 @@ export const syncClerkUser: RequestHandler = async (req: any, res) => {
     });
 
     // Get the user from database
-    const user = await storage.getUserById(id);
+    const user = await storage.getUser(id);
     
     res.json(user);
   } catch (error) {

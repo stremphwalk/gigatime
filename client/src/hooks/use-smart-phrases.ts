@@ -2,15 +2,25 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import type { SmartPhrase, InsertSmartPhrase } from "@shared/schema";
 
+export type UISmartPhrase = SmartPhrase & {
+  type?: "text" | "multipicker" | "nested_multipicker" | "date";
+  options?: { choices: Array<{ label: string; value: string; children?: Array<{ label: string; value: string }> }> } | null;
+};
+
 export function useSmartPhrases() {
   const queryClient = useQueryClient();
 
-  const { data: phrases, isLoading } = useQuery<SmartPhrase[]>({
+  const { data: phrases, isLoading } = useQuery<UISmartPhrase[]>({
     queryKey: ["/api/smart-phrases"],
   });
 
   const createPhraseMutation = useMutation({
-    mutationFn: async (phraseData: Partial<InsertSmartPhrase>) => {
+    mutationFn: async (
+      phraseData: Partial<InsertSmartPhrase> & {
+        type?: UISmartPhrase["type"];
+        options?: UISmartPhrase["options"];
+      }
+    ) => {
       const response = await apiRequest("POST", "/api/smart-phrases", phraseData);
       return response.json();
     },
@@ -20,7 +30,13 @@ export function useSmartPhrases() {
   });
 
   const updatePhraseMutation = useMutation({
-    mutationFn: async ({ id, ...phraseData }: { id: string } & Partial<InsertSmartPhrase>) => {
+    mutationFn: async ({
+      id,
+      ...phraseData
+    }: { id: string } & Partial<InsertSmartPhrase> & {
+      type?: UISmartPhrase["type"];
+      options?: UISmartPhrase["options"];
+    }) => {
       const response = await apiRequest("PUT", `/api/smart-phrases/${id}`, phraseData);
       return response.json();
     },

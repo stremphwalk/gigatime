@@ -232,6 +232,141 @@ async function initializeRoutes() {
     res.json({ apiKey: process.env.DEEPGRAM_API_KEY });
   });
 
+  // Smart phrase routes
+  app.get("/api/smart-phrases", requireAuth, async (req, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      
+      // Ensure user exists
+      let user = await storage.getUser(userId);
+      if (!user) {
+        user = await storage.createUser({
+          id: userId,
+          email: "doctor@hospital.com",
+          firstName: "Dr. Sarah",
+          lastName: "Mitchell",
+          specialty: "Emergency Medicine"
+        });
+      }
+      
+      const query = req.query.q as string;
+      
+      const mapElementsToClient = (phrase: any) => {
+        const base = { ...phrase };
+        const elements = Array.isArray(phrase?.elements) ? phrase.elements : [];
+        if (elements.length === 0) {
+          return { ...base, type: 'text', options: null };
+        }
+        if (elements.length === 1) {
+          const el: any = elements[0];
+          if (el.type === 'date') {
+            return { ...base, type: 'date', options: null };
+          }
+          if (el.type === 'multipicker' || el.type === 'nested_multipicker') {
+            return { ...base, type: el.type, options: { choices: Array.isArray(el.options) ? el.options : [] } };
+          }
+        }
+        return { ...base, type: 'text', options: null };
+      };
+      
+      if (query) {
+        const phrases = await storage.searchSmartPhrases(userId, query);
+        res.json(phrases.map(mapElementsToClient));
+      } else {
+        const phrases = await storage.getSmartPhrases(userId);
+        res.json(phrases.map(mapElementsToClient));
+      }
+    } catch (error) {
+      console.error("Error fetching smart phrases:", error);
+      res.status(500).json({ message: "Failed to fetch smart phrases" });
+    }
+  });
+
+  app.post("/api/smart-phrases", requireAuth, async (req, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      
+      // Ensure user exists
+      let user = await storage.getUser(userId);
+      if (!user) {
+        user = await storage.createUser({
+          id: userId,
+          email: "doctor@hospital.com",
+          firstName: "Dr. Sarah",
+          lastName: "Mitchell",
+          specialty: "Emergency Medicine"
+        });
+      }
+      
+      const body = { ...req.body } as any;
+      if (!body.elements && body.type) {
+        if (body.type === 'text') {
+          body.elements = [];
+        } else if (body.type === 'date') {
+          body.elements = [
+            {
+              id: 'date',
+              type: 'date',
+              label: 'Date',
+              placeholder: '{date}',
+            },
+          ];
+        } else if (body.type === 'multipicker' || body.type === 'nested_multipicker') {
+          body.elements = [
+            {
+              id: 'option',
+              type: body.type,
+              label: 'Options',
+              placeholder: '{option}',
+              options: body.options?.choices || [],
+            },
+          ];
+        }
+        delete body.type;
+        delete body.options;
+      }
+      const phraseData = insertSmartPhraseSchema.parse({ ...body, userId });
+      const phrase = await storage.createSmartPhrase(phraseData);
+      
+      const elements = Array.isArray((phrase as any)?.elements) ? (phrase as any).elements : [];
+      let type: any = 'text';
+      let options: any = null;
+      if (elements.length === 1) {
+        const el: any = elements[0];
+        if (el?.type === 'date') type = 'date';
+        if (el?.type === 'multipicker' || el?.type === 'nested_multipicker') {
+          type = el.type;
+          options = { choices: Array.isArray(el.options) ? el.options : [] };
+        }
+      }
+      res.json({ ...phrase, type, options });
+    } catch (error) {
+      console.error("Error creating smart phrase:", error);
+      res.status(500).json({ message: "Failed to create smart phrase" });
+    }
+  });
+
+  // Init endpoint
+  app.post("/api/init", requireAuth, async (req, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      let user = await storage.getUser(userId);
+      if (!user) {
+        user = await storage.createUser({
+          id: userId,
+          email: "doctor@hospital.com",
+          firstName: "Dr. Sarah",
+          lastName: "Mitchell",
+          specialty: "Emergency Medicine"
+        });
+      }
+      res.json({ message: "Initialized", user });
+    } catch (error) {
+      console.error("Error initializing:", error);
+      res.status(500).json({ message: "Failed to initialize" });
+    }
+  });
+
   routesInitialized = true;
 }
 

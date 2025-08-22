@@ -12,7 +12,7 @@ import {
   insertTeamCalendarEventSchema,
   insertUserSchema,
   insertUserLabSettingSchema
-} from "@shared/schema";
+} from "../shared/schema";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -398,16 +398,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/smart-phrases", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
+      
+      // Ensure user exists
+      let user = await storage.getUser(userId);
+      if (!user) {
+        user = await storage.createUser({
+          id: userId,
+          email: "doctor@hospital.com",
+          firstName: "Dr. Sarah",
+          lastName: "Mitchell",
+          specialty: "Emergency Medicine"
+        });
+      }
+      
       const query = req.query.q as string;
       
+      // Helper to project DB elements into client-friendly type/options
+      const mapElementsToClient = (phrase: any) => {
+        const base = { ...phrase };
+        const elements = Array.isArray(phrase?.elements) ? phrase.elements : [];
+        if (elements.length === 0) {
+          return { ...base, type: 'text', options: null };
+        }
+        if (elements.length === 1) {
+          const el: any = elements[0];
+          if (el.type === 'date') {
+            return { ...base, type: 'date', options: null };
+          }
+          if (el.type === 'multipicker' || el.type === 'nested_multipicker') {
+            return { ...base, type: el.type, options: { choices: Array.isArray(el.options) ? el.options : [] } };
+          }
+        }
+        // Fallback when multiple/mixed elements exist
+        return { ...base, type: 'text', options: null };
+      };
+
       let phrases;
       if (query) {
         phrases = await storage.searchSmartPhrases(userId, query);
       } else {
         phrases = await storage.getSmartPhrases(userId);
       }
-      
-      res.json(phrases);
+
+      // Enrich with computed fields for the current UI
+      const enriched = (phrases || []).map(mapElementsToClient);
+      res.json(enriched);
     } catch (error) {
       console.error("Error fetching smart phrases:", error);
       res.status(500).json({ message: "Failed to fetch smart phrases" });
@@ -417,9 +452,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/smart-phrases", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
-      const phraseData = insertSmartPhraseSchema.parse({ ...req.body, userId });
+      
+      // Ensure user exists
+      let user = await storage.getUser(userId);
+      if (!user) {
+        user = await storage.createUser({
+          id: userId,
+          email: "doctor@hospital.com",
+          firstName: "Dr. Sarah",
+          lastName: "Mitchell",
+          specialty: "Emergency Medicine"
+        });
+      }
+      
+      // Accept client payload with type/options and convert to elements
+      const body = { ...req.body } as any;
+      if (!body.elements && body.type) {
+        if (body.type === 'text') {
+          body.elements = [];
+        } else if (body.type === 'date') {
+          body.elements = [
+            {
+              id: 'date',
+              type: 'date',
+              label: 'Date',
+              placeholder: '{date}',
+            },
+          ];
+        } else if (body.type === 'multipicker' || body.type === 'nested_multipicker') {
+          body.elements = [
+            {
+              id: 'option',
+              type: body.type,
+              label: 'Options',
+              placeholder: '{option}',
+              options: body.options?.choices || [],
+            },
+          ];
+        }
+        delete body.type;
+        delete body.options;
+      }
+      const phraseData = insertSmartPhraseSchema.parse({ ...body, userId });
       const phrase = await storage.createSmartPhrase(phraseData);
-      res.json(phrase);
+      // Respond enriched for UI based on stored elements
+      const elements = Array.isArray((phrase as any)?.elements) ? (phrase as any).elements : [];
+      let type: any = 'text';
+      let options: any = null;
+      if (elements.length === 1) {
+        const el: any = elements[0];
+        if (el?.type === 'date') type = 'date';
+        if (el?.type === 'multipicker' || el?.type === 'nested_multipicker') {
+          type = el.type;
+          options = { choices: Array.isArray(el.options) ? el.options : [] };
+        }
+      }
+      res.json({ ...phrase, type, options });
     } catch (error) {
       console.error("Error creating smart phrase:", error);
       res.status(500).json({ message: "Failed to create smart phrase" });
@@ -428,10 +516,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/smart-phrases/:id", requireAuth, async (req, res) => {
     try {
+      const userId = getCurrentUserId(req);
+      
+      // Ensure user exists
+      let user = await storage.getUser(userId);
+      if (!user) {
+        user = await storage.createUser({
+          id: userId,
+          email: "doctor@hospital.com",
+          firstName: "Dr. Sarah",
+          lastName: "Mitchell",
+          specialty: "Emergency Medicine"
+        });
+      }
+      
       const { id } = req.params;
-      const phraseData = insertSmartPhraseSchema.partial().parse(req.body);
+      // Accept client payload with type/options and convert to elements when present
+      const body = { ...req.body } as any;
+      if (!body.elements && (body.type || body.options)) {
+        if (body.type === 'text') {
+          body.elements = [];
+        } else if (body.type === 'date') {
+          body.elements = [
+            {
+              id: 'date',
+              type: 'date',
+              label: 'Date',
+              placeholder: '{date}',
+            },
+          ];
+        } else if (body.type === 'multipicker' || body.type === 'nested_multipicker') {
+          body.elements = [
+            {
+              id: 'option',
+              type: body.type,
+              label: 'Options',
+              placeholder: '{option}',
+              options: body.options?.choices || [],
+            },
+          ];
+        }
+        delete body.type;
+        delete body.options;
+      }
+      const phraseData = insertSmartPhraseSchema.partial().parse(body);
       const phrase = await storage.updateSmartPhrase(id, phraseData);
-      res.json(phrase);
+      const elements = Array.isArray((phrase as any)?.elements) ? (phrase as any).elements : [];
+      let type: any = 'text';
+      let options: any = null;
+      if (elements.length === 1) {
+        const el: any = elements[0];
+        if (el?.type === 'date') type = 'date';
+        if (el?.type === 'multipicker' || el?.type === 'nested_multipicker') {
+          type = el.type;
+          options = { choices: Array.isArray(el.options) ? el.options : [] };
+        }
+      }
+      res.json({ ...phrase, type, options });
     } catch (error) {
       console.error("Error updating smart phrase:", error);
       res.status(500).json({ message: "Failed to update smart phrase" });
@@ -440,6 +581,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/smart-phrases/:id", requireAuth, async (req, res) => {
     try {
+      const userId = getCurrentUserId(req);
+      
+      // Ensure user exists
+      let user = await storage.getUser(userId);
+      if (!user) {
+        user = await storage.createUser({
+          id: userId,
+          email: "doctor@hospital.com",
+          firstName: "Dr. Sarah",
+          lastName: "Mitchell",
+          specialty: "Emergency Medicine"
+        });
+      }
+      
       const { id } = req.params;
       await storage.deleteSmartPhrase(id);
       res.json({ message: "Smart phrase deleted successfully" });
@@ -452,6 +607,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/smart-phrases/import/:shareableId", requireAuth, async (req: any, res) => {
     try {
       const userId = getCurrentUserId(req);
+      
+      // Ensure user exists
+      let user = await storage.getUser(userId);
+      if (!user) {
+        user = await storage.createUser({
+          id: userId,
+          email: "doctor@hospital.com",
+          firstName: "Dr. Sarah",
+          lastName: "Mitchell",
+          specialty: "Emergency Medicine"
+        });
+      }
+      
       const { shareableId } = req.params;
 
       if (!shareableId || !shareableId.trim()) {

@@ -29,7 +29,7 @@ import {
   type InsertPertinentNegativePreset,
   type UserLabSetting,
   type InsertUserLabSetting,
-} from "@shared/schema";
+} from "../shared/schema";
 import { db } from "./db";
 import { eq, and, desc, like, or } from "drizzle-orm";
 
@@ -596,7 +596,8 @@ export class DatabaseStorage implements IStorage {
     const [created] = await db
       .insert(pertinentNegativePresets)
       .values({
-        ...preset,
+        name: preset.name,
+        selectedSymptoms: preset.selectedSymptoms as Record<string, string[]>,
         userId: 'default-user',
       })
       .returning();
