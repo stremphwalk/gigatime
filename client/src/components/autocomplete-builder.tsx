@@ -204,12 +204,12 @@ export function AutocompleteBuilder() {
                 </div>
               </div>
               <div className="w-full sm:w-64">
-                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                <Select value={selectedCategory || "all"} onValueChange={(value) => setSelectedCategory(value === "all" ? "" : value)}>
                   <SelectTrigger data-testid="filter-category">
                     <SelectValue placeholder="Filter by category" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All Categories</SelectItem>
+                    <SelectItem value="all">All Categories</SelectItem>
                     {SECTION_CATEGORIES.map((category) => (
                       <SelectItem key={category.value} value={category.value}>
                         {category.label}
