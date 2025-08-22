@@ -61,6 +61,31 @@
   --medical-red: hsl(0 84% 60%);
 }
 
+/* Unified Note Sections CSS */
+.section-card {
+  @apply border-0 shadow-none bg-transparent;
+}
+
+.section-card + .section-card {
+  @apply mt-0;
+}
+
+.section-card:first-of-type {
+  @apply rounded-t-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700;
+}
+
+.section-card:last-of-type {
+  @apply rounded-b-lg bg-white dark:bg-gray-800 border-l border-r border-b border-gray-200 dark:border-gray-700;
+}
+
+.section-card:not(:first-of-type):not(:last-of-type) {
+  @apply bg-white dark:bg-gray-800 border-l border-r border-gray-200 dark:border-gray-700;
+}
+
+.section-card:not(:last-of-type) .section-card-content {
+  @apply border-b border-gray-100 dark:border-gray-700;
+}
+
 .dark {
   --background: hsl(222 84% 4.9%);
   --foreground: hsl(210 40% 98%);
