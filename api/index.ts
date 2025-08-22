@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import "dotenv/config";
 import express from "express";
-import { requireAuth, optionalAuth, getCurrentUserId } from "../server/auth";
-import { storage } from "../server/storage";
-import { verifyClerkToken, syncClerkUser } from "../server/clerkAuth";
+import { requireAuth, optionalAuth, getCurrentUserId } from "../server/auth.js";
+import { storage } from "../server/storage.js";
+import { verifyClerkToken, syncClerkUser } from "../server/clerkAuth.js";
 import session from "express-session";
 import { 
   insertNoteSchema, 
@@ -13,7 +13,7 @@ import {
   insertTeamCalendarEventSchema,
   insertUserSchema,
   insertUserLabSettingSchema
-} from "../shared/schema";
+} from "../shared/schema.js";
 import { z } from "zod";
 
 // Create Express app
@@ -42,7 +42,7 @@ async function initializeRoutes() {
 
   // Set up Auth0 if configured, otherwise use session for development
   if (process.env.AUTH0_CLIENT_ID) {
-    const { setupAuth0 } = await import('../server/auth0');
+    const { setupAuth0 } = await import('../server/auth0.js');
     setupAuth0(app);
   } else if (process.env.NODE_ENV === 'development') {
     // Fallback to session for development without Auth0
