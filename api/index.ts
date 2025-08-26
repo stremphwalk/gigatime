@@ -1,20 +1,45 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import "dotenv/config";
-import express from "express";
-import { requireAuth, optionalAuth, getCurrentUserId } from "../server/auth.js";
-import { storage } from "../server/storage.js";
-import { verifyClerkToken, syncClerkUser } from "../server/clerkAuth.js";
-import session from "express-session";
-import { 
-  insertNoteSchema, 
-  insertNoteTemplateSchema, 
-  insertSmartPhraseSchema,
-  insertTeamTodoSchema,
-  insertTeamCalendarEventSchema,
-  insertUserSchema,
-  insertUserLabSettingSchema
-} from "../shared/schema.js";
-import { z } from "zod";
+
+// Wrap critical imports in try-catch
+let express: any;
+let storage: any;
+let requireAuth: any;
+let optionalAuth: any;
+let getCurrentUserId: any;
+let verifyClerkToken: any;
+let syncClerkUser: any;
+let session: any;
+let schemas: any;
+let z: any;
+
+try {
+  console.log("[Imports] Loading dependencies...");
+  
+  require("dotenv/config");
+  express = require("express").default;
+  
+  const auth = require("../server/auth.js");
+  requireAuth = auth.requireAuth;
+  optionalAuth = auth.optionalAuth;
+  getCurrentUserId = auth.getCurrentUserId;
+  
+  const storageModule = require("../server/storage.js");
+  storage = storageModule.storage;
+  
+  const clerkAuth = require("../server/clerkAuth.js");
+  verifyClerkToken = clerkAuth.verifyClerkToken;
+  syncClerkUser = clerkAuth.syncClerkUser;
+  
+  session = require("express-session");
+  
+  schemas = require("../shared/schema.js");
+  z = require("zod").z;
+  
+  console.log("[Imports] All dependencies loaded successfully");
+} catch (error) {
+  console.error("[Imports] Failed to load dependencies:", error);
+  throw new Error(`Failed to load dependencies: ${error instanceof Error ? error.message : 'Unknown error'}`);
+}
 
 // Create Express app
 const app = express();
@@ -26,6 +51,13 @@ let routesInitialized = false;
 
 async function initializeRoutes() {
   if (routesInitialized) return;
+  
+  try {
+    console.log("[InitRoutes] Starting route initialization");
+  } catch (error) {
+    console.error("[InitRoutes] Error during initialization:", error);
+    throw error;
+  }
 
   // Handle CORS for Vercel
   app.use((req, res, next) => {
@@ -141,7 +173,7 @@ async function initializeRoutes() {
   app.post("/api/notes", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
-      const noteData = insertNoteSchema.parse({ ...req.body, userId });
+      const noteData = schemas.insertNoteSchema.parse({ ...req.body, userId });
       const note = await storage.createNote(noteData);
       res.json(note);
     } catch (error) {
@@ -270,7 +302,7 @@ async function initializeRoutes() {
       console.log("[POST /api/note-templates] User verified", { userId });
       
       console.log("[POST /api/note-templates] Parsing request body...");
-      const templateData = insertNoteTemplateSchema.parse({ ...req.body, userId });
+      const templateData = schemas.insertNoteTemplateSchema.parse({ ...req.body, userId });
       console.log("[POST /api/note-templates] Schema validation passed");
       
       console.log("[POST /api/note-templates] Starting database insert...");
@@ -411,7 +443,7 @@ async function initializeRoutes() {
         delete body.type;
         delete body.options;
       }
-      const phraseData = insertSmartPhraseSchema.parse({ ...body, userId });
+      const phraseData = schemas.insertSmartPhraseSchema.parse({ ...body, userId });
       const phrase = await storage.createSmartPhrase(phraseData);
       
       const elements = Array.isArray((phrase as any)?.elements) ? (phrase as any).elements : [];
@@ -432,12 +464,28 @@ async function initializeRoutes() {
     }
   });
 
+  // Health check endpoint (no auth required)
+  app.get("/api/health", (req, res) => {
+    console.log("[Health] Health check requested");
+    res.json({ 
+      status: "ok", 
+      timestamp: new Date().toISOString(),
+      env: process.env.NODE_ENV 
+    });
+  });
+
   // Init endpoint
   app.post("/api/init", requireAuth, async (req, res) => {
     try {
+      console.log("[Init] Starting initialization");
       const userId = getCurrentUserId(req);
+      console.log("[Init] User ID:", userId);
+      
       let user = await storage.getUser(userId);
+      console.log("[Init] User lookup complete:", !!user);
+      
       if (!user) {
+        console.log("[Init] Creating new user");
         user = await storage.createUser({
           id: userId,
           email: "doctor@hospital.com",
@@ -445,11 +493,16 @@ async function initializeRoutes() {
           lastName: "Mitchell",
           specialty: "Emergency Medicine"
         });
+        console.log("[Init] User created:", user.id);
       }
+      
       res.json({ message: "Initialized", user });
     } catch (error) {
-      console.error("Error initializing:", error);
-      res.status(500).json({ message: "Failed to initialize" });
+      console.error("[Init] Error initializing:", error);
+      res.status(500).json({ 
+        message: "Failed to initialize",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
     }
   });
 
@@ -457,16 +510,36 @@ async function initializeRoutes() {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  await initializeRoutes();
+  try {
+    console.log("[Handler] Starting request:", req.method, req.url);
+    
+    await initializeRoutes();
+    console.log("[Handler] Routes initialized");
 
-  // Handle the request using Express
-  return new Promise((resolve, reject) => {
-    app(req as any, res as any, (err: any) => {
-      if (err) {
-        reject(err);
-      } else {
-        resolve(undefined);
-      }
+    // Handle the request using Express
+    return new Promise((resolve, reject) => {
+      app(req as any, res as any, (err: any) => {
+        if (err) {
+          console.error("[Handler] Express error:", err);
+          reject(err);
+        } else {
+          console.log("[Handler] Request completed successfully");
+          resolve(undefined);
+        }
+      });
     });
-  });
+  } catch (error) {
+    console.error("[Handler] Top-level error:", error);
+    
+    // Fallback error response
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        message: "Internal server error", 
+        error: error instanceof Error ? error.message : "Unknown error",
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    throw error;
+  }
 }
