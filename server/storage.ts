@@ -29,8 +29,8 @@ import {
   type InsertPertinentNegativePreset,
   type UserLabSetting,
   type InsertUserLabSetting,
-} from "../shared/schema";
-import { db } from "./db";
+} from "../shared/schema.js";
+import { db } from "./db.js";
 import { eq, and, desc, like, or } from "drizzle-orm";
 
 export interface IStorage {
@@ -308,17 +308,40 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createNoteTemplate(templateData: InsertNoteTemplate): Promise<NoteTemplate> {
-    const [template] = await db.insert(noteTemplates).values(templateData).returning();
-    return template;
+    console.log('[Storage.createNoteTemplate] Starting insert with data:', {
+      ...templateData,
+      sections: Array.isArray(templateData.sections) ? `[${templateData.sections.length} sections]` : templateData.sections
+    });
+    
+    try {
+      const [template] = await db.insert(noteTemplates).values(templateData).returning();
+      console.log('[Storage.createNoteTemplate] Insert successful:', { id: template.id, name: template.name });
+      return template;
+    } catch (error) {
+      console.error('[Storage.createNoteTemplate] Database error:', error);
+      throw error;
+    }
   }
 
   async updateNoteTemplate(id: string, templateData: Partial<InsertNoteTemplate>): Promise<NoteTemplate> {
-    const [template] = await db
-      .update(noteTemplates)
-      .set({ ...templateData, updatedAt: new Date() })
-      .where(eq(noteTemplates.id, id))
-      .returning();
-    return template;
+    console.log('[Storage.updateNoteTemplate] Starting update:', {
+      id,
+      ...templateData,
+      sections: Array.isArray(templateData.sections) ? `[${templateData.sections.length} sections]` : templateData.sections
+    });
+    
+    try {
+      const [template] = await db
+        .update(noteTemplates)
+        .set({ ...templateData, updatedAt: new Date() })
+        .where(eq(noteTemplates.id, id))
+        .returning();
+      console.log('[Storage.updateNoteTemplate] Update successful:', { id: template.id, name: template.name });
+      return template;
+    } catch (error) {
+      console.error('[Storage.updateNoteTemplate] Database error:', error);
+      throw error;
+    }
   }
 
   async deleteNoteTemplate(id: string): Promise<void> {

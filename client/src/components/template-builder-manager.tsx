@@ -41,6 +41,8 @@ export function TemplateBuilderManager() {
   const [editingTemplate, setEditingTemplate] = useState<NoteTemplate | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     type: "progress",
@@ -48,7 +50,7 @@ export function TemplateBuilderManager() {
     sections: [] as TemplateSection[]
   });
 
-  const { templates, createTemplate, updateTemplate, deleteTemplate, isCreating } = useNoteTemplates();
+  const { templates, createTemplate, updateTemplate, deleteTemplate, isCreating, createError, updateError, isCreateError, isUpdateError } = useNoteTemplates();
   const { phrases } = useSmartPhrases();
 
   const templateTypes = [
@@ -233,18 +235,63 @@ export function TemplateBuilderManager() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Prevent duplicate submissions
+    if (isSaving || isCreating) {
+      console.log('[Template Save] Already saving, ignoring duplicate submission');
+      return;
+    }
+    
+    setSaveError(null);
+    setIsSaving(true);
+    
+    console.log('[Template Save] Starting save operation', {
+      isEditing: !!editingTemplate,
+      templateId: editingTemplate?.id,
+      formData: {
+        name: formData.name,
+        type: formData.type,
+        sectionsCount: formData.sections.length
+      }
+    });
+    
+    // Create a timeout to prevent infinite saving state
+    const timeoutId = setTimeout(() => {
+      console.error('[Template Save] Save operation timed out after 30 seconds');
+      setSaveError('Save operation timed out. Please try again.');
+      setIsSaving(false);
+    }, 30000);
+    
     try {
       const templateData = {
-        ...formData,
-        sections: JSON.stringify(formData.sections)
+        name: formData.name,
+        type: formData.type,
+        description: formData.description || null,
+        sections: formData.sections, // Keep as array, server expects JSONB
+        isDefault: false,
+        isPublic: false,
+        userId: null // Will be set by server
       };
+      
+      console.log('[Template Save] Prepared template data', {
+        ...templateData,
+        sections: `[${templateData.sections.length} sections]`
+      });
 
+      let result;
       if (editingTemplate) {
-        await updateTemplate({ id: editingTemplate.id, ...templateData });
+        console.log('[Template Save] Updating existing template', editingTemplate.id);
+        result = await updateTemplate({ id: editingTemplate.id, ...templateData });
+        console.log('[Template Save] Update successful', result);
       } else {
-        await createTemplate(templateData);
+        console.log('[Template Save] Creating new template');
+        result = await createTemplate(templateData);
+        console.log('[Template Save] Create successful', result);
       }
       
+      // Clear the timeout since operation succeeded
+      clearTimeout(timeoutId);
+      
+      console.log('[Template Save] Resetting form state');
       setFormData({
         name: "",
         type: "progress",
@@ -254,8 +301,17 @@ export function TemplateBuilderManager() {
       
       setActiveTab('library');
       setEditingTemplate(null);
+      setIsSaving(false);
+      console.log('[Template Save] Save operation completed successfully');
     } catch (error) {
-      console.error("Error saving template:", error);
+      clearTimeout(timeoutId);
+      console.error('[Template Save] Error during save operation:', {
+        error,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        errorStack: error instanceof Error ? error.stack : undefined
+      });
+      setSaveError(error instanceof Error ? error.message : "Failed to save template. Please try again.");
+      setIsSaving(false);
     }
   };
 
@@ -581,6 +637,13 @@ export function TemplateBuilderManager() {
               </CardContent>
             </Card>
 
+            {/* Error Message */}
+            {saveError && (
+              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm text-red-600">{saveError}</p>
+              </div>
+            )}
+
             {/* Submit Buttons */}
             <div className="flex justify-between pt-6 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-white rounded-lg p-4">
               <Button
@@ -594,12 +657,21 @@ export function TemplateBuilderManager() {
               </Button>
               <Button
                 type="submit"
-                disabled={isCreating || !formData.name.trim()}
-                className="bg-gradient-to-r from-medical-teal to-professional-blue hover:from-medical-teal/90 hover:to-professional-blue/90 text-white shadow-md disabled:opacity-50"
+                disabled={isSaving || isCreating || !formData.name.trim()}
+                className="bg-gradient-to-r from-medical-teal to-professional-blue hover:from-medical-teal/90 hover:to-professional-blue/90 text-white shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="button-save-template"
               >
-                <Save size={16} className="mr-2" />
-                {isCreating ? 'Saving...' : (activeTab === 'create' ? 'Create Template' : 'Update Template')}
+                {(isSaving || isCreating) ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save size={16} className="mr-2" />
+                    {activeTab === 'create' ? 'Create Template' : 'Update Template'}
+                  </>
+                )}
               </Button>
             </div>
           </form>

@@ -1,8 +1,8 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { requireAuth, optionalAuth, getCurrentUserId } from "./auth";
-import { verifyClerkToken, syncClerkUser, getClerkUserId } from "./clerkAuth";
+import { storage } from "./storage.js";
+import { requireAuth, optionalAuth, getCurrentUserId } from "./auth.js";
+import { verifyClerkToken, syncClerkUser, getClerkUserId } from "./clerkAuth.js";
 import session from "express-session";
 import { 
   insertNoteSchema, 
@@ -12,13 +12,13 @@ import {
   insertTeamCalendarEventSchema,
   insertUserSchema,
   insertUserLabSettingSchema
-} from "../shared/schema";
+} from "../shared/schema.js";
 import { z } from "zod";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up Auth0 if configured, otherwise use session for development
   if (process.env.AUTH0_CLIENT_ID) {
-    const { setupAuth0 } = await import('./auth0');
+    const { setupAuth0 } = await import('./auth0.js');
     setupAuth0(app);
   } else if (process.env.NODE_ENV === 'development') {
     // Fallback to session for development without Auth0
@@ -271,26 +271,132 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post("/api/note-templates", requireAuth, async (req, res) => {
+    const startTime = Date.now();
+    console.log("[POST /api/note-templates] Request received", { 
+      timestamp: new Date().toISOString(),
+      headers: req.headers,
+      bodyKeys: Object.keys(req.body || {})
+    });
+    
     try {
       const userId = getCurrentUserId(req);
+      console.log("[POST /api/note-templates] User ID extracted:", userId);
+      
+      // Ensure user exists for FK constraints
+      let user = await storage.getUser(userId);
+      if (!user) {
+        console.log("[POST /api/note-templates] User not found, creating new user");
+        user = await storage.createUser({
+          id: userId,
+          email: "doctor@hospital.com",
+          firstName: "Dr. Sarah",
+          lastName: "Mitchell",
+          specialty: "Emergency Medicine",
+        });
+      }
+      console.log("[POST /api/note-templates] User verified", { userId, userExists: !!user });
+      
+      console.log("[POST /api/note-templates] Raw request body:", JSON.stringify(req.body, null, 2));
+      
       const templateData = insertNoteTemplateSchema.parse({ ...req.body, userId });
+      console.log("[POST /api/note-templates] Schema validation passed", {
+        name: templateData.name,
+        type: templateData.type,
+        hasSections: Array.isArray((templateData as any).sections),
+        sectionsLen: Array.isArray((templateData as any).sections) ? (templateData as any).sections.length : null,
+      });
+      
+      console.log("[POST /api/note-templates] Starting database insert...");
       const template = await storage.createNoteTemplate(templateData);
-      res.json(template);
+      console.log("[POST /api/note-templates] Database insert successful", { 
+        id: template.id,
+        timeTaken: Date.now() - startTime + 'ms'
+      });
+      
+      console.log("[POST /api/note-templates] Sending response", { statusCode: 200 });
+      return res.status(200).json(template);
     } catch (error) {
-      console.error("Error creating note template:", error);
-      res.status(500).json({ message: "Failed to create note template" });
+      console.error("[POST /api/note-templates] ERROR:", {
+        error,
+        message: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+        timeTaken: Date.now() - startTime + 'ms'
+      });
+      
+      // Handle Zod validation errors specifically
+      if (error && typeof error === 'object' && 'issues' in error) {
+        const validationErrors = (error as any).issues.map((issue: any) => 
+          `${issue.path.join('.')}: ${issue.message}`
+        ).join(', ');
+        console.log("[POST /api/note-templates] Sending validation error response", { statusCode: 400 });
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          error: `Invalid template data: ${validationErrors}` 
+        });
+      }
+      
+      console.log("[POST /api/note-templates] Sending error response", { statusCode: 500 });
+      return res.status(500).json({ 
+        message: "Failed to create note template", 
+        error: error instanceof Error ? error.message : "Unknown error" 
+      });
     }
   });
 
   app.put("/api/note-templates/:id", requireAuth, async (req, res) => {
+    const startTime = Date.now();
+    console.log("[PUT /api/note-templates] Request received", { 
+      id: req.params.id,
+      timestamp: new Date().toISOString(),
+      bodyKeys: Object.keys(req.body || {})
+    });
+    
     try {
       const { id } = req.params;
+      console.log("[PUT /api/note-templates] Raw request body:", JSON.stringify(req.body, null, 2));
+      
       const templateData = insertNoteTemplateSchema.partial().parse(req.body);
+      console.log("[PUT /api/note-templates] Schema validation passed", {
+        hasName: !!templateData.name,
+        hasType: !!templateData.type,
+        hasSections: !!(templateData as any).sections,
+        sectionsLen: Array.isArray((templateData as any).sections) ? (templateData as any).sections.length : null,
+      });
+      
+      console.log("[PUT /api/note-templates] Starting database update...");
       const template = await storage.updateNoteTemplate(id, templateData);
-      res.json(template);
+      console.log("[PUT /api/note-templates] Database update successful", { 
+        id: template.id,
+        timeTaken: Date.now() - startTime + 'ms'
+      });
+      
+      console.log("[PUT /api/note-templates] Sending response", { statusCode: 200 });
+      return res.status(200).json(template);
     } catch (error) {
-      console.error("Error updating note template:", error);
-      res.status(500).json({ message: "Failed to update note template" });
+      console.error("[PUT /api/note-templates] ERROR:", {
+        error,
+        message: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+        timeTaken: Date.now() - startTime + 'ms'
+      });
+      
+      // Handle Zod validation errors specifically
+      if (error && typeof error === 'object' && 'issues' in error) {
+        const validationErrors = (error as any).issues.map((issue: any) => 
+          `${issue.path.join('.')}: ${issue.message}`
+        ).join(', ');
+        console.log("[PUT /api/note-templates] Sending validation error response", { statusCode: 400 });
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          error: `Invalid template data: ${validationErrors}` 
+        });
+      }
+      
+      console.log("[PUT /api/note-templates] Sending error response", { statusCode: 500 });
+      return res.status(500).json({ 
+        message: "Failed to update note template", 
+        error: error instanceof Error ? error.message : "Unknown error" 
+      });
     }
   });
 
@@ -308,6 +414,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/note-templates/import", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
+      // Ensure user exists for FK constraints
+      let user = await storage.getUser(userId);
+      if (!user) {
+        user = await storage.createUser({
+          id: userId,
+          email: "doctor@hospital.com",
+          firstName: "Dr. Sarah",
+          lastName: "Mitchell",
+          specialty: "Emergency Medicine",
+        });
+      }
       const { shareableId } = req.body;
 
       if (!shareableId || !shareableId.trim()) {
@@ -835,6 +952,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/init", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
+      // Ensure user exists before creating default content that references the user
+      let user = await storage.getUser(userId);
+      if (!user) {
+        user = await storage.createUser({
+          id: userId,
+          email: "doctor@hospital.com",
+          firstName: "Dr. Sarah",
+          lastName: "Mitchell",
+          specialty: "Emergency Medicine",
+        });
+      }
       
       // Check if default templates already exist
       const existingDefaultTemplates = await storage.getNoteTemplates();
