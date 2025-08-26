@@ -1,5 +1,5 @@
 import type { RequestHandler } from "express";
-import { isAuth0Authenticated, getAuth0UserId } from './auth0';
+import { isAuth0Authenticated, getAuth0UserId } from './auth0.js';
 
 function extractAuth0UserFromCookie(req: any): { sub: string; email?: string; name?: string; picture?: string } | null {
   try {
@@ -21,8 +21,11 @@ function extractAuth0UserFromCookie(req: any): { sub: string; email?: string; na
 }
 
 export const requireAuth: RequestHandler = async (req: any, res, next) => {
+  console.log("[requireAuth] Starting auth check, NODE_ENV:", process.env.NODE_ENV);
+  
   // In development with no Auth0 config, use mock user
   if (process.env.NODE_ENV === 'development' && !process.env.AUTH0_CLIENT_ID) {
+    console.log("[requireAuth] Using development mock user");
     // Initialize session if it doesn't exist
     if (!req.session) {
       req.session = {};
@@ -30,6 +33,7 @@ export const requireAuth: RequestHandler = async (req: any, res, next) => {
     
     // Check if user has been explicitly logged out
     if (req.session.loggedOut === true) {
+      console.log("[requireAuth] User logged out in session");
       return res.status(401).json({ message: "Not authenticated" });
     }
     
@@ -44,13 +48,16 @@ export const requireAuth: RequestHandler = async (req: any, res, next) => {
         }
       };
     }
+    console.log("[requireAuth] Mock user set, proceeding");
     
     return next();
   }
   
   // In production, accept auth via cookie set by /api/auth/callback
+  console.log("[requireAuth] Checking for auth cookie...");
   const cookieUser = extractAuth0UserFromCookie(req);
   if (cookieUser) {
+    console.log("[requireAuth] Found auth cookie user:", cookieUser.sub);
     if (!req.user) {
       const [firstName = '', ...rest] = (cookieUser.name || '').split(' ');
       req.user = {
@@ -65,6 +72,7 @@ export const requireAuth: RequestHandler = async (req: any, res, next) => {
     return next();
   }
   
+  console.log("[requireAuth] No cookie found, checking Auth0 session...");
   // Fallback to Auth0 middleware session if configured
   return isAuth0Authenticated(req, res, next);
 };

@@ -272,54 +272,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/note-templates", requireAuth, async (req, res) => {
     const startTime = Date.now();
-    console.log("[POST /api/note-templates] Request received", { 
-      timestamp: new Date().toISOString(),
-      headers: req.headers,
-      bodyKeys: Object.keys(req.body || {})
-    });
+    console.log("[POST /api/note-templates] Starting request handler");
+    
+    // Set timeout for serverless function
+    const timeoutHandle = setTimeout(() => {
+      console.error("[POST /api/note-templates] Function timeout after 25s");
+      if (!res.headersSent) {
+        res.status(504).json({ 
+          message: "Request timeout", 
+          error: "The operation took too long to complete" 
+        });
+      }
+    }, 25000);
     
     try {
+      console.log("[POST /api/note-templates] Getting user ID...");
       const userId = getCurrentUserId(req);
       console.log("[POST /api/note-templates] User ID extracted:", userId);
       
-      // Ensure user exists for FK constraints
-      let user = await storage.getUser(userId);
+      // Ensure user exists for FK constraints with timeout
+      console.log("[POST /api/note-templates] Checking user existence...");
+      let user = await Promise.race([
+        storage.getUser(userId),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Database timeout")), 5000))
+      ]) as any;
+      
       if (!user) {
         console.log("[POST /api/note-templates] User not found, creating new user");
-        user = await storage.createUser({
-          id: userId,
-          email: "doctor@hospital.com",
-          firstName: "Dr. Sarah",
-          lastName: "Mitchell",
-          specialty: "Emergency Medicine",
-        });
+        user = await Promise.race([
+          storage.createUser({
+            id: userId,
+            email: "doctor@hospital.com",
+            firstName: "Dr. Sarah",
+            lastName: "Mitchell",
+            specialty: "Emergency Medicine",
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Create user timeout")), 5000))
+        ]);
       }
-      console.log("[POST /api/note-templates] User verified", { userId, userExists: !!user });
+      console.log("[POST /api/note-templates] User verified", { userId });
       
-      console.log("[POST /api/note-templates] Raw request body:", JSON.stringify(req.body, null, 2));
-      
+      console.log("[POST /api/note-templates] Parsing request body...");
       const templateData = insertNoteTemplateSchema.parse({ ...req.body, userId });
-      console.log("[POST /api/note-templates] Schema validation passed", {
-        name: templateData.name,
-        type: templateData.type,
-        hasSections: Array.isArray((templateData as any).sections),
-        sectionsLen: Array.isArray((templateData as any).sections) ? (templateData as any).sections.length : null,
-      });
+      console.log("[POST /api/note-templates] Schema validation passed");
       
       console.log("[POST /api/note-templates] Starting database insert...");
-      const template = await storage.createNoteTemplate(templateData);
-      console.log("[POST /api/note-templates] Database insert successful", { 
-        id: template.id,
-        timeTaken: Date.now() - startTime + 'ms'
-      });
+      const template = await Promise.race([
+        storage.createNoteTemplate(templateData),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Database insert timeout")), 10000))
+      ]) as any;
       
-      console.log("[POST /api/note-templates] Sending response", { statusCode: 200 });
-      return res.status(200).json(template);
+      clearTimeout(timeoutHandle);
+      console.log("[POST /api/note-templates] Success, time taken:", Date.now() - startTime + 'ms');
+      
+      if (!res.headersSent) {
+        return res.status(200).json(template);
+      }
     } catch (error) {
+      clearTimeout(timeoutHandle);
       console.error("[POST /api/note-templates] ERROR:", {
         error,
         message: error instanceof Error ? error.message : "Unknown error",
-        stack: error instanceof Error ? error.stack : undefined,
         timeTaken: Date.now() - startTime + 'ms'
       });
       
