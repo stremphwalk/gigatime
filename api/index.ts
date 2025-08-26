@@ -227,6 +227,92 @@ async function initializeRoutes() {
     }
   });
 
+  app.post("/api/note-templates", requireAuth, async (req, res) => {
+    const startTime = Date.now();
+    console.log("[POST /api/note-templates] Starting request handler");
+    
+    // Set timeout for serverless function
+    const timeoutHandle = setTimeout(() => {
+      console.error("[POST /api/note-templates] Function timeout after 25s");
+      if (!res.headersSent) {
+        res.status(504).json({ 
+          message: "Request timeout", 
+          error: "The operation took too long to complete" 
+        });
+      }
+    }, 25000);
+    
+    try {
+      console.log("[POST /api/note-templates] Getting user ID...");
+      const userId = getCurrentUserId(req);
+      console.log("[POST /api/note-templates] User ID extracted:", userId);
+      
+      // Ensure user exists for FK constraints with timeout
+      console.log("[POST /api/note-templates] Checking user existence...");
+      let user = await Promise.race([
+        storage.getUser(userId),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Database timeout")), 5000))
+      ]) as any;
+      
+      if (!user) {
+        console.log("[POST /api/note-templates] User not found, creating new user");
+        user = await Promise.race([
+          storage.createUser({
+            id: userId,
+            email: "doctor@hospital.com",
+            firstName: "Dr. Sarah",
+            lastName: "Mitchell",
+            specialty: "Emergency Medicine",
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error("Create user timeout")), 5000))
+        ]);
+      }
+      console.log("[POST /api/note-templates] User verified", { userId });
+      
+      console.log("[POST /api/note-templates] Parsing request body...");
+      const templateData = insertNoteTemplateSchema.parse({ ...req.body, userId });
+      console.log("[POST /api/note-templates] Schema validation passed");
+      
+      console.log("[POST /api/note-templates] Starting database insert...");
+      const template = await Promise.race([
+        storage.createNoteTemplate(templateData),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Database insert timeout")), 10000))
+      ]) as any;
+      
+      clearTimeout(timeoutHandle);
+      console.log("[POST /api/note-templates] Success, time taken:", Date.now() - startTime + 'ms');
+      
+      if (!res.headersSent) {
+        return res.status(200).json(template);
+      }
+    } catch (error) {
+      clearTimeout(timeoutHandle);
+      console.error("[POST /api/note-templates] ERROR:", {
+        error,
+        message: error instanceof Error ? error.message : "Unknown error",
+        timeTaken: Date.now() - startTime + 'ms'
+      });
+      
+      // Handle Zod validation errors specifically
+      if (error && typeof error === 'object' && 'issues' in error) {
+        const validationErrors = (error as any).issues.map((issue: any) => 
+          `${issue.path.join('.')}: ${issue.message}`
+        ).join(', ');
+        console.log("[POST /api/note-templates] Sending validation error response", { statusCode: 400 });
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          error: `Invalid template data: ${validationErrors}` 
+        });
+      }
+      
+      console.log("[POST /api/note-templates] Sending error response", { statusCode: 500 });
+      return res.status(500).json({ 
+        message: "Failed to create note template", 
+        error: error instanceof Error ? error.message : "Unknown error" 
+      });
+    }
+  });
+
   // Deepgram API key endpoint
   app.get("/api/deepgram-key", requireAuth, (req, res) => {
     res.json({ apiKey: process.env.DEEPGRAM_API_KEY });
