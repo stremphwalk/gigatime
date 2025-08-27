@@ -36,6 +36,18 @@
       "destination": "/api/debug"
     },
     {
+      "source": "/api/test",
+      "destination": "/api/test"
+    },
+    {
+      "source": "/api/simple",
+      "destination": "/api/simple"
+    },
+    {
+      "source": "/api/note-templates",
+      "destination": "/api/simple"
+    },
+    {
       "source": "/api/auth/test-login",
       "destination": "/api/auth/test-login"
     },
