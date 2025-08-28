@@ -1,6 +1,6 @@
 import { verifyToken } from "@clerk/backend";
 import type { RequestHandler } from "express";
-import { storage } from "./storage";
+import { storage } from "./storage.js";
 
 // Check if Clerk is configured
 const isClerkConfigured = () => {

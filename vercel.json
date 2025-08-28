@@ -45,7 +45,7 @@
     },
     {
       "source": "/api/note-templates",
-      "destination": "/api/simple"
+      "destination": "/api/note-templates-handler"
     },
     {
       "source": "/api/auth/test-login",

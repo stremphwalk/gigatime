@@ -1,6 +1,6 @@
 import { auth } from 'express-openid-connect';
 import type { Express, RequestHandler } from 'express';
-import { storage } from './storage';
+import { storage } from './storage.js';
 
 export const auth0Config = {
   authRequired: false,

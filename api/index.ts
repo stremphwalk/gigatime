@@ -1,50 +1,23 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-
-// Wrap critical imports in try-catch
-let express: any;
-let storage: any;
-let requireAuth: any;
-let optionalAuth: any;
-let getCurrentUserId: any;
-let verifyClerkToken: any;
-let syncClerkUser: any;
-let session: any;
-let schemas: any;
-let z: any;
-
-try {
-  console.log("[Imports] Loading dependencies...");
-  
-  require("dotenv/config");
-  express = require("express").default;
-  
-  const auth = require("../server/auth.js");
-  requireAuth = auth.requireAuth;
-  optionalAuth = auth.optionalAuth;
-  getCurrentUserId = auth.getCurrentUserId;
-  
-  const storageModule = require("../server/storage.js");
-  storage = storageModule.storage;
-  
-  const clerkAuth = require("../server/clerkAuth.js");
-  verifyClerkToken = clerkAuth.verifyClerkToken;
-  syncClerkUser = clerkAuth.syncClerkUser;
-  
-  session = require("express-session");
-  
-  schemas = require("../shared/schema.js");
-  z = require("zod").z;
-  
-  console.log("[Imports] All dependencies loaded successfully");
-} catch (error) {
-  console.error("[Imports] Failed to load dependencies:", error);
-  throw new Error(`Failed to load dependencies: ${error instanceof Error ? error.message : 'Unknown error'}`);
-}
+import "dotenv/config";
+import express from "express";
+import { requireAuth, optionalAuth, getCurrentUserId } from "../server/auth.js";
+import { storage } from "../server/storage.js";
+import { verifyClerkToken, syncClerkUser } from "../server/clerkAuth.js";
+import session from "express-session";
+import * as schemas from "../shared/schema.js";
+import { z } from "zod";
 
 // Create Express app
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Also handle DATABASE_URL for compatibility
+if (!process.env.DATABASE_URL && process.env.POSTGRES_URL) {
+  process.env.DATABASE_URL = process.env.POSTGRES_URL;
+  console.log('[Init] Set DATABASE_URL from POSTGRES_URL');
+}
 
 // Initialize routes only once
 let routesInitialized = false;

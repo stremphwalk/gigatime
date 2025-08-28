@@ -48,16 +48,23 @@ export function TemplateBuilderDialog({ template, onClose }: TemplateBuilderDial
     ]
   );
 
-  const { createTemplate, updateTemplate, isCreating } = useNoteTemplates();
+  const { createTemplate, updateTemplate, isCreating, createError, updateError, isCreateError, isUpdateError } = useNoteTemplates();
+
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSaveError(null);
     
     try {
       const templateData = {
-        ...formData,
+        name: formData.name,
+        type: formData.type,
+        description: formData.description || null,
         sections: sections,
-        isDefault: false
+        isDefault: false,
+        isPublic: false,
+        userId: null // Will be set by server
       };
 
       if (template) {
@@ -70,6 +77,7 @@ export function TemplateBuilderDialog({ template, onClose }: TemplateBuilderDial
       onClose?.();
     } catch (error) {
       console.error("Error saving template:", error);
+      setSaveError(error instanceof Error ? error.message : "Failed to save template. Please try again.");
     }
   };
 
@@ -275,6 +283,13 @@ export function TemplateBuilderDialog({ template, onClose }: TemplateBuilderDial
               ))}
             </div>
           </div>
+
+          {/* Error Message */}
+          {saveError && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-sm text-red-600">{saveError}</p>
+            </div>
+          )}
 
           <div className="flex justify-end space-x-2 pt-4 border-t">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
