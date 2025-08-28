@@ -32,22 +32,6 @@
       "destination": "/api/auth/simple-callback"
     },
     {
-      "source": "/api/debug",
-      "destination": "/api/debug"
-    },
-    {
-      "source": "/api/test",
-      "destination": "/api/test"
-    },
-    {
-      "source": "/api/simple",
-      "destination": "/api/simple"
-    },
-    {
-      "source": "/api/note-templates",
-      "destination": "/api/note-templates-handler"
-    },
-    {
       "source": "/api/auth/test-login",
       "destination": "/api/auth/test-login"
     },
