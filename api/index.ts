@@ -488,9 +488,46 @@ async function initializeRoutes() {
         });
       }
       
-      const items = category 
-        ? await storage.getAutocompleteItemsByCategory(userId, category)
-        : await storage.getAutocompleteItems(userId);
+      let items;
+      try {
+        items = category 
+          ? await storage.getAutocompleteItemsByCategory(userId, category)
+          : await storage.getAutocompleteItems(userId);
+      } catch (error) {
+        console.error("[Autocomplete] Table might not exist, attempting to create it:", error);
+        
+        // Try to create the table if it doesn't exist
+        try {
+          await storage.db.execute(`
+            CREATE TABLE IF NOT EXISTS autocomplete_items (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                text VARCHAR(500) NOT NULL,
+                category VARCHAR(100) NOT NULL,
+                is_priority BOOLEAN DEFAULT false,
+                dosage VARCHAR(100),
+                frequency VARCHAR(100),
+                description TEXT,
+                user_id VARCHAR NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            );
+            
+            CREATE INDEX IF NOT EXISTS idx_autocomplete_items_user_id ON autocomplete_items(user_id);
+            CREATE INDEX IF NOT EXISTS idx_autocomplete_items_category ON autocomplete_items(category);
+            CREATE INDEX IF NOT EXISTS idx_autocomplete_items_priority ON autocomplete_items(is_priority);
+          `);
+          
+          console.log("[Autocomplete] Table created successfully, retrying query");
+          
+          // Retry the query after creating the table
+          items = category 
+            ? await storage.getAutocompleteItemsByCategory(userId, category)
+            : await storage.getAutocompleteItems(userId);
+        } catch (createError) {
+          console.error("[Autocomplete] Failed to create table:", createError);
+          throw error; // Re-throw original error
+        }
+      }
         
       res.json(items);
     } catch (error) {
@@ -516,7 +553,43 @@ async function initializeRoutes() {
       }
       
       const itemData = schemas.insertAutocompleteItemSchema.parse({ ...req.body, userId });
-      const item = await storage.createAutocompleteItem(itemData);
+      
+      let item;
+      try {
+        item = await storage.createAutocompleteItem(itemData);
+      } catch (error) {
+        console.error("[Autocomplete] Create failed, table might not exist, attempting to create it:", error);
+        
+        // Try to create the table if it doesn't exist
+        try {
+          await storage.db.execute(`
+            CREATE TABLE IF NOT EXISTS autocomplete_items (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                text VARCHAR(500) NOT NULL,
+                category VARCHAR(100) NOT NULL,
+                is_priority BOOLEAN DEFAULT false,
+                dosage VARCHAR(100),
+                frequency VARCHAR(100),
+                description TEXT,
+                user_id VARCHAR NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            );
+            
+            CREATE INDEX IF NOT EXISTS idx_autocomplete_items_user_id ON autocomplete_items(user_id);
+            CREATE INDEX IF NOT EXISTS idx_autocomplete_items_category ON autocomplete_items(category);
+            CREATE INDEX IF NOT EXISTS idx_autocomplete_items_priority ON autocomplete_items(is_priority);
+          `);
+          
+          console.log("[Autocomplete] Table created successfully, retrying create");
+          
+          // Retry the creation after creating the table
+          item = await storage.createAutocompleteItem(itemData);
+        } catch (createError) {
+          console.error("[Autocomplete] Failed to create table:", createError);
+          throw error; // Re-throw original error
+        }
+      }
       
       res.json(item);
     } catch (error) {
