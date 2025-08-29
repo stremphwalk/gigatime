@@ -437,6 +437,110 @@ async function initializeRoutes() {
     }
   });
 
+  // Autocomplete items endpoints
+  app.get("/api/autocomplete-items", requireAuth, async (req, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const category = req.query.category as string;
+      
+      // Ensure user exists
+      let user = await storage.getUser(userId);
+      if (!user) {
+        user = await storage.createUser({
+          id: userId,
+          email: "doctor@hospital.com",
+          firstName: "Dr. Sarah",
+          lastName: "Mitchell",
+          specialty: "Emergency Medicine"
+        });
+      }
+      
+      const items = category 
+        ? await storage.getAutocompleteItemsByCategory(userId, category)
+        : await storage.getAutocompleteItems(userId);
+        
+      res.json(items);
+    } catch (error) {
+      console.error("Error fetching autocomplete items:", error);
+      res.status(500).json({ message: "Failed to fetch autocomplete items" });
+    }
+  });
+
+  app.post("/api/autocomplete-items", requireAuth, async (req, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      
+      // Ensure user exists
+      let user = await storage.getUser(userId);
+      if (!user) {
+        user = await storage.createUser({
+          id: userId,
+          email: "doctor@hospital.com",
+          firstName: "Dr. Sarah",
+          lastName: "Mitchell",
+          specialty: "Emergency Medicine"
+        });
+      }
+      
+      const itemData = schemas.insertAutocompleteItemSchema.parse({ ...req.body, userId });
+      const item = await storage.createAutocompleteItem(itemData);
+      
+      res.json(item);
+    } catch (error) {
+      console.error("Error creating autocomplete item:", error);
+      
+      // Handle Zod validation errors
+      if (error && typeof error === 'object' && 'issues' in error) {
+        const validationErrors = (error as any).issues.map((issue: any) => 
+          `${issue.path.join('.')}: ${issue.message}`
+        ).join(', ');
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          error: `Invalid autocomplete item data: ${validationErrors}` 
+        });
+      }
+      
+      res.status(500).json({ message: "Failed to create autocomplete item" });
+    }
+  });
+
+  app.put("/api/autocomplete-items/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const itemData = schemas.insertAutocompleteItemSchema.partial().parse(req.body);
+      const item = await storage.updateAutocompleteItem(id, itemData);
+      
+      res.json(item);
+    } catch (error) {
+      console.error("Error updating autocomplete item:", error);
+      
+      // Handle Zod validation errors
+      if (error && typeof error === 'object' && 'issues' in error) {
+        const validationErrors = (error as any).issues.map((issue: any) => 
+          `${issue.path.join('.')}: ${issue.message}`
+        ).join(', ');
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          error: `Invalid autocomplete item data: ${validationErrors}` 
+        });
+      }
+      
+      res.status(500).json({ message: "Failed to update autocomplete item" });
+    }
+  });
+
+  app.delete("/api/autocomplete-items/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteAutocompleteItem(id);
+      
+      res.json({ message: "Autocomplete item deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting autocomplete item:", error);
+      res.status(500).json({ message: "Failed to delete autocomplete item" });
+    }
+  });
+
   // Health check endpoint (no auth required)
   app.get("/api/health", (req, res) => {
     console.log("[Health] Health check requested");

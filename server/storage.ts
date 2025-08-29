@@ -9,6 +9,7 @@ import {
   teamCalendarEvents,
   pertinentNegativePresets,
   userLabSettings,
+  autocompleteItems,
   type User,
   type InsertUser,
   type UpsertUser,
@@ -29,6 +30,8 @@ import {
   type InsertPertinentNegativePreset,
   type UserLabSetting,
   type InsertUserLabSetting,
+  type AutocompleteItem,
+  type InsertAutocompleteItem,
 } from "../shared/schema.js";
 import { db } from "./db.js";
 import { eq, and, desc, like, or } from "drizzle-orm";
@@ -96,6 +99,13 @@ export interface IStorage {
   getUserLabSettings(userId: string): Promise<UserLabSetting[]>;
   upsertUserLabSetting(setting: InsertUserLabSetting): Promise<UserLabSetting>;
   deleteUserLabSetting(userId: string, panelId: string, labId: string): Promise<void>;
+
+  // Autocomplete item operations
+  getAutocompleteItems(userId: string): Promise<AutocompleteItem[]>;
+  getAutocompleteItemsByCategory(userId: string, category: string): Promise<AutocompleteItem[]>;
+  createAutocompleteItem(item: InsertAutocompleteItem): Promise<AutocompleteItem>;
+  updateAutocompleteItem(id: string, item: Partial<InsertAutocompleteItem>): Promise<AutocompleteItem>;
+  deleteAutocompleteItem(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -679,6 +689,41 @@ export class DatabaseStorage implements IStorage {
           eq(userLabSettings.labId, labId)
         )
       );
+  }
+
+  // Autocomplete item operations
+  async getAutocompleteItems(userId: string): Promise<AutocompleteItem[]> {
+    return db
+      .select()
+      .from(autocompleteItems)
+      .where(eq(autocompleteItems.userId, userId))
+      .orderBy(desc(autocompleteItems.isPriority), autocompleteItems.category, autocompleteItems.text);
+  }
+
+  async getAutocompleteItemsByCategory(userId: string, category: string): Promise<AutocompleteItem[]> {
+    return db
+      .select()
+      .from(autocompleteItems)
+      .where(and(eq(autocompleteItems.userId, userId), eq(autocompleteItems.category, category)))
+      .orderBy(desc(autocompleteItems.isPriority), autocompleteItems.text);
+  }
+
+  async createAutocompleteItem(item: InsertAutocompleteItem): Promise<AutocompleteItem> {
+    const [newItem] = await db.insert(autocompleteItems).values(item).returning();
+    return newItem;
+  }
+
+  async updateAutocompleteItem(id: string, item: Partial<InsertAutocompleteItem>): Promise<AutocompleteItem> {
+    const [updated] = await db
+      .update(autocompleteItems)
+      .set({ ...item, updatedAt: new Date() })
+      .where(eq(autocompleteItems.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteAutocompleteItem(id: string): Promise<void> {
+    await db.delete(autocompleteItems).where(eq(autocompleteItems.id, id));
   }
 }
 

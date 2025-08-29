@@ -146,6 +146,20 @@ export const userLabSettings = pgTable("user_lab_settings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Autocomplete items table for note section autocompletions
+export const autocompleteItems = pgTable("autocomplete_items", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  text: varchar("text", { length: 500 }).notNull(),
+  category: varchar("category", { length: 100 }).notNull(), // consultation-reasons, past-medical-history, etc.
+  isPriority: boolean("is_priority").default(false),
+  dosage: varchar("dosage", { length: 100 }),
+  frequency: varchar("frequency", { length: 100 }),
+  description: text("description"),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   notes: many(notes),
@@ -156,6 +170,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   assignedTodos: many(teamTodos, { relationName: "assignedTodos" }),
   createdEvents: many(teamCalendarEvents),
   labSettings: many(userLabSettings),
+  autocompleteItems: many(autocompleteItems),
 }));
 
 export const teamsRelations = relations(teams, ({ one, many }) => ({
@@ -199,6 +214,10 @@ export const teamCalendarEventsRelations = relations(teamCalendarEvents, ({ one 
 
 export const userLabSettingsRelations = relations(userLabSettings, ({ one }) => ({
   user: one(users, { fields: [userLabSettings.userId], references: [users.id] }),
+}));
+
+export const autocompleteItemsRelations = relations(autocompleteItems, ({ one }) => ({
+  user: one(users, { fields: [autocompleteItems.userId], references: [users.id] }),
 }));
 
 // Insert schemas
@@ -265,6 +284,12 @@ export const insertUserLabSettingSchema = createInsertSchema(userLabSettings).om
   updatedAt: true,
 });
 
+export const insertAutocompleteItemSchema = createInsertSchema(autocompleteItems).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -295,3 +320,6 @@ export type InsertTeamCalendarEvent = z.infer<typeof insertTeamCalendarEventSche
 
 export type UserLabSetting = typeof userLabSettings.$inferSelect;
 export type InsertUserLabSetting = z.infer<typeof insertUserLabSettingSchema>;
+
+export type AutocompleteItem = typeof autocompleteItems.$inferSelect;
+export type InsertAutocompleteItem = z.infer<typeof insertAutocompleteItemSchema>;
