@@ -3,9 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
 import { useToast } from "@/hooks/use-toast";
-import { Search, Plus, Edit2, Trash2, Zap, Calendar, MousePointer, ChevronRight, Download } from "lucide-react";
+import { Search, Plus, Edit2, Trash2, Zap, Calendar, MousePointer, ChevronRight, Download, Filter, Clock, Star, SortAsc } from "lucide-react";
+import { AdvancedFilterBar } from "./advanced-filter-bar";
 import { FlexibleSmartPhraseBuilder } from "./flexible-smart-phrase-builder";
 import { ImportSmartPhraseDialog } from "./import-smart-phrase-dialog";
 
@@ -14,15 +16,51 @@ export function SmartPhrasesManager() {
   const [searchQuery, setSearchQuery] = useState("");
   const [editingPhrase, setEditingPhrase] = useState<any>(null);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [sortBy, setSortBy] = useState<"name" | "dateCreated" | "dateModified" | "lastUsed" | "type">("name");
+  const [filterType, setFilterType] = useState<string>("all");
+  const [filterCategory, setFilterCategory] = useState<string>("all");
 
   const { phrases, createPhrase, updatePhrase, deletePhrase, isCreating } = useSmartPhrases();
   const { toast } = useToast();
 
-  const filteredPhrases = phrases?.filter(phrase =>
-    phrase.trigger.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    phrase.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    phrase.category?.toLowerCase().includes(searchQuery.toLowerCase())
-  ) || [];
+  // Filter phrases based on search query and filters
+  const filteredPhrases = phrases?.filter(phrase => {
+    const matchesSearch = phrase.trigger.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      phrase.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      phrase.category?.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesType = filterType === "all" || 
+      (filterType === "interactive" && phrase.elements && phrase.elements.length > 0) ||
+      (filterType === "text" && (!phrase.elements || phrase.elements.length === 0));
+    
+    const matchesCategory = filterCategory === "all" || phrase.category === filterCategory;
+    
+    return matchesSearch && matchesType && matchesCategory;
+  }) || [];
+
+  // Sort phrases
+  const sortedPhrases = [...filteredPhrases].sort((a, b) => {
+    switch (sortBy) {
+      case "name":
+        return a.trigger.localeCompare(b.trigger);
+      case "dateCreated":
+        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+      case "dateModified":
+        return new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime();
+      case "lastUsed":
+        return new Date(b.lastUsed || 0).getTime() - new Date(a.lastUsed || 0).getTime();
+      case "type":
+        const aHasElements = a.elements && a.elements.length > 0;
+        const bHasElements = b.elements && b.elements.length > 0;
+        if (aHasElements === bHasElements) return a.trigger.localeCompare(b.trigger);
+        return aHasElements ? -1 : 1;
+      default:
+        return 0;
+    }
+  });
+
+  // Get unique categories for filter
+  const categories = Array.from(new Set(phrases?.map(p => p.category).filter(Boolean) || []));
 
   const handleCreateNew = () => {
     setEditingPhrase(null);
@@ -80,10 +118,10 @@ export function SmartPhrasesManager() {
 
   const getElementTypeIcon = (type: string) => {
     switch (type) {
-      case 'multipicker': return <MousePointer size={10} />;
-      case 'nested_multipicker': return <ChevronRight size={10} />;
-      case 'date': return <Calendar size={10} />;
-      default: return <Zap size={10} />;
+      case 'multipicker': return <MousePointer size={12} />;
+      case 'nested_multipicker': return <ChevronRight size={12} />;
+      case 'date': return <Calendar size={12} />;
+      default: return <Zap size={12} />;
     }
   };
 
@@ -140,37 +178,60 @@ export function SmartPhrasesManager() {
           </div>
         </div>
 
-        <div className="mt-4 flex items-center space-x-4">
-          <div className="relative flex-1 max-w-md">
-            <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" />
-            <Input
-              placeholder="Search phrases..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-              data-testid="input-search-phrases"
-            />
-          </div>
-          <Badge variant="secondary" className="text-sm">
-            {filteredPhrases.length} phrase{filteredPhrases.length !== 1 ? 's' : ''}
-          </Badge>
+        {/* Enhanced Search and Filter Bar */}
+        <div className="mt-4">
+          <AdvancedFilterBar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchPlaceholder="Search phrases by trigger, description, or category..."
+            
+            filterOptions={[
+              { value: "interactive", label: "Interactive" },
+              { value: "text", label: "Text Only" }
+            ]}
+            selectedFilter={filterType}
+            onFilterChange={setFilterType}
+            filterLabel="Type"
+            
+            categoryOptions={categories.map(category => ({
+              value: category,
+              label: category.charAt(0).toUpperCase() + category.slice(1)
+            }))}
+            selectedCategory={filterCategory}
+            onCategoryChange={setFilterCategory}
+            categoryLabel="Category"
+            
+            sortOptions={[
+              { value: "name", label: "Name", icon: <SortAsc size={12} /> },
+              { value: "dateCreated", label: "Date Created" },
+              { value: "dateModified", label: "Date Modified" },
+              { value: "lastUsed", label: "Last Used" },
+              { value: "type", label: "Type" }
+            ]}
+            selectedSort={sortBy}
+            onSortChange={(value: any) => setSortBy(value)}
+            sortLabel="Sort by"
+            
+            resultCount={sortedPhrases.length}
+            resultLabel="phrase(s)"
+          />
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6">
-        {filteredPhrases.length === 0 ? (
+        {sortedPhrases.length === 0 ? (
           <div className="text-center py-12">
             <Zap size={48} className="mx-auto text-gray-400 mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {searchQuery ? 'No phrases found' : 'No smart phrases yet'}
+              {searchQuery || filterType !== "all" || filterCategory !== "all" ? 'No phrases found' : 'No smart phrases yet'}
             </h3>
             <p className="text-gray-500 mb-6">
-              {searchQuery 
-                ? 'Try adjusting your search terms' 
+              {searchQuery || filterType !== "all" || filterCategory !== "all"
+                ? 'Try adjusting your search terms or filters' 
                 : 'Create your first flexible smart phrase to speed up documentation'
               }
             </p>
-            {!searchQuery && (
+            {!searchQuery && filterType === "all" && filterCategory === "all" && (
               <Button onClick={handleCreateNew} data-testid="button-create-first-phrase">
                 <Plus size={16} className="mr-2" />
                 Create Your First Phrase
@@ -178,16 +239,23 @@ export function SmartPhrasesManager() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredPhrases.map((phrase) => (
-              <Card key={phrase.id} className="hover:shadow-md transition-shadow">
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center space-x-2">
-                        <CardTitle className="text-lg font-semibold">
-                          <span className="text-medical-teal">/{phrase.trigger}</span>
-                        </CardTitle>
+          <div className="space-y-2">
+            {sortedPhrases.map((phrase) => (
+              <Card key={phrase.id} className="hover:shadow-md transition-shadow border-l-4 border-l-medical-teal">
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    {/* Left side - Trigger and description */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg font-semibold text-medical-teal">
+                            /{phrase.trigger}
+                          </span>
+                          <Badge variant="outline" className="text-xs">
+                            {phrase.category}
+                          </Badge>
+                        </div>
+                        
                         {/* Interactive elements indicators */}
                         {phrase.elements && Array.isArray(phrase.elements) && (phrase.elements as any[]).length > 0 && (
                           <div className="flex space-x-1">
@@ -209,39 +277,44 @@ export function SmartPhrasesManager() {
                           </Badge>
                         )}
                       </div>
+                      
                       {phrase.description && (
-                        <CardDescription className="mt-1">
+                        <p className="text-sm text-gray-600 mb-2 line-clamp-1">
                           {phrase.description}
-                        </CardDescription>
+                        </p>
                       )}
-                    </div>
-                    <Badge variant="outline" className="text-xs">
-                      {phrase.category}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div className="bg-gray-50 p-3 rounded-md">
-                      <p className="text-sm text-gray-700 line-clamp-3">
+                      
+                      <div className="text-sm text-gray-500 line-clamp-2">
                         {phrase.content}
-                      </p>
+                      </div>
                     </div>
-                    {phrase.elements && Array.isArray(phrase.elements) && (phrase.elements as any[]).length > 0 && (
-                      <div className="text-xs text-gray-500">
-                        {(phrase.elements as any[]).length} interactive element{(phrase.elements as any[]).length !== 1 ? 's' : ''}
+
+                    {/* Right side - Metadata and actions */}
+                    <div className="flex items-center gap-4 ml-4">
+                      {/* Metadata */}
+                      <div className="text-right text-xs text-gray-500 space-y-1">
+                        <div className="flex items-center gap-1">
+                          <Clock size={10} />
+                          {phrase.lastUsed ? new Date(phrase.lastUsed).toLocaleDateString() : 'Never used'}
+                        </div>
+                        <div>
+                          {phrase.content.length} chars
+                        </div>
+                        {phrase.elements && Array.isArray(phrase.elements) && (phrase.elements as any[]).length > 0 && (
+                          <div>
+                            {(phrase.elements as any[]).length} element{(phrase.elements as any[]).length !== 1 ? 's' : ''}
+                          </div>
+                        )}
                       </div>
-                    )}
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs text-gray-500">
-                        {phrase.content.length} characters
-                      </div>
-                      <div className="flex items-center space-x-2">
+
+                      {/* Action buttons */}
+                      <div className="flex items-center space-x-1">
                         <Button
                           size="sm"
                           variant="ghost"
                           onClick={() => handleEdit(phrase)}
                           data-testid={`button-edit-phrase-${phrase.id}`}
+                          className="h-8 w-8 p-0"
                         >
                           <Edit2 size={14} />
                         </Button>
@@ -249,7 +322,7 @@ export function SmartPhrasesManager() {
                           size="sm"
                           variant="ghost"
                           onClick={() => handleDelete(phrase.id)}
-                          className="text-red-600 hover:text-red-700"
+                          className="text-red-600 hover:text-red-700 h-8 w-8 p-0"
                           data-testid={`button-delete-phrase-${phrase.id}`}
                         >
                           <Trash2 size={14} />

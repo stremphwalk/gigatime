@@ -22,8 +22,12 @@ import {
   Save,
   ArrowUp,
   ArrowDown,
-  Download
+  Download,
+  Filter,
+  Clock,
+  SortAsc
 } from "lucide-react";
+import { AdvancedFilterBar } from "./advanced-filter-bar";
 import { cn } from "@/lib/utils";
 import type { NoteTemplate } from "@shared/schema";
 
@@ -43,6 +47,8 @@ export function TemplateBuilderManager() {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [sortBy, setSortBy] = useState<"name" | "dateCreated" | "dateModified" | "type">("name");
+  const [filterType, setFilterType] = useState<string>("all");
   const [formData, setFormData] = useState({
     name: "",
     type: "progress",
@@ -111,11 +117,36 @@ export function TemplateBuilderManager() {
     ]
   };
 
-  const filteredTemplates = templates?.filter(template => 
-    template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    template.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    template.description?.toLowerCase().includes(searchQuery.toLowerCase())
-  ) || [];
+  // Filter templates based on search query and filters
+  const filteredTemplates = templates?.filter(template => {
+    const matchesSearch = template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      template.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      template.description?.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesType = filterType === "all" || template.type === filterType;
+    
+    return matchesSearch && matchesType;
+  }) || [];
+
+  // Sort templates
+  const sortedTemplates = [...filteredTemplates].sort((a, b) => {
+    switch (sortBy) {
+      case "name":
+        return a.name.localeCompare(b.name);
+      case "dateCreated":
+        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+      case "dateModified":
+        return new Date(b.updatedAt || 0).getTime() - new Date(a.updatedAt || 0).getTime();
+
+      case "type":
+        return a.type.localeCompare(b.type);
+      default:
+        return 0;
+    }
+  });
+
+  // Get unique template types for filter
+  const templateTypeValues = Array.from(new Set(templates?.map(t => t.type) || []));
 
   const handleCreateNew = () => {
     setFormData({
@@ -716,37 +747,51 @@ export function TemplateBuilderManager() {
           </div>
         </div>
 
-        <div className="mt-4 flex items-center space-x-4">
-          <div className="relative flex-1 max-w-md">
-            <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" />
-            <Input
-              placeholder="Search templates..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-              data-testid="input-search-templates"
-            />
-          </div>
-          <Badge variant="secondary" className="text-sm">
-            {filteredTemplates.length} template{filteredTemplates.length !== 1 ? 's' : ''}
-          </Badge>
+                {/* Enhanced Search and Filter Bar */}
+        <div className="mt-4">
+          <AdvancedFilterBar
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchPlaceholder="Search templates by name, type, or description..."
+            
+            filterOptions={templateTypeValues.map(type => ({
+              value: type,
+              label: templateTypes.find(t => t.value === type)?.label || type
+            }))}
+            selectedFilter={filterType}
+            onFilterChange={setFilterType}
+            filterLabel="Type"
+            
+            sortOptions={[
+              { value: "name", label: "Name", icon: <SortAsc size={12} /> },
+              { value: "dateCreated", label: "Date Created" },
+              { value: "dateModified", label: "Date Modified" },
+              { value: "type", label: "Type" }
+            ]}
+            selectedSort={sortBy}
+            onSortChange={(value: any) => setSortBy(value)}
+            sortLabel="Sort by"
+            
+            resultCount={sortedTemplates.length}
+            resultLabel="template(s)"
+          />
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6">
-        {filteredTemplates.length === 0 ? (
+        {sortedTemplates.length === 0 ? (
           <div className="text-center py-12">
             <FileText size={48} className="mx-auto text-gray-400 mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {searchQuery ? 'No templates found' : 'No templates yet'}
+              {searchQuery || filterType !== "all" ? 'No templates found' : 'No templates yet'}
             </h3>
             <p className="text-gray-500 mb-6">
-              {searchQuery 
-                ? 'Try adjusting your search terms' 
+              {searchQuery || filterType !== "all"
+                ? 'Try adjusting your search terms or filters' 
                 : 'Create your first template to streamline note creation'
               }
             </p>
-            {!searchQuery && (
+            {!searchQuery && filterType === "all" && (
               <Button onClick={handleCreateNew} data-testid="button-create-first-template">
                 <Plus size={16} className="mr-2" />
                 Create Your First Template
@@ -754,8 +799,8 @@ export function TemplateBuilderManager() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredTemplates.map((template) => {
+          <div className="space-y-2">
+            {sortedTemplates.map((template) => {
               let sectionsCount = 0;
               try {
                 const sections = Array.isArray(template.sections) 
@@ -767,40 +812,52 @@ export function TemplateBuilderManager() {
               }
 
               return (
-                <Card key={template.id} className="hover:shadow-md transition-shadow">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <CardTitle className="text-lg font-semibold">
-                          {template.name}
-                        </CardTitle>
-                        {template.description && (
-                          <CardDescription className="mt-1">
-                            {template.description}
-                          </CardDescription>
-                        )}
-                      </div>
-                      <Badge variant="outline" className="text-xs">
-                        {templateTypes.find(t => t.value === template.type)?.label || template.type}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      <div className="text-sm text-gray-600">
-                        <span className="font-medium">{sectionsCount}</span> section{sectionsCount !== 1 ? 's' : ''}
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="text-xs text-gray-500">
-                          {new Date(template.createdAt || '').toLocaleDateString()}
+                <Card key={template.id} className="hover:shadow-md transition-shadow border-l-4 border-l-professional-blue">
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      {/* Left side - Template name and description */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3 mb-2">
+                          <span className="text-lg font-semibold text-professional-blue">
+                            {template.name}
+                          </span>
+                          <Badge variant="outline" className="text-xs">
+                            {templateTypes.find(t => t.value === template.type)?.label || template.type}
+                          </Badge>
                         </div>
-                        <div className="flex items-center space-x-2">
+                        
+                        {template.description && (
+                          <p className="text-sm text-gray-600 mb-2 line-clamp-1">
+                            {template.description}
+                          </p>
+                        )}
+                        
+                        <div className="text-sm text-gray-500">
+                          <span className="font-medium">{sectionsCount}</span> section{sectionsCount !== 1 ? 's' : ''}
+                        </div>
+                      </div>
+
+                      {/* Right side - Metadata and actions */}
+                      <div className="flex items-center gap-4 ml-4">
+                                                 {/* Metadata */}
+                         <div className="text-right text-xs text-gray-500 space-y-1">
+                           <div>
+                             Created: {new Date(template.createdAt || '').toLocaleDateString()}
+                           </div>
+                           <div>
+                             Updated: {new Date(template.updatedAt || '').toLocaleDateString()}
+                           </div>
+                         </div>
+
+                        {/* Action buttons */}
+                        <div className="flex items-center space-x-1">
                           <Button
                             size="sm"
                             variant="ghost"
                             onClick={() => handleDuplicateTemplate(template)}
                             title="Duplicate template"
                             data-testid={`button-duplicate-template-${template.id}`}
+                            className="h-8 w-8 p-0"
                           >
                             <Copy size={14} />
                           </Button>
@@ -809,6 +866,7 @@ export function TemplateBuilderManager() {
                             variant="ghost"
                             onClick={() => handleEdit(template)}
                             data-testid={`button-edit-template-${template.id}`}
+                            className="h-8 w-8 p-0"
                           >
                             <Edit2 size={14} />
                           </Button>
@@ -816,7 +874,7 @@ export function TemplateBuilderManager() {
                             size="sm"
                             variant="ghost"
                             onClick={() => handleDelete(template.id)}
-                            className="text-red-600 hover:text-red-700"
+                            className="text-red-600 hover:text-red-700 h-8 w-8 p-0"
                             data-testid={`button-delete-template-${template.id}`}
                           >
                             <Trash2 size={14} />
