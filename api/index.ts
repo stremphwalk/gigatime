@@ -318,6 +318,60 @@ async function initializeRoutes() {
     }
   });
 
+  // Update note template endpoint
+  app.put("/api/note-templates/:id", requireAuth, async (req, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const { id } = req.params;
+      
+      // Ensure user exists
+      let user = await storage.getUser(userId);
+      if (!user) {
+        user = await storage.createUser({
+          id: userId,
+          email: "doctor@hospital.com",
+          firstName: "Dr. Sarah",
+          lastName: "Mitchell",
+          specialty: "Emergency Medicine"
+        });
+      }
+      
+      const templateData = schemas.insertNoteTemplateSchema.partial().parse(req.body);
+      const template = await storage.updateNoteTemplate(id, templateData);
+      
+      res.json(template);
+    } catch (error) {
+      console.error("Error updating note template:", error);
+      
+      // Handle Zod validation errors
+      if (error && typeof error === 'object' && 'issues' in error) {
+        const validationErrors = (error as any).issues.map((issue: any) => 
+          `${issue.path.join('.')}: ${issue.message}`
+        ).join(', ');
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          error: `Invalid template data: ${validationErrors}` 
+        });
+      }
+      
+      res.status(500).json({ message: "Failed to update note template" });
+    }
+  });
+
+  // Delete note template endpoint
+  app.delete("/api/note-templates/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      await storage.deleteNoteTemplate(id);
+      
+      res.json({ message: "Note template deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting note template:", error);
+      res.status(500).json({ message: "Failed to delete note template" });
+    }
+  });
+
   // Deepgram API key endpoint
   app.get("/api/deepgram-key", requireAuth, (req, res) => {
     res.json({ apiKey: process.env.DEEPGRAM_API_KEY });
@@ -434,6 +488,88 @@ async function initializeRoutes() {
     } catch (error) {
       console.error("Error creating smart phrase:", error);
       res.status(500).json({ message: "Failed to create smart phrase" });
+    }
+  });
+
+  // Update smart phrase endpoint
+  app.put("/api/smart-phrases/:id", requireAuth, async (req, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const { id } = req.params;
+      
+      // Ensure user exists
+      let user = await storage.getUser(userId);
+      if (!user) {
+        user = await storage.createUser({
+          id: userId,
+          email: "doctor@hospital.com",
+          firstName: "Dr. Sarah",
+          lastName: "Mitchell",
+          specialty: "Emergency Medicine"
+        });
+      }
+      
+      const body = { ...req.body } as any;
+      if (!body.elements && body.type) {
+        if (body.type === 'text') {
+          body.elements = [];
+        } else if (body.type === 'date') {
+          body.elements = [
+            {
+              id: 'date',
+              type: 'date',
+              label: 'Date',
+              placeholder: '{date}',
+            },
+          ];
+        } else if (body.type === 'multipicker' || body.type === 'nested_multipicker') {
+          body.elements = [
+            {
+              id: 'option',
+              type: body.type,
+              label: 'Options',
+              placeholder: '{option}',
+              options: body.options?.choices || [],
+            },
+          ];
+        }
+        delete body.type;
+        delete body.options;
+      }
+      
+      const phraseData = schemas.insertSmartPhraseSchema.partial().parse(body);
+      const phrase = await storage.updateSmartPhrase(id, phraseData);
+      
+      const elements = Array.isArray((phrase as any)?.elements) ? (phrase as any).elements : [];
+      let type: any = 'text';
+      let options: any = null;
+      if (elements.length === 1) {
+        const el: any = elements[0];
+        if (el?.type === 'date') type = 'date';
+        if (el?.type === 'multipicker' || el?.type === 'nested_multipicker') {
+          type = el.type;
+          options = { choices: Array.isArray(el.options) ? el.options : [] };
+        }
+      }
+      
+      res.json({ ...phrase, type, options });
+    } catch (error) {
+      console.error("Error updating smart phrase:", error);
+      res.status(500).json({ message: "Failed to update smart phrase" });
+    }
+  });
+
+  // Delete smart phrase endpoint
+  app.delete("/api/smart-phrases/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      await storage.deleteSmartPhrase(id);
+      
+      res.json({ message: "Smart phrase deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting smart phrase:", error);
+      res.status(500).json({ message: "Failed to delete smart phrase" });
     }
   });
 
