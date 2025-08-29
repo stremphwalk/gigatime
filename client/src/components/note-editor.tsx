@@ -93,7 +93,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     sectionId: string;
     position: { top: number; left: number };
   } | null>(null);
-  const [useInlineSmartPhrases, setUseInlineSmartPhrases] = useState(true);
+  const [useInlineSmartPhrases, setUseInlineSmartPhrases] = useState(false);
   const [activeInlinePhrases, setActiveInlinePhrases] = useState<Record<string, any>>({});
   
   const [activeMedicalAutocomplete, setActiveMedicalAutocomplete] = useState<{
@@ -327,7 +327,28 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       return; // Don't process other triggers
     }
 
-    // Check for inline smart phrase patterns
+    // Check for smart phrase trigger - always check for autocomplete first
+    if (content.endsWith('/')) {
+      const rect = textarea.getBoundingClientRect();
+      setActiveAutocomplete({
+        sectionId,
+        position: { top: rect.bottom, left: rect.left },
+        query: ''
+      });
+    } else if (activeAutocomplete && content.includes('/')) {
+      const lastSlashIndex = content.lastIndexOf('/');
+      const query = content.slice(lastSlashIndex + 1);
+      // Don't show autocomplete for /calc command
+      if (query === 'calc') {
+        setActiveAutocomplete(null);
+      } else {
+        setActiveAutocomplete(prev => prev ? { ...prev, query } : null);
+      }
+    } else if (activeAutocomplete && !content.includes('/')) {
+      setActiveAutocomplete(null);
+    }
+    
+    // Check for inline smart phrase patterns when enabled
     if (useInlineSmartPhrases) {
       const smartPhraseRegex = /\/(symptom|diagnosis|medication|exam|severity|duration|location|quality)\b/gi;
       let match;
@@ -376,8 +397,8 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       }
     }
     
-    // Check for smart phrase trigger (excluding calc) - fallback to popup mode
-    if (!useInlineSmartPhrases && content.endsWith('/')) {
+    // Old fallback check for when inline is disabled - REMOVED as redundant
+    if (false && !useInlineSmartPhrases && content.endsWith('/')) {
       const rect = textarea.getBoundingClientRect();
       setActiveAutocomplete({
         sectionId,
@@ -1841,8 +1862,8 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                     </div>
                   )}
                   
-                  {/* Traditional autocomplete for when inline mode is disabled */}
-                  {!useInlineSmartPhrases && activeAutocomplete && activeAutocomplete.sectionId === section.id && (
+                  {/* Traditional autocomplete (always available) */}
+                  {activeAutocomplete && activeAutocomplete.sectionId === section.id && (
                     <SmartPhraseAutocomplete
                       query={activeAutocomplete.query}
                       position={activeAutocomplete.position}
