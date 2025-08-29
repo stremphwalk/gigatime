@@ -8,6 +8,8 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SmartPhraseAutocomplete } from "./smart-phrase-autocomplete";
 import { FlexibleSmartPhrasePicker } from "./flexible-smart-phrase-picker";
+import { InlineSmartPhrase } from "./inline-smart-phrase";
+import { SmartPhraseRenderer } from "./smart-phrase-renderer";
 import { MedicalConditionAutocomplete } from "./medical-condition-autocomplete";
 import { AllergyAutocomplete } from "./allergy-autocomplete";
 import { SocialHistoryAutocomplete } from "./social-history-autocomplete";
@@ -91,6 +93,8 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     sectionId: string;
     position: { top: number; left: number };
   } | null>(null);
+  const [useInlineSmartPhrases, setUseInlineSmartPhrases] = useState(true);
+  const [activeInlinePhrases, setActiveInlinePhrases] = useState<Record<string, any>>({});
   
   const [activeMedicalAutocomplete, setActiveMedicalAutocomplete] = useState<{
     sectionId: string;
@@ -240,6 +244,50 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     }
   };
 
+  const handleInlineSmartPhraseToggle = (sectionId: string, phraseId: string, option: string) => {
+    setActiveInlinePhrases(prev => ({
+      ...prev,
+      [sectionId]: {
+        ...prev[sectionId],
+        [phraseId]: {
+          ...prev[sectionId]?.[phraseId],
+          selectedOptions: prev[sectionId]?.[phraseId]?.selectedOptions?.includes(option)
+            ? prev[sectionId][phraseId].selectedOptions.filter((o: string) => o !== option)
+            : [...(prev[sectionId]?.[phraseId]?.selectedOptions || []), option]
+        }
+      }
+    }));
+  };
+
+  const handleInlineSmartPhraseComplete = (sectionId: string, phraseId: string) => {
+    const phrase = activeInlinePhrases[sectionId]?.[phraseId];
+    if (!phrase || !phrase.selectedOptions?.length) return;
+
+    const currentContent = noteData.content[sectionId] || '';
+    const selectedText = phrase.selectedOptions.join(', ');
+    
+    // Replace the smart phrase trigger with selected options
+    const regex = new RegExp(`\\/${phrase.trigger}`, 'g');
+    const newContent = currentContent.replace(regex, selectedText);
+    
+    setNoteData(prev => ({
+      ...prev,
+      content: {
+        ...prev.content,
+        [sectionId]: newContent
+      }
+    }));
+
+    // Clear the completed phrase
+    setActiveInlinePhrases(prev => {
+      const updated = { ...prev };
+      if (updated[sectionId]) {
+        delete updated[sectionId][phraseId];
+      }
+      return updated;
+    });
+  };
+
   const handleSectionContentChange = (sectionId: string, content: string, textarea: HTMLTextAreaElement) => {
     setNoteData(prev => ({
       ...prev,
@@ -279,15 +327,64 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       return; // Don't process other triggers
     }
 
-    // Check for smart phrase trigger (excluding calc)
-    if (content.endsWith('/')) {
+    // Check for inline smart phrase patterns
+    if (useInlineSmartPhrases) {
+      const smartPhraseRegex = /\/(symptom|diagnosis|medication|exam|severity|duration|location|quality)\b/gi;
+      let match;
+      const foundPhrases: any = {};
+      
+      while ((match = smartPhraseRegex.exec(content)) !== null) {
+        const trigger = match[1].toLowerCase();
+        const phraseId = `${trigger}-${match.index}`;
+        
+        // Define options for each trigger type
+        const optionsMap: Record<string, string[]> = {
+          symptom: ['headache', 'dizziness', 'nausea', 'fatigue', 'chest pain', 'shortness of breath'],
+          diagnosis: ['tension headache', 'migraine', 'sinusitis', 'viral syndrome', 'hypertension', 'diabetes'],
+          medication: ['ibuprofen', 'acetaminophen', 'naproxen', 'aspirin', 'metformin', 'lisinopril'],
+          exam: ['unremarkable', 'mild tenderness', 'swelling', 'redness', 'normal range of motion'],
+          severity: ['mild', 'moderate', 'severe', 'intermittent', 'constant'],
+          duration: ['hours', 'days', 'weeks', 'months', 'acute', 'chronic'],
+          location: ['bilateral', 'unilateral', 'diffuse', 'localized', 'radiating'],
+          quality: ['sharp', 'dull', 'throbbing', 'burning', 'aching', 'stabbing']
+        };
+        
+        if (optionsMap[trigger]) {
+          foundPhrases[phraseId] = {
+            trigger,
+            options: optionsMap[trigger],
+            selectedOptions: activeInlinePhrases[sectionId]?.[phraseId]?.selectedOptions || [],
+            startPos: match.index,
+            endPos: match.index + match[0].length
+          };
+        }
+      }
+      
+      // Update active inline phrases for this section
+      if (Object.keys(foundPhrases).length > 0) {
+        setActiveInlinePhrases(prev => ({
+          ...prev,
+          [sectionId]: foundPhrases
+        }));
+      } else {
+        // Clear inline phrases if none found
+        setActiveInlinePhrases(prev => {
+          const updated = { ...prev };
+          delete updated[sectionId];
+          return updated;
+        });
+      }
+    }
+    
+    // Check for smart phrase trigger (excluding calc) - fallback to popup mode
+    if (!useInlineSmartPhrases && content.endsWith('/')) {
       const rect = textarea.getBoundingClientRect();
       setActiveAutocomplete({
         sectionId,
         position: { top: rect.bottom, left: rect.left },
         query: ''
       });
-    } else if (activeAutocomplete && content.includes('/')) {
+    } else if (!useInlineSmartPhrases && activeAutocomplete && content.includes('/')) {
       const lastSlashIndex = content.lastIndexOf('/');
       const query = content.slice(lastSlashIndex + 1);
       // Don't show autocomplete for /calc command
@@ -1351,6 +1448,17 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
           </div>
         </div>
         <div className="flex items-center space-x-2">
+          {/* Smart Phrase Mode Toggle */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setUseInlineSmartPhrases(!useInlineSmartPhrases)}
+            className="text-xs px-2 h-8 border-gray-200"
+            title={useInlineSmartPhrases ? "Switch to popup smart phrases" : "Switch to inline smart phrases"}
+          >
+            <Zap size={12} className="mr-1" />
+            {useInlineSmartPhrases ? "Inline" : "Popup"}
+          </Button>
           <Button 
             variant="ghost" 
             size="sm"
@@ -1713,7 +1821,28 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                     data-section-id={section.id}
                   />
                   
-                  {activeAutocomplete && activeAutocomplete.sectionId === section.id && (
+                  {/* Render inline smart phrases if detected */}
+                  {useInlineSmartPhrases && activeInlinePhrases[section.id] && Object.keys(activeInlinePhrases[section.id]).length > 0 && (
+                    <div className="mt-2 space-y-2">
+                      {Object.entries(activeInlinePhrases[section.id]).map(([phraseId, phrase]: [string, any]) => (
+                        <InlineSmartPhrase
+                          key={phraseId}
+                          trigger={phrase.trigger}
+                          options={phrase.options}
+                          selectedOptions={phrase.selectedOptions || []}
+                          onOptionToggle={(option) => handleInlineSmartPhraseToggle(section.id, phraseId, option)}
+                          onComplete={() => handleInlineSmartPhraseComplete(section.id, phraseId)}
+                          position="overlay"
+                        />
+                      ))}
+                      <div className="text-xs text-gray-500 mt-2">
+                        💡 Select options above and press Ctrl+Enter to insert into your note
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Traditional autocomplete for when inline mode is disabled */}
+                  {!useInlineSmartPhrases && activeAutocomplete && activeAutocomplete.sectionId === section.id && (
                     <SmartPhraseAutocomplete
                       query={activeAutocomplete.query}
                       position={activeAutocomplete.position}
