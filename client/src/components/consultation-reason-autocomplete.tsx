@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { FileText } from 'lucide-react';
+import { FileText, Star } from 'lucide-react';
 import { searchReasons } from '@/lib/consultation-reasons';
+import { useAutocompleteItems } from '@/hooks/use-autocomplete-items';
 import { cn } from '@/lib/utils';
 
 interface ConsultationReasonAutocompleteProps {
@@ -22,15 +23,45 @@ export function ConsultationReasonAutocomplete({
   type = 'consultation',
   sectionId
 }: ConsultationReasonAutocompleteProps) {
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<Array<{text: string, isPriority?: boolean, isCustom?: boolean}>>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Get custom autocomplete items from database
+  const { items: customItems } = useAutocompleteItems('consultation-reasons');
+
   useEffect(() => {
-    const results = searchReasons(query, type);
-    setSuggestions(results);
+    // Get static reasons
+    const staticResults = searchReasons(query, type);
+    
+    // Filter and search custom items
+    const customResults = customItems
+      .filter(item => 
+        item.text.toLowerCase().includes(query.toLowerCase().trim()) ||
+        item.description?.toLowerCase().includes(query.toLowerCase().trim())
+      )
+      .map(item => ({
+        text: item.text,
+        isPriority: item.isPriority,
+        isCustom: true
+      }));
+
+    // Combine results with custom items first (especially priority ones)
+    const priorityCustom = customResults.filter(item => item.isPriority);
+    const regularCustom = customResults.filter(item => !item.isPriority);
+    const staticSuggestions = staticResults.map(text => ({ text, isCustom: false }));
+
+    // Combine: priority custom items, then regular custom items, then static items
+    const allSuggestions = [
+      ...priorityCustom,
+      ...regularCustom,
+      ...staticSuggestions
+    ]
+      .slice(0, 10); // Limit to 10 suggestions
+
+    setSuggestions(allSuggestions);
     setSelectedIndex(0);
-  }, [query, type]);
+  }, [query, type, customItems]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -49,7 +80,7 @@ export function ConsultationReasonAutocomplete({
         case "Tab":
           e.preventDefault();
           if (suggestions[selectedIndex]) {
-            handleReasonSelect(suggestions[selectedIndex]);
+            handleReasonSelect(suggestions[selectedIndex].text);
           }
           break;
         case "Escape":
@@ -103,22 +134,38 @@ export function ConsultationReasonAutocomplete({
               <span className="text-xs font-medium text-blue-700">
                 {type === 'admission' ? 'Admission' : 'Consultation'} Reasons
               </span>
+              {suggestions.some(s => s.isCustom) && (
+                <span className="text-xs text-blue-600 ml-auto">+ Custom</span>
+              )}
             </div>
-            {suggestions.map((reason, index) => (
+            {suggestions.map((suggestion, index) => (
               <Button
-                key={reason}
+                key={`${suggestion.text}-${suggestion.isCustom}`}
                 variant="ghost"
                 size="sm"
                 className={cn(
                   "w-full justify-start text-left h-auto py-2 px-3 rounded-none border-b border-gray-50 last:border-b-0",
-                  index === selectedIndex && "bg-blue-50 text-blue-900"
+                  index === selectedIndex && "bg-blue-50 text-blue-900",
+                  suggestion.isPriority && "bg-yellow-50 border-yellow-200"
                 )}
-                onClick={(e) => handleReasonSelect(reason, e)}
+                onClick={(e) => handleReasonSelect(suggestion.text, e)}
                 data-testid={`reason-suggestion-${index}`}
               >
                 <div className="flex items-center gap-2 w-full">
-                  <FileText size={16} className="text-blue-600 flex-shrink-0" />
-                  <span className="font-medium text-sm">{reason}</span>
+                  {suggestion.isPriority ? (
+                    <Star size={16} className="text-yellow-600 flex-shrink-0 fill-yellow-600" />
+                  ) : (
+                    <FileText size={16} className="text-blue-600 flex-shrink-0" />
+                  )}
+                  <span className={cn(
+                    "font-medium text-sm flex-1",
+                    suggestion.isPriority && "text-yellow-800"
+                  )}>
+                    {suggestion.text}
+                  </span>
+                  {suggestion.isCustom && (
+                    <span className="text-xs text-gray-500 font-normal">Custom</span>
+                  )}
                 </div>
               </Button>
             ))}
