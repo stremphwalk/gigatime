@@ -437,6 +437,39 @@ async function initializeRoutes() {
     }
   });
 
+  // Debug endpoint to initialize autocomplete table
+  app.post("/api/initialize-autocomplete-table", requireAuth, async (req, res) => {
+    try {
+      console.log("[InitAutocomplete] Starting table initialization");
+      
+      // Execute the SQL to create table if it doesn't exist
+      await storage.db.execute(`
+        CREATE TABLE IF NOT EXISTS autocomplete_items (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            text VARCHAR(500) NOT NULL,
+            category VARCHAR(100) NOT NULL,
+            is_priority BOOLEAN DEFAULT false,
+            dosage VARCHAR(100),
+            frequency VARCHAR(100),
+            description TEXT,
+            user_id VARCHAR NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW(),
+            updated_at TIMESTAMP DEFAULT NOW()
+        );
+        
+        CREATE INDEX IF NOT EXISTS idx_autocomplete_items_user_id ON autocomplete_items(user_id);
+        CREATE INDEX IF NOT EXISTS idx_autocomplete_items_category ON autocomplete_items(category);
+        CREATE INDEX IF NOT EXISTS idx_autocomplete_items_priority ON autocomplete_items(is_priority);
+      `);
+      
+      console.log("[InitAutocomplete] Table initialization completed");
+      res.json({ message: "Autocomplete table initialized successfully" });
+    } catch (error) {
+      console.error("[InitAutocomplete] Error:", error);
+      res.status(500).json({ message: "Failed to initialize table", error: error.message });
+    }
+  });
+
   // Autocomplete items endpoints
   app.get("/api/autocomplete-items", requireAuth, async (req, res) => {
     try {
