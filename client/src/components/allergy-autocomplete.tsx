@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { searchAllergies } from "@/lib/medical-conditions";
+import { useAutocompleteItems } from "@/hooks/use-autocomplete-items";
 import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -23,12 +24,27 @@ export function AllergyAutocomplete({
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const { items: customItems } = useAutocompleteItems('allergies');
 
   useEffect(() => {
-    const results = searchAllergies(query, 8);
-    setSuggestions(results);
+    const staticResults = searchAllergies(query, 8);
+
+    // Filter custom items by query
+    const filteredCustom = customItems
+      .filter(item =>
+        item.text.toLowerCase().includes(query.toLowerCase().trim()) ||
+        item.description?.toLowerCase().includes(query.toLowerCase().trim())
+      )
+      .map(item => ({ text: item.text, isPriority: item.isPriority }))
+      .sort((a, b) => Number(b.isPriority) - Number(a.isPriority))
+      .map(i => i.text);
+
+    // Merge custom first (priority first), then static; de-dupe
+    const merged = Array.from(new Set([...filteredCustom, ...staticResults])).slice(0, 10);
+
+    setSuggestions(merged);
     setSelectedIndex(0);
-  }, [query]);
+  }, [query, customItems]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

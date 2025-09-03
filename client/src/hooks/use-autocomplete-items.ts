@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 export interface AutocompleteItem {
   id: string;
@@ -7,6 +8,8 @@ export interface AutocompleteItem {
   isPriority: boolean;
   dosage?: string;
   frequency?: string;
+  dosageOptions?: string[];
+  frequencyOptions?: string[];
   description?: string;
   userId: string;
   createdAt: string;
@@ -19,28 +22,21 @@ export interface CreateAutocompleteItem {
   isPriority: boolean;
   dosage?: string;
   frequency?: string;
+  dosageOptions?: string[];
+  frequencyOptions?: string[];
   description?: string;
 }
 
-async function apiRequest(
-  method: string,
-  url: string,
-  data?: unknown
-): Promise<Response> {
-  const res = await fetch(url, {
-    method,
-    headers: data ? { "Content-Type": "application/json" } : {},
-    body: data ? JSON.stringify(data) : undefined,
-    credentials: "include",
-  });
-
-  if (!res.ok) {
-    const errorData = await res.json();
-    throw new Error(errorData.message || `HTTP ${res.status}: ${res.statusText}`);
+async function parseJsonOrThrow<T>(res: Response): Promise<T> {
+  const contentType = res.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    const body = await res.text();
+    throw new Error(body || `Non-JSON response (${contentType}) from ${res.url}`);
   }
-
-  return res;
+  return (await res.json()) as T;
 }
+
+// Use the shared, hardened apiRequest from lib/queryClient
 
 export function useAutocompleteItems(category?: string) {
   const queryClient = useQueryClient();
@@ -57,7 +53,7 @@ export function useAutocompleteItems(category?: string) {
         ? `/api/autocomplete-items?category=${encodeURIComponent(category)}`
         : "/api/autocomplete-items";
       const response = await apiRequest("GET", url);
-      return response.json() as Promise<AutocompleteItem[]>;
+      return parseJsonOrThrow<AutocompleteItem[]>(response);
     },
   });
 
@@ -65,7 +61,7 @@ export function useAutocompleteItems(category?: string) {
   const createItemMutation = useMutation({
     mutationFn: async (itemData: CreateAutocompleteItem) => {
       const response = await apiRequest("POST", "/api/autocomplete-items", itemData);
-      return response.json() as Promise<AutocompleteItem>;
+      return parseJsonOrThrow<AutocompleteItem>(response);
     },
     onSuccess: () => {
       // Invalidate both the specific category query and the general query
@@ -80,7 +76,7 @@ export function useAutocompleteItems(category?: string) {
   const updateItemMutation = useMutation({
     mutationFn: async ({ id, ...itemData }: { id: string } & Partial<CreateAutocompleteItem>) => {
       const response = await apiRequest("PUT", `/api/autocomplete-items/${id}`, itemData);
-      return response.json() as Promise<AutocompleteItem>;
+      return parseJsonOrThrow<AutocompleteItem>(response);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/autocomplete-items"] });
@@ -94,7 +90,7 @@ export function useAutocompleteItems(category?: string) {
   const deleteItemMutation = useMutation({
     mutationFn: async (id: string) => {
       const response = await apiRequest("DELETE", `/api/autocomplete-items/${id}`);
-      return response.json();
+      return parseJsonOrThrow(response);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/autocomplete-items"] });

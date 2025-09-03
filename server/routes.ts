@@ -11,7 +11,8 @@ import {
   insertTeamTodoSchema,
   insertTeamCalendarEventSchema,
   insertUserSchema,
-  insertUserLabSettingSchema
+  insertUserLabSettingSchema,
+  insertAutocompleteItemSchema
 } from "../shared/schema.js";
 import { z } from "zod";
 
@@ -958,6 +959,152 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting calendar event:", error);
       res.status(500).json({ message: "Failed to delete calendar event" });
+    }
+  });
+
+  // Autocomplete items routes
+  app.get("/api/autocomplete-items", requireAuth, async (req, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const category = req.query.category as string | undefined;
+
+      // Ensure user exists (FK constraints)
+      let user = await storage.getUser(userId);
+      if (!user) {
+        user = await storage.createUser({
+          id: userId,
+          email: "doctor@hospital.com",
+          firstName: "Dr. Sarah",
+          lastName: "Mitchell",
+          specialty: "Emergency Medicine",
+        });
+      }
+
+      const items = category
+        ? await storage.getAutocompleteItemsByCategory(userId, category)
+        : await storage.getAutocompleteItems(userId);
+
+      res.json(items);
+    } catch (error) {
+      console.error("Error fetching autocomplete items:", error);
+      res.status(500).json({ message: "Failed to fetch autocomplete items" });
+    }
+  });
+
+  app.post("/api/autocomplete-items", requireAuth, async (req, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+
+      // Ensure user exists
+      let user = await storage.getUser(userId);
+      if (!user) {
+        user = await storage.createUser({
+          id: userId,
+          email: "doctor@hospital.com",
+          firstName: "Dr. Sarah",
+          lastName: "Mitchell",
+          specialty: "Emergency Medicine",
+        });
+      }
+
+      const itemData = insertAutocompleteItemSchema.parse({ ...req.body, userId });
+      try {
+        const item = await storage.createAutocompleteItem(itemData);
+        return res.json(item);
+      } catch (dbErr: any) {
+        // Fallback: if DB columns for options don't exist yet, strip array fields and retry
+        if (dbErr?.code === '42703') {
+          const { dosageOptions, frequencyOptions, dosage, frequency, ...rest } = itemData as any;
+          const fallbackData = {
+            ...rest,
+            // Backfill single fields if not provided
+            dosage: dosage ?? (Array.isArray(dosageOptions) && dosageOptions.length === 1 ? dosageOptions[0] : undefined),
+            frequency: frequency ?? (Array.isArray(frequencyOptions) && frequencyOptions.length === 1 ? frequencyOptions[0] : undefined),
+          } as any;
+          const item = await storage.createAutocompleteItem(fallbackData);
+          return res.json(item);
+        }
+        throw dbErr;
+      }
+    } catch (error) {
+      console.error("Error creating autocomplete item:", error);
+
+      // Handle Zod validation errors
+      if (error && typeof error === "object" && "issues" in (error as any)) {
+        const validationErrors = (error as any).issues
+          .map((issue: any) => `${issue.path.join('.')} : ${issue.message}`)
+          .join(', ');
+        return res.status(400).json({
+          message: "Validation failed",
+          error: `Invalid autocomplete item data: ${validationErrors}`,
+        });
+      }
+
+      // Unique constraint violation (duplicate item)
+      if ((error as any)?.code === '23505') {
+        return res.status(409).json({ message: "Duplicate item", error: "An autocomplete item with this text already exists in this category." });
+      }
+
+      const debug = process.env.NODE_ENV === 'development' || process.env.NO_AUTH === '1';
+      if (debug) {
+        const anyErr: any = error;
+        return res.status(500).json({ 
+          message: "Failed to create autocomplete item", 
+          code: anyErr?.code, 
+          detail: anyErr?.detail || anyErr?.message || String(error)
+        });
+      }
+      res.status(500).json({ message: "Failed to create autocomplete item" });
+    }
+  });
+
+  app.put("/api/autocomplete-items/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const itemData = insertAutocompleteItemSchema.partial().parse(req.body);
+      try {
+        const item = await storage.updateAutocompleteItem(id, itemData);
+        return res.json(item);
+      } catch (dbErr: any) {
+        if (dbErr?.code === '42703') {
+          const { dosageOptions, frequencyOptions, ...rest } = itemData as any;
+          const fallbackData = { ...rest } as any;
+          const item = await storage.updateAutocompleteItem(id, fallbackData);
+          return res.json(item);
+        }
+        throw dbErr;
+      }
+    } catch (error) {
+      console.error("Error updating autocomplete item:", error);
+
+      // Handle Zod validation errors
+      if (error && typeof error === "object" && "issues" in (error as any)) {
+        const validationErrors = (error as any).issues
+          .map((issue: any) => `${issue.path.join('.')} : ${issue.message}`)
+          .join(', ');
+        return res.status(400).json({
+          message: "Validation failed",
+          error: `Invalid autocomplete item data: ${validationErrors}`,
+        });
+      }
+
+      const anyErr: any = error;
+      const debug = process.env.NODE_ENV === 'development' || process.env.NO_AUTH === '1';
+      if (debug) {
+        return res.status(500).json({ message: "Failed to update autocomplete item", code: anyErr?.code, detail: anyErr?.detail || anyErr?.message || String(error) });
+      }
+      res.status(500).json({ message: "Failed to update autocomplete item" });
+    }
+  });
+
+  app.delete("/api/autocomplete-items/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteAutocompleteItem(id);
+      res.json({ message: "Autocomplete item deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting autocomplete item:", error);
+      res.status(500).json({ message: "Failed to delete autocomplete item" });
     }
   });
 

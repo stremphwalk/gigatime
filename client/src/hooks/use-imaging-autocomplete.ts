@@ -7,6 +7,11 @@ interface UseImagingAutocompleteProps {
 
 export function useImagingAutocomplete({ onInsert }: UseImagingAutocompleteProps) {
   const handleImagingSelect = useCallback((study: ImagingStudy, selectedNegatives: string[]) => {
+    // If this is a custom snippet, insert as-is
+    if (study.abbreviation === "__CUSTOM__") {
+      onInsert(study.fullName);
+      return;
+    }
     // Generate the formatted text to insert
     let insertText = `${study.fullName} (${study.abbreviation}):\n\n`;
     

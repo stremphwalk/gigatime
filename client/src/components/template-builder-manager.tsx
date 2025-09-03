@@ -4,9 +4,15 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { SearchField } from "@/components/library/SearchField";
+import { FilterDropdown } from "@/components/library/FilterDropdown";
+import { LayoutDensityControls } from "@/components/library/LayoutDensityControls";
+import { ActionButtons as SharedActions } from "@/components/library/ActionButtons";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useNoteTemplates } from "../hooks/use-notes";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
 import { ImportTemplateDialog } from "./import-template-dialog";
@@ -22,7 +28,11 @@ import {
   Save,
   ArrowUp,
   ArrowDown,
-  Download
+  Download,
+  Grid3X3,
+  List,
+  ChevronsUpDown,
+  Check
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { NoteTemplate } from "@shared/schema";
@@ -40,6 +50,9 @@ export function TemplateBuilderManager() {
   const [activeTab, setActiveTab] = useState<'library' | 'create' | 'edit'>('library');
   const [editingTemplate, setEditingTemplate] = useState<NoteTemplate | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<string>("");
+  const [layout, setLayout] = useState<"grid" | "list">("grid");
+  const [density, setDensity] = useState<"compact" | "cozy">("compact");
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -111,11 +124,15 @@ export function TemplateBuilderManager() {
     ]
   };
 
-  const filteredTemplates = templates?.filter(template => 
-    template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    template.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    template.description?.toLowerCase().includes(searchQuery.toLowerCase())
-  ) || [];
+  const filteredTemplates = (templates || []).filter(t => {
+    const q = searchQuery.toLowerCase();
+    const matchesQuery = !q || t.name.toLowerCase().includes(q) || t.type.toLowerCase().includes(q) || t.description?.toLowerCase().includes(q);
+    const matchesType = !typeFilter || t.type === typeFilter;
+    return matchesQuery && matchesType;
+  });
+
+  const densityCls = density === 'compact' ? 'text-[12px] leading-5' : 'text-sm';
+  const padCls = density === 'compact' ? 'p-2' : 'p-3';
 
   const handleCreateNew = () => {
     setFormData({
@@ -681,59 +698,36 @@ export function TemplateBuilderManager() {
   }
 
   return (
+    <TooltipProvider>
     <div className="h-full flex flex-col">
-      <div className="border-b-2 border-medical-teal/20 p-8 bg-gradient-to-br from-professional-blue/5 via-medical-teal/5 to-white">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-professional-blue via-medical-teal to-professional-blue rounded-xl flex items-center justify-center shadow-md">
-              <FileText className="text-white" size={24} />
-            </div>
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-professional-blue to-medical-teal bg-clip-text text-transparent">
-                Template Library
-              </h1>
-              <p className="text-gray-700 font-medium mt-1">Manage your note templates with smart phrases and medical sections</p>
-            </div>
+      <div className="border-b border-gray-200 p-4 bg-white">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">Templates</h1>
+            <p className="text-muted-foreground text-xs">Create and manage note templates</p>
           </div>
-          <div className="flex gap-2">
-            <Button 
-              variant="outline"
-              onClick={() => setShowImportDialog(true)}
-              className="border-professional-blue text-professional-blue hover:bg-professional-blue/10"
-              data-testid="button-import-template"
-            >
-              <Download size={16} className="mr-2" />
-              Import Template
-            </Button>
-            <Button 
-              onClick={handleCreateNew} 
-              className="bg-gradient-to-r from-medical-teal to-professional-blue hover:from-medical-teal/90 hover:to-professional-blue/90 text-white shadow-lg"
-              data-testid="button-create-template"
-            >
-              <Plus size={16} className="mr-2" />
-              Create New Template
-            </Button>
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" className="gap-2" onClick={() => setShowImportDialog(true)} data-testid="button-import-template"><Download className="h-4 w-4"/>Import</Button>
+            <Button size="sm" className="gap-2" onClick={handleCreateNew} data-testid="button-create-template"><Plus className="h-4 w-4"/>New Template</Button>
           </div>
         </div>
 
-        <div className="mt-4 flex items-center space-x-4">
-          <div className="relative flex-1 max-w-md">
-            <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" />
-            <Input
-              placeholder="Search templates..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-              data-testid="input-search-templates"
-            />
-          </div>
-          <Badge variant="secondary" className="text-sm">
-            {filteredTemplates.length} template{filteredTemplates.length !== 1 ? 's' : ''}
-          </Badge>
+        <Card className="border-muted/60">
+          <CardContent className={`flex flex-wrap items-center gap-2 ${padCls}`}>
+            <SearchField value={searchQuery} onChange={setSearchQuery} placeholder="Search templates…" />
+            <Separator orientation="vertical" className="h-6"/>
+            <FilterDropdown label="Type" options={templateTypes.map(t=>({ value: t.value, label: t.label }))} value={typeFilter} onChange={setTypeFilter} menuLabel="Filter by type" />
+            <LayoutDensityControls layout={layout} onLayoutChange={setLayout} density={density} onDensityChange={setDensity} />
+          </CardContent>
+        </Card>
+
+        <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+          <span>{filteredTemplates.length} templates</span>
+          {typeFilter && (<><span>•</span><span>Type:</span><Badge variant="outline" className="px-1 py-0 text-[10px]">{templateTypes.find(t=>t.value===typeFilter)?.label || typeFilter}</Badge></>)}
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-4">
         {filteredTemplates.length === 0 ? (
           <div className="text-center py-12">
             <FileText size={48} className="mx-auto text-gray-400 mb-4" />
@@ -754,81 +748,69 @@ export function TemplateBuilderManager() {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredTemplates.map((template) => {
-              let sectionsCount = 0;
-              try {
-                const sections = Array.isArray(template.sections) 
-                  ? template.sections 
-                  : (typeof template.sections === 'string' ? JSON.parse(template.sections) : []);
-                sectionsCount = sections.length;
-              } catch (error) {
-                sectionsCount = 0;
-              }
+          layout === 'grid' ? (
+            <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {filteredTemplates.map((template) => {
+                let sectionsCount = 0;
+                try {
+                  const sections = Array.isArray(template.sections) 
+                    ? template.sections 
+                    : (typeof template.sections === 'string' ? JSON.parse(template.sections) : []);
+                  sectionsCount = sections.length;
+                } catch (error) {
+                  sectionsCount = 0;
+                }
 
-              return (
-                <Card key={template.id} className="hover:shadow-md transition-shadow">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <CardTitle className="text-lg font-semibold">
-                          {template.name}
-                        </CardTitle>
-                        {template.description && (
-                          <CardDescription className="mt-1">
-                            {template.description}
-                          </CardDescription>
-                        )}
-                      </div>
-                      <Badge variant="outline" className="text-xs">
-                        {templateTypes.find(t => t.value === template.type)?.label || template.type}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-3">
-                      <div className="text-sm text-gray-600">
-                        <span className="font-medium">{sectionsCount}</span> section{sectionsCount !== 1 ? 's' : ''}
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="text-xs text-gray-500">
-                          {new Date(template.createdAt || '').toLocaleDateString()}
-                        </div>
-                        <div className="flex items-center space-x-2">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleDuplicateTemplate(template)}
-                            title="Duplicate template"
-                            data-testid={`button-duplicate-template-${template.id}`}
-                          >
-                            <Copy size={14} />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleEdit(template)}
-                            data-testid={`button-edit-template-${template.id}`}
-                          >
-                            <Edit2 size={14} />
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => handleDelete(template.id)}
-                            className="text-red-600 hover:text-red-700"
-                            data-testid={`button-delete-template-${template.id}`}
-                          >
-                            <Trash2 size={14} />
-                          </Button>
+                return (
+                  <Card key={template.id} className="group overflow-hidden border-muted/60 transition-shadow hover:shadow-sm">
+                    <CardHeader className={`flex flex-row items-start justify-between ${padCls}`}>
+                      <div className="min-w-0">
+                        <CardTitle className={`truncate font-medium ${densityCls}`}>{template.name}</CardTitle>
+                        <div className="mt-1 flex flex-wrap items-center gap-1">
+                          <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[10px] leading-4">{templateTypes.find(t=>t.value===template.type)?.label || template.type}</Badge>
                         </div>
                       </div>
+                      <SharedActions onEdit={() => handleEdit(template)} onDuplicate={() => handleDuplicateTemplate(template)} onDelete={() => handleDelete(template.id)} />
+                    </CardHeader>
+                    <CardContent className={`${padCls} pt-0`}>
+                      {template.description && <p className={`line-clamp-2 text-muted-foreground ${densityCls}`}>{template.description}</p>}
+                      <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+                        <span>{sectionsCount} sections</span>
+                        <span>{new Date(template.createdAt || '').toLocaleDateString()}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="mt-3 divide-y rounded-xl border bg-background/40">
+              {filteredTemplates.map((t) => {
+                let sectionsCount = 0;
+                try {
+                  const sections = Array.isArray(t.sections) ? t.sections : (typeof t.sections === 'string' ? JSON.parse(t.sections) : []);
+                  sectionsCount = sections.length;
+                } catch {}
+                return (
+                  <div key={t.id} className={`grid grid-cols-12 items-center ${padCls} gap-2 hover:bg-muted/40`}>
+                    <div className="col-span-4 flex items-center gap-2 min-w-0">
+                      <span className={`truncate font-medium ${densityCls}`}>{t.name}</span>
                     </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+                    <div className="col-span-4 min-w-0">
+                      <p className={`truncate text-muted-foreground ${densityCls}`}>{t.description}</p>
+                    </div>
+                    <div className="col-span-2 flex items-center gap-1">
+                      <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[10px] leading-4">{templateTypes.find(tt=>tt.value===t.type)?.label || t.type}</Badge>
+                    </div>
+                    <div className="col-span-2 ml-auto flex items-center justify-end gap-3 text-[11px] text-muted-foreground">
+                      <span>{sectionsCount} sec</span>
+                      <SharedActions onEdit={() => handleEdit(t)} onDuplicate={() => handleDuplicateTemplate(t)} onDelete={() => handleDelete(t.id)} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )
         )}
       </div>
       <ImportTemplateDialog 
@@ -836,5 +818,6 @@ export function TemplateBuilderManager() {
         onOpenChange={setShowImportDialog} 
       />
     </div>
+    </TooltipProvider>
   );
 }

@@ -3,6 +3,7 @@ import { searchMedicalConditions, getMedicalConditionAbbreviations } from "@/lib
 import { Card } from "@/components/ui/card";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAutocompleteItems } from "@/hooks/use-autocomplete-items";
 
 interface MedicalConditionAutocompleteProps {
   textareaRef: React.RefObject<HTMLTextAreaElement>;
@@ -27,6 +28,7 @@ export function MedicalConditionAutocomplete({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const abbreviations = getMedicalConditionAbbreviations();
+  const { items: customItems } = useAutocompleteItems('past-medical-history');
 
   // Update suggestions when query changes
   useEffect(() => {
@@ -38,16 +40,33 @@ export function MedicalConditionAutocomplete({
     // Check if query matches an abbreviation
     const abbreviation = abbreviations[query.toLowerCase()];
     if (abbreviation) {
-      setSuggestions([abbreviation]);
+      // Include priority custom items that also match
+      const customMatches = customItems
+        .filter(item =>
+          item.text.toLowerCase().includes(query.toLowerCase().trim()) ||
+          item.description?.toLowerCase().includes(query.toLowerCase().trim())
+        )
+        .sort((a, b) => Number(b.isPriority) - Number(a.isPriority))
+        .map(i => i.text);
+      const merged = Array.from(new Set([...customMatches, abbreviation])).slice(0, 10);
+      setSuggestions(merged);
       setSelectedIndex(0);
       return;
     }
 
-    // Search for medical conditions
+    // Search for medical conditions and merge custom items (priority first)
     const results = searchMedicalConditions(query, 8);
-    setSuggestions(results);
+    const customMatches = customItems
+      .filter(item =>
+        item.text.toLowerCase().includes(query.toLowerCase().trim()) ||
+        item.description?.toLowerCase().includes(query.toLowerCase().trim())
+      )
+      .sort((a, b) => Number(b.isPriority) - Number(a.isPriority))
+      .map(i => i.text);
+    const merged = Array.from(new Set([...customMatches, ...results])).slice(0, 10);
+    setSuggestions(merged);
     setSelectedIndex(0);
-  }, [query]);
+  }, [query, customItems]);
 
   // Handle keyboard navigation
   const handleKeyDown = useCallback((e: KeyboardEvent) => {

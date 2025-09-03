@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Pill, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAutocompleteItems } from "@/hooks/use-autocomplete-items";
 import { 
   searchMedications, 
   getMedicationCategories,
@@ -177,6 +178,83 @@ function DosageFrequencyPopup({ medication, position, onSelect, onClose }: Dosag
   );
 }
 
+interface CustomItemPickerProps {
+  medText: string;
+  position: { top: number; left: number };
+  dosageOptions?: string[];
+  frequencyOptions?: string[];
+  onSelect: (fullMedication: string) => void;
+  onClose: () => void;
+}
+
+function CustomItemPicker({ medText, position, dosageOptions = [], frequencyOptions = [], onSelect, onClose }: CustomItemPickerProps) {
+  const [selectedDosage, setSelectedDosage] = useState<string>("");
+  const [selectedFrequency, setSelectedFrequency] = useState<string>("");
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) onClose();
+    };
+    const timeoutId = setTimeout(() => document.addEventListener("mousedown", handleClickOutside), 100);
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [onClose]);
+
+  const commit = (d?: string, f?: string) => {
+    const full = [medText, d, f].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+    onSelect(full);
+  };
+
+  return (
+    <div ref={containerRef} className="fixed z-50" style={{ top: `${position.top + 10}px`, left: `${position.left}px`, maxWidth: "300px", minWidth: "280px" }}>
+      <Card className="shadow-lg border border-gray-200">
+        <CardContent className="p-3">
+          <div className="text-sm font-medium mb-2">{medText}</div>
+          {dosageOptions.length > 0 && (
+            <div className="mb-2">
+              <div className="text-xs font-medium text-gray-700 mb-1">Dosage Options</div>
+              <div className="flex flex-wrap gap-1">
+                {dosageOptions.map(d => (
+                  <Button key={d} variant={selectedDosage === d ? 'default' : 'outline'} size="sm" className="text-xs h-6 px-2" onClick={() => { setSelectedDosage(d); if (selectedFrequency) commit(d, selectedFrequency); }}>{d}</Button>
+                ))}
+              </div>
+            </div>
+          )}
+          {frequencyOptions.length > 0 && (
+            <div className="mb-2">
+              <div className="text-xs font-medium text-gray-700 mb-1">Frequency Options</div>
+              <div className="flex flex-wrap gap-1">
+                {frequencyOptions.map(f => (
+                  <Button key={f} variant={selectedFrequency === f ? 'default' : 'outline'} size="sm" className="text-xs h-6 px-2" onClick={() => { setSelectedFrequency(f); if (selectedDosage) commit(selectedDosage, f); }}>{f}</Button>
+                ))}
+              </div>
+            </div>
+          )}
+          {(!dosageOptions.length && !frequencyOptions.length) && (
+            <div className="text-xs text-gray-500">No options provided. Selecting will insert the medication name only.</div>
+          )}
+          {selectedDosage && selectedFrequency && (
+            <div className="mt-2 p-2 bg-green-50 rounded text-xs">
+              <span className="font-medium text-green-800">{medText} {selectedDosage} {selectedFrequency}</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 export function MedicationAutocomplete({
   query,
   position,
@@ -187,13 +265,28 @@ export function MedicationAutocomplete({
   const [suggestions, setSuggestions] = useState<MedicationInfo[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showDosagePopup, setShowDosagePopup] = useState<MedicationInfo | null>(null);
+  const [customPicker, setCustomPicker] = useState<{ text: string; dosages?: string[]; freqs?: string[] } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const { items: customItems } = useAutocompleteItems('medications');
 
   useEffect(() => {
     const results = searchMedications(query, 8);
     setSuggestions(results);
     setSelectedIndex(0);
   }, [query]);
+
+  const customSuggestions = customItems
+    .filter(item =>
+      item.text.toLowerCase().includes(query.toLowerCase().trim()) ||
+      item.description?.toLowerCase().includes(query.toLowerCase().trim())
+    )
+    .sort((a, b) => Number(b.isPriority) - Number(a.isPriority))
+    .slice(0, 5);
+
+  const handleCustomSelect = (text: string, dosage?: string, frequency?: string) => {
+    const full = [text, dosage, frequency].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+    onSelect(full);
+  };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -278,6 +371,52 @@ export function MedicationAutocomplete({
         <Card className="shadow-lg border border-gray-200">
           <CardContent className="p-0">
             <div className="max-h-64 overflow-y-auto">
+              {customSuggestions.length > 0 && (
+                <>
+                  <div className="p-2 bg-purple-50 border-b flex items-center gap-2">
+                    <Pill size={14} className="text-purple-600" />
+                    <span className="text-xs font-medium text-purple-700">Custom Medications</span>
+                  </div>
+                  {customSuggestions.map((item, index) => (
+                    <Button
+                      key={item.id}
+                      variant="ghost"
+                      size="sm"
+                      className={cn(
+                        "w-full justify-start text-left h-auto py-2 px-3 rounded-none border-b border-gray-50 last:border-b-0",
+                        index === selectedIndex && "bg-purple-50 text-purple-900"
+                      )}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (item.dosageOptions?.length || item.frequencyOptions?.length) {
+                          setCustomPicker({ text: item.text, dosages: item.dosageOptions, freqs: item.frequencyOptions });
+                        } else {
+                          handleCustomSelect(item.text, item.dosage, item.frequency);
+                        }
+                      }}
+                      data-testid={`custom-medication-suggestion-${index}`}
+                    >
+                      <div className="flex items-center gap-2 w-full">
+                        <Pill size={16} className="text-purple-600 flex-shrink-0" />
+                        <div className="flex flex-col items-start gap-0.5 flex-1">
+                          <span className="font-medium text-sm">{item.text}</span>
+                          <div className="flex items-center gap-2 text-xs text-gray-500">
+                            {item.dosage && <span>Dosage: {item.dosage}</span>}
+                            {item.frequency && <span>Frequency: {item.frequency}</span>}
+                            {item.dosageOptions && item.dosageOptions.length > 0 && (
+                              <span>{item.dosageOptions.length} dosage option{item.dosageOptions.length > 1 ? 's' : ''}</span>
+                            )}
+                            {item.frequencyOptions && item.frequencyOptions.length > 0 && (
+                              <span>{item.frequencyOptions.length} frequency option{item.frequencyOptions.length > 1 ? 's' : ''}</span>
+                            )}
+                            {item.isPriority && <Badge variant="outline" className="text-[10px]">Priority</Badge>}
+                          </div>
+                        </div>
+                      </div>
+                    </Button>
+                  ))}
+                </>
+              )}
               <div className="p-2 bg-purple-50 border-b flex items-center gap-2">
                 <Pill size={14} className="text-purple-600" />
                 <span className="text-xs font-medium text-purple-700">Common Medications</span>
@@ -337,6 +476,16 @@ export function MedicationAutocomplete({
           position={position}
           onSelect={handleDosageFrequencySelect}
           onClose={handleDosagePopupClose}
+        />
+      )}
+      {customPicker && (
+        <CustomItemPicker
+          medText={customPicker.text}
+          position={position}
+          dosageOptions={customPicker.dosages}
+          frequencyOptions={customPicker.freqs}
+          onSelect={(full) => { onSelect(full); setCustomPicker(null); }}
+          onClose={() => { setCustomPicker(null); onClose(); }}
         />
       )}
     </>

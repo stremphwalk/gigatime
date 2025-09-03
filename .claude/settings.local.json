@@ -26,10 +26,13 @@
       "Bash(npx vercel:*)",
       "Bash(chmod:*)",
       "Bash(git fetch:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(npx tsx:*)",
+      "Bash(rg:*)",
+      "Bash(ls:*)"
     ],
     "deny": [],
-    "ask": [],
-    "defaultMode": "acceptEdits"
+    "defaultMode": "acceptEdits",
+    "ask": []
   }
 }

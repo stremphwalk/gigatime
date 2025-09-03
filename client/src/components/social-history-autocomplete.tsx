@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Cigarette, Wine, Pill } from "lucide-react";
+import { Cigarette, Wine, Pill, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAutocompleteItems } from "@/hooks/use-autocomplete-items";
 
 interface SocialHistoryAutocompleteProps {
   query: string;
@@ -30,6 +31,7 @@ export function SocialHistoryAutocomplete({
   const [suggestions, setSuggestions] = useState<SocialHistoryOption[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const { items: customItems } = useAutocompleteItems('social-history');
 
   // Define social history options
   const socialHistoryOptions: SocialHistoryOption[] = [
@@ -69,6 +71,21 @@ export function SocialHistoryAutocomplete({
 
     let results: SocialHistoryOption[] = [];
 
+    // Custom items (priority first)
+    const customMatches = customItems
+      .filter(item =>
+        item.text.toLowerCase().includes(normalizedQuery) ||
+        item.description?.toLowerCase().includes(normalizedQuery)
+      )
+      .sort((a, b) => Number(b.isPriority) - Number(a.isPriority))
+      .map((item) => ({
+        id: `custom-${item.id}`,
+        label: item.text,
+        icon: Pill,
+        format: () => item.text,
+        category: item.isPriority ? 'Custom (Priority)' : 'Custom'
+      }));
+
     // Check if query is "nil" or similar
     if (["nil", "none", "denies", "negative"].includes(normalizedQuery)) {
       results = nilOptions;
@@ -93,9 +110,12 @@ export function SocialHistoryAutocomplete({
       ];
     }
 
-    setSuggestions(results);
+    // Merge custom items at the top and de-dupe by label
+    const merged = [...customMatches, ...results];
+    const uniqueByLabel = merged.filter((opt, index, arr) => arr.findIndex(o => o.label === opt.label) === index);
+    setSuggestions(uniqueByLabel.slice(0, 10));
     setSelectedIndex(0);
-  }, [query]);
+  }, [query, customItems]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

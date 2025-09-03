@@ -9,9 +9,10 @@ export function Auth0ProviderWrapper({ children }: Auth0ProviderWrapperProps) {
   const domain = import.meta.env.VITE_AUTH0_DOMAIN || '';
   const clientId = import.meta.env.VITE_AUTH0_CLIENT_ID || '';
   const redirectUri = `${window.location.origin}/auth/callback`;
+  const noAuth = import.meta.env.VITE_NO_AUTH === '1';
 
   // If Auth0 is not configured, just render children
-  if (!domain || !clientId) {
+  if (noAuth || !domain || !clientId) {
     return <>{children}</>;
   }
 

@@ -5,6 +5,7 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Stethoscope, Eye, Heart, Zap, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { searchPhysicalExamOptions, getPhysicalExamSuggestions, QUICK_PHYSICAL_EXAM_PHRASES, COMPREHENSIVE_NEGATIVE_FINDINGS, type PhysicalExamOption } from "@/lib/physical-exam-options";
+import { useAutocompleteItems } from "@/hooks/use-autocomplete-items";
 
 interface PhysicalExamAutocompleteProps {
   query: string;
@@ -38,9 +39,19 @@ export function PhysicalExamAutocomplete({
 }: PhysicalExamAutocompleteProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showCategories, setShowCategories] = useState(false);
+  const { items: customItems } = useAutocompleteItems('physical-exam');
 
   // Get suggestions based on query
-  const suggestions = getPhysicalExamSuggestions(query);
+  // Merge custom items into quick suggestions
+  const baseSuggestions = getPhysicalExamSuggestions(query);
+  const customMatches = customItems
+    .filter(item =>
+      item.text.toLowerCase().includes(query.toLowerCase().trim()) ||
+      item.description?.toLowerCase().includes(query.toLowerCase().trim())
+    )
+    .sort((a, b) => Number(b.isPriority) - Number(a.isPriority))
+    .map(i => i.text);
+  const suggestions = Array.from(new Set([...customMatches, ...baseSuggestions])).slice(0, 12);
   const categoryResults = searchPhysicalExamOptions(query);
 
   useEffect(() => {

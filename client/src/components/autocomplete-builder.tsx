@@ -2,6 +2,10 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -24,8 +28,16 @@ import {
   Beaker,
   Camera,
   Target,
-  X
+  X,
+  Grid3X3,
+  List,
+  ChevronsUpDown,
+  Check
 } from "lucide-react";
+import { SearchField } from "@/components/library/SearchField";
+import { FilterDropdown } from "@/components/library/FilterDropdown";
+import { LayoutDensityControls } from "@/components/library/LayoutDensityControls";
+import { ActionButtons as SharedActions } from "@/components/library/ActionButtons";
 
 const SECTION_CATEGORIES = [
   { value: 'consultation-reasons', label: 'Consultation/Admission Reasons', icon: FileText },
@@ -43,6 +55,8 @@ export function AutocompleteBuilder() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [editingItem, setEditingItem] = useState<AutocompleteItem | null>(null);
+  const [layout, setLayout] = useState<'grid'|'list'>('grid');
+  const [density, setDensity] = useState<'compact'|'cozy'>('compact');
   
   const { 
     items: autocompleteItems, 
@@ -59,6 +73,8 @@ export function AutocompleteBuilder() {
     isPriority: false,
     dosage: '',
     frequency: '',
+    dosageOptions: [] as string[],
+    frequencyOptions: [] as string[],
     description: ''
   });
 
@@ -71,6 +87,8 @@ export function AutocompleteBuilder() {
     const matchesCategory = !selectedCategory || item.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
+  const densityCls = density === 'compact' ? 'text-[12px] leading-5' : 'text-sm';
+  const padCls = density === 'compact' ? 'p-2' : 'p-3';
 
   const handleSave = async () => {
     if (!formData.text.trim() || !selectedCategory) {
@@ -83,7 +101,7 @@ export function AutocompleteBuilder() {
     }
 
     try {
-      const itemData = {
+      const itemData: any = {
         text: formData.text.trim(),
         category: selectedCategory,
         isPriority: formData.isPriority,
@@ -91,6 +109,15 @@ export function AutocompleteBuilder() {
         frequency: formData.frequency.trim() || undefined,
         description: formData.description.trim() || undefined,
       };
+
+      if (selectedCategory === 'medications') {
+        const cleanDosages = Array.from(new Set((formData.dosageOptions || []).map(d => d.trim()).filter(Boolean)));
+        const cleanFrequencies = Array.from(new Set((formData.frequencyOptions || []).map(f => f.trim()).filter(Boolean)));
+        if (cleanDosages.length > 0) itemData.dosageOptions = cleanDosages;
+        if (cleanFrequencies.length > 0) itemData.frequencyOptions = cleanFrequencies;
+        if (!itemData.dosage && cleanDosages.length === 1) itemData.dosage = cleanDosages[0];
+        if (!itemData.frequency && cleanFrequencies.length === 1) itemData.frequency = cleanFrequencies[0];
+      }
 
       if (editingItem) {
         await updateItem({ id: editingItem.id, ...itemData });
@@ -112,6 +139,8 @@ export function AutocompleteBuilder() {
         isPriority: false,
         dosage: '',
         frequency: '',
+        dosageOptions: [],
+        frequencyOptions: [],
         description: ''
       });
       setIsCreating(false);
@@ -132,6 +161,8 @@ export function AutocompleteBuilder() {
       isPriority: item.isPriority,
       dosage: item.dosage || '',
       frequency: item.frequency || '',
+      dosageOptions: item.dosageOptions || (item.dosage ? [item.dosage] : []),
+      frequencyOptions: item.frequencyOptions || (item.frequency ? [item.frequency] : []),
       description: item.description || ''
     });
     setSelectedCategory(item.category);
@@ -163,6 +194,8 @@ export function AutocompleteBuilder() {
       isPriority: false,
       dosage: '',
       frequency: '',
+      dosageOptions: [],
+      frequencyOptions: [],
       description: ''
     });
     setSelectedCategory('');
@@ -178,6 +211,8 @@ export function AutocompleteBuilder() {
       isPriority: false,
       dosage: '',
       frequency: '',
+      dosageOptions: [],
+      frequencyOptions: [],
       description: ''
     });
   };
@@ -205,6 +240,7 @@ export function AutocompleteBuilder() {
   }
 
   return (
+    <TooltipProvider>
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-6xl mx-auto p-6">
         <div className="mb-6">
@@ -216,45 +252,54 @@ export function AutocompleteBuilder() {
           </p>
         </div>
 
-        {/* Filters and Create Button */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
-          <div className="flex-1">
-            <Label htmlFor="search" className="sr-only">Search</Label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-              <Input
-                id="search"
-                placeholder="Search autocomplete items..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-                data-testid="search-autocomplete-items"
-              />
-            </div>
+        {/* Header + Toolbar */}
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight">Autocomplete</h2>
+            <p className="text-muted-foreground text-xs">Manage custom suggestions for note sections</p>
           </div>
-          <div className="w-full sm:w-64">
-            <Select value={selectedCategory || "all"} onValueChange={(value) => setSelectedCategory(value === "all" ? "" : value)}>
-              <SelectTrigger data-testid="filter-category">
-                <SelectValue placeholder="Filter by category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {SECTION_CATEGORIES.map((category) => (
-                  <SelectItem key={category.value} value={category.value}>
-                    {category.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button 
-            onClick={handleCreateNew}
-            className="bg-medical-teal hover:bg-medical-teal/90"
-            data-testid="button-create-autocomplete-item"
-          >
-            <Plus size={16} className="mr-2" />
-            Create New
+          <Button onClick={handleCreateNew} className="bg-medical-teal hover:bg-medical-teal/90" size="sm" data-testid="button-create-autocomplete-item">
+            <Plus size={16} className="mr-2"/>New Item
           </Button>
+        </div>
+        <Card className="border-muted/60 mb-6">
+          <CardContent className={`flex flex-wrap items-center gap-2 ${padCls}`}>
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
+              <Input value={searchQuery} onChange={(e)=>setSearchQuery(e.target.value)} placeholder="Search items…" className="pl-8 w-64"/>
+            </div>
+            <Separator orientation="vertical" className="h-6"/>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="gap-1"><ChevronsUpDown className="h-4 w-4"/>Category</Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuLabel>Filter by category</DropdownMenuLabel>
+                <DropdownMenuSeparator/>
+                <DropdownMenuItem onClick={()=>setSelectedCategory("")}>{selectedCategory==="" && <Check className="mr-2 h-4 w-4"/>}All</DropdownMenuItem>
+                {SECTION_CATEGORIES.map(c => (
+                  <DropdownMenuItem key={c.value} onClick={()=>setSelectedCategory(c.value)}>
+                    {selectedCategory===c.value && <Check className="mr-2 h-4 w-4"/>}{c.label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <div className="ml-auto flex items-center gap-1">
+              <Button size="icon" variant={layout==='grid'? 'default':'outline'} className="h-8 w-8" onClick={()=>setLayout('grid')}><Grid3X3 className="h-4 w-4"/></Button>
+              <Button size="icon" variant={layout==='list'? 'default':'outline'} className="h-8 w-8" onClick={()=>setLayout('list')}><List className="h-4 w-4"/></Button>
+              <Separator orientation="vertical" className="h-6"/>
+              <Tabs value={density} onValueChange={(v)=>setDensity(v as any)}>
+                <TabsList className="grid grid-cols-2">
+                  <TabsTrigger value="compact" className="text-xs">Compact</TabsTrigger>
+                  <TabsTrigger value="cozy" className="text-xs">Cozy</TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+          </CardContent>
+        </Card>
+        <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+          <span>{filteredItems.length} items</span>
+          {selectedCategory && (<><span>•</span><span>Category:</span><Badge variant="outline" className="px-1 py-0 text-[10px]">{getCategoryLabel(selectedCategory)}</Badge></>)}
         </div>
 
         {/* Create/Edit Form */}
@@ -328,24 +373,78 @@ export function AutocompleteBuilder() {
               {selectedCategory === 'medications' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                   <div>
-                    <Label htmlFor="dosage">Dosage</Label>
-                    <Input
-                      id="dosage"
-                      value={formData.dosage}
-                      onChange={(e) => setFormData(prev => ({ ...prev, dosage: e.target.value }))}
-                      placeholder="e.g., 10mg, 5ml"
-                      data-testid="input-medication-dosage"
-                    />
+                    <Label htmlFor="dosage">Dosage Options</Label>
+                    <div className="flex gap-2 mb-2">
+                      <Input
+                        id="dosage"
+                        value={formData.dosage}
+                        onChange={(e) => setFormData(prev => ({ ...prev, dosage: e.target.value }))}
+                        placeholder="e.g., 10 mg, 5 mL"
+                        data-testid="input-medication-dosage"
+                      />
+                      <Button type="button" variant="secondary" onClick={() => {
+                        const v = formData.dosage.trim();
+                        if (!v) return;
+                        if ((formData.dosageOptions || []).length >= 20) return;
+                        setFormData(prev => ({
+                          ...prev,
+                          dosage: '',
+                          dosageOptions: Array.from(new Set([...(prev.dosageOptions || []), v]))
+                        }));
+                      }}>Add</Button>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {(formData.dosageOptions || []).map((opt, idx) => (
+                        <Badge key={`${opt}-${idx}`} variant="secondary" className="text-xs flex items-center gap-1">
+                          {opt}
+                          <button type="button" onClick={() => setFormData(prev => ({
+                            ...prev,
+                            dosageOptions: (prev.dosageOptions || []).filter((_, i) => i !== idx)
+                          }))} aria-label="Remove">×</button>
+                        </Badge>
+                      ))}
+                    </div>
                   </div>
                   <div>
-                    <Label htmlFor="frequency">Frequency</Label>
-                    <Input
-                      id="frequency"
-                      value={formData.frequency}
-                      onChange={(e) => setFormData(prev => ({ ...prev, frequency: e.target.value }))}
-                      placeholder="e.g., BID, TID, PRN"
-                      data-testid="input-medication-frequency"
-                    />
+                    <Label htmlFor="frequency">Frequency Options</Label>
+                    <div className="flex gap-2 mb-2">
+                      <Input
+                        id="frequency"
+                        value={formData.frequency}
+                        onChange={(e) => setFormData(prev => ({ ...prev, frequency: e.target.value }))}
+                        placeholder="e.g., BID, TID, QID, q6h, PRN"
+                        data-testid="input-medication-frequency"
+                      />
+                      <Button type="button" variant="secondary" onClick={() => {
+                        const v = formData.frequency.trim();
+                        if (!v) return;
+                        if ((formData.frequencyOptions || []).length >= 20) return;
+                        setFormData(prev => ({
+                          ...prev,
+                          frequency: '',
+                          frequencyOptions: Array.from(new Set([...(prev.frequencyOptions || []), v]))
+                        }));
+                      }}>Add</Button>
+                    </div>
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {['QD','BID','TID','QID','q6h','q8h','PRN','HS'].map(preset => (
+                        <Button key={preset} type="button" size="sm" variant="outline" className="text-xs" onClick={() => setFormData(prev => ({
+                          ...prev,
+                          frequencyOptions: Array.from(new Set([...(prev.frequencyOptions || []), preset]))
+                        }))}>{preset}</Button>
+                      ))}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {(formData.frequencyOptions || []).map((opt, idx) => (
+                        <Badge key={`${opt}-${idx}`} variant="secondary" className="text-xs flex items-center gap-1">
+                          {opt}
+                          <button type="button" onClick={() => setFormData(prev => ({
+                            ...prev,
+                            frequencyOptions: (prev.frequencyOptions || []).filter((_, i) => i !== idx)
+                          }))} aria-label="Remove">×</button>
+                        </Badge>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
@@ -387,8 +486,9 @@ export function AutocompleteBuilder() {
           </Card>
         )}
 
-        {/* Items Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* Items */}
+        {layout === 'grid' ? (
+        <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {filteredItems.length === 0 ? (
             <div className="col-span-full text-center py-12">
               <Target className="mx-auto h-12 w-12 text-gray-400 mb-4" />
@@ -412,12 +512,12 @@ export function AutocompleteBuilder() {
             </div>
           ) : (
             filteredItems.map((item) => (
-              <Card key={item.id} className="hover:shadow-md transition-shadow">
-                <CardHeader className="pb-3">
+              <Card key={item.id} className="group overflow-hidden border-muted/60 transition-shadow hover:shadow-sm">
+                <CardHeader className={`flex flex-row items-start justify-between ${padCls}`}>
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center space-x-2 mb-1">
-                        <CardTitle className="text-lg font-medium">
+                        <CardTitle className={`truncate font-medium ${densityCls}`}>
                           {item.text}
                         </CardTitle>
                         {item.isPriority && (
@@ -434,14 +534,14 @@ export function AutocompleteBuilder() {
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent className="space-y-3">
+                <CardContent className={`${padCls} pt-0 space-y-3`}>
                   {item.description && (
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                       {item.description}
                     </p>
                   )}
                   
-                  {(item.dosage || item.frequency) && (
+                  {((item.dosage && item.dosage.length) || (item.frequency && item.frequency.length) || (item.dosageOptions && item.dosageOptions.length) || (item.frequencyOptions && item.frequencyOptions.length)) && (
                     <div className="flex flex-wrap gap-2">
                       {item.dosage && (
                         <Badge variant="secondary" className="text-xs">
@@ -453,34 +553,50 @@ export function AutocompleteBuilder() {
                           Frequency: {item.frequency}
                         </Badge>
                       )}
+                      {item.dosageOptions && item.dosageOptions.length > 0 && (
+                        <Badge variant="secondary" className="text-xs">
+                          {item.dosageOptions.length} dosage option{item.dosageOptions.length > 1 ? 's' : ''}
+                        </Badge>
+                      )}
+                      {item.frequencyOptions && item.frequencyOptions.length > 0 && (
+                        <Badge variant="secondary" className="text-xs">
+                          {item.frequencyOptions.length} frequency option{item.frequencyOptions.length > 1 ? 's' : ''}
+                        </Badge>
+                      )}
                     </div>
                   )}
                   
                   <div className="flex justify-end space-x-2 pt-2">
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={() => handleEdit(item)}
-                      data-testid={`button-edit-${item.id}`}
-                    >
-                      <Edit2 size={14} />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="text-red-600 hover:text-red-700"
-                      onClick={() => handleDelete(item.id)}
-                      data-testid={`button-delete-${item.id}`}
-                    >
-                      <Trash2 size={14} />
-                    </Button>
+                    <SharedActions onEdit={() => handleEdit(item)} onDelete={() => handleDelete(item.id)} size="sm" />
                   </div>
                 </CardContent>
               </Card>
             ))
           )}
         </div>
+        ) : (
+          <div className="mt-3 divide-y rounded-xl border bg-background/40">
+            {filteredItems.map(item => (
+              <div key={item.id} className={`grid grid-cols-12 items-center ${padCls} gap-2`}>
+                <div className="col-span-5 min-w-0">
+                  <div className={`truncate font-medium ${densityCls}`}>{item.text}</div>
+                  {item.description && <div className={`truncate text-muted-foreground ${densityCls}`}>{item.description}</div>}
+                </div>
+                <div className="col-span-3 flex items-center gap-1">
+                  <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[10px] leading-4">{getCategoryLabel(item.category)}</Badge>
+                  {item.isPriority && <Badge variant="outline" className="text-[10px]">Priority</Badge>}
+                </div>
+                <div className="col-span-4 ml-auto flex items-center justify-end gap-2">
+                  {(item.dosageOptions && item.dosageOptions.length > 0) && <Badge variant="secondary" className="text-[10px]">{item.dosageOptions.length} dosages</Badge>}
+                  {(item.frequencyOptions && item.frequencyOptions.length > 0) && <Badge variant="secondary" className="text-[10px]">{item.frequencyOptions.length} freqs</Badge>}
+                  <SharedActions onEdit={() => handleEdit(item)} onDelete={() => handleDelete(item.id)} size="sm" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
+    </TooltipProvider>
   );
 }

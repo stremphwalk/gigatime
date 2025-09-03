@@ -22,6 +22,24 @@ function extractAuth0UserFromCookie(req: any): { sub: string; email?: string; na
 
 export const requireAuth: RequestHandler = async (req: any, res, next) => {
   console.log("[requireAuth] Starting auth check, NODE_ENV:", process.env.NODE_ENV);
+  // Explicit no-auth override for local development/testing
+  if (process.env.NO_AUTH === '1') {
+    if (!req.session) req.session = {} as any;
+    if (req.session.loggedOut === true) {
+      return res.status(401).json({ message: "Not authenticated" });
+    }
+    if (!req.user) {
+      req.user = {
+        claims: {
+          sub: "123e4567-e89b-12d3-a456-426614174000",
+          email: "doctor@hospital.com",
+          first_name: "Dr. Sarah",
+          last_name: "Mitchell"
+        }
+      };
+    }
+    return next();
+  }
   
   // In development with no Auth0 config, use mock user
   if (process.env.NODE_ENV === 'development' && !process.env.AUTH0_CLIENT_ID) {
@@ -78,6 +96,21 @@ export const requireAuth: RequestHandler = async (req: any, res, next) => {
 };
 
 export const optionalAuth: RequestHandler = async (req: any, res, next) => {
+  // Explicit no-auth override for local development/testing
+  if (process.env.NO_AUTH === '1') {
+    if (!req.session) req.session = {} as any;
+    if (req.session.loggedOut !== true && !req.user) {
+      req.user = {
+        claims: {
+          sub: "123e4567-e89b-12d3-a456-426614174000",
+          email: "doctor@hospital.com",
+          first_name: "Dr. Sarah",
+          last_name: "Mitchell"
+        }
+      };
+    }
+    return next();
+  }
   // In development with no Auth0 config, set mock user if not logged out
   if (process.env.NODE_ENV === 'development' && !process.env.AUTH0_CLIENT_ID) {
     // Initialize session if it doesn't exist
@@ -117,6 +150,14 @@ export const optionalAuth: RequestHandler = async (req: any, res, next) => {
 };
 
 export const getCurrentUserId = (req: any): string => {
+  // Explicit no-auth override
+  if (process.env.NO_AUTH === '1') {
+    if (!req.session) req.session = {} as any;
+    if (req.session.loggedOut !== true) {
+      return "123e4567-e89b-12d3-a456-426614174000";
+    }
+    throw new Error("User not authenticated");
+  }
   // Check for Auth0 user first
   if (req.oidc && req.oidc.isAuthenticated() && req.oidc.user) {
     return getAuth0UserId(req);

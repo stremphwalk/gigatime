@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAutocompleteItems } from "@/hooks/use-autocomplete-items";
 
 interface ImagingStudy {
   abbreviation: string;
@@ -158,12 +159,21 @@ export function ImagingAutocomplete({ onSelect, trigger, placeholder = "Search i
   const [selectedStudy, setSelectedStudy] = useState<ImagingStudy | null>(null);
   const [selectedNegatives, setSelectedNegatives] = useState<string[]>([]);
   const [searchValue, setSearchValue] = useState("");
+  const { items: customItems } = useAutocompleteItems('imaging');
 
   const filteredStudies = IMAGING_STUDIES.filter(
     study => 
       study.abbreviation.toLowerCase().includes(searchValue.toLowerCase()) ||
       study.fullName.toLowerCase().includes(searchValue.toLowerCase())
   );
+
+  const customSnippets = customItems
+    .filter(item =>
+      item.text.toLowerCase().includes(searchValue.toLowerCase().trim()) ||
+      item.description?.toLowerCase().includes(searchValue.toLowerCase().trim())
+    )
+    .sort((a, b) => Number(b.isPriority) - Number(a.isPriority))
+    .slice(0, 10);
 
   const handleStudySelect = useCallback((study: ImagingStudy) => {
     setSelectedStudy(study);
@@ -195,6 +205,22 @@ export function ImagingAutocomplete({ onSelect, trigger, placeholder = "Search i
     setSearchValue("");
   }, []);
 
+  const handleCustomSnippetSelect = useCallback((text: string) => {
+    // Use a special abbreviation to signal raw insert
+    const pseudoStudy = {
+      abbreviation: "__CUSTOM__",
+      fullName: text,
+      category: "Custom",
+      commonFindings: [],
+      pertinentNegatives: [],
+    } as ImagingStudy;
+    onSelect(pseudoStudy, []);
+    setOpen(false);
+    setSelectedStudy(null);
+    setSelectedNegatives([]);
+    setSearchValue("");
+  }, [onSelect]);
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -219,6 +245,33 @@ export function ImagingAutocomplete({ onSelect, trigger, placeholder = "Search i
             />
             <CommandList>
               <CommandEmpty>No imaging studies found.</CommandEmpty>
+              {customSnippets.length > 0 && (
+                <CommandGroup heading="Custom Imaging Snippets">
+                  {customSnippets.map((item) => (
+                    <CommandItem
+                      key={item.id}
+                      value={item.text}
+                      onSelect={() => handleCustomSnippetSelect(item.text)}
+                      className="flex flex-col items-start space-y-1 p-3"
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center space-x-2">
+                          <Badge variant="secondary" className="text-xs">Custom</Badge>
+                          <span className="font-medium">{item.text}</span>
+                        </div>
+                        {item.isPriority && (
+                          <Badge variant="outline" className="text-xs">Priority</Badge>
+                        )}
+                      </div>
+                      {item.description && (
+                        <p className="text-sm text-gray-600 text-left">
+                          {item.description}
+                        </p>
+                      )}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              )}
               <CommandGroup heading="Imaging Studies">
                 {filteredStudies.map((study) => (
                   <CommandItem

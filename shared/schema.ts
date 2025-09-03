@@ -9,6 +9,7 @@ import {
   uuid,
   boolean,
   integer,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -147,18 +148,30 @@ export const userLabSettings = pgTable("user_lab_settings", {
 });
 
 // Autocomplete items table for note section autocompletions
-export const autocompleteItems = pgTable("autocomplete_items", {
-  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
-  text: varchar("text", { length: 500 }).notNull(),
-  category: varchar("category", { length: 100 }).notNull(), // consultation-reasons, past-medical-history, etc.
-  isPriority: boolean("is_priority").default(false),
-  dosage: varchar("dosage", { length: 100 }),
-  frequency: varchar("frequency", { length: 100 }),
-  description: text("description"),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
+export const autocompleteItems = pgTable(
+  "autocomplete_items",
+  {
+    id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    text: varchar("text", { length: 500 }).notNull(),
+    category: varchar("category", { length: 100 }).notNull(), // consultation-reasons, past-medical-history, etc.
+    isPriority: boolean("is_priority").default(false),
+    dosage: varchar("dosage", { length: 100 }),
+    frequency: varchar("frequency", { length: 100 }),
+    dosageOptions: jsonb("dosage_options").$type<string[]>(),
+    frequencyOptions: jsonb("frequency_options").$type<string[]>(),
+    description: text("description"),
+    userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("ux_autocomplete_items_user_category_text").on(
+      table.userId,
+      table.category,
+      table.text,
+    ),
+  ],
+);
 
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({

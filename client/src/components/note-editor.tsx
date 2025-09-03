@@ -52,6 +52,7 @@ import {
   FileSearch
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatSmartPhrase, computeElementStrings } from "@/lib/smart-phrase-format";
 import { noteTemplates } from "../lib/note-templates";
 import { COMMON_ALLERGIES, TOP_MEDICAL_ALLERGIES } from "@/lib/medical-conditions";
 import type { Note, NoteTemplate } from "@shared/schema";
@@ -90,7 +91,18 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     phrase: any;
     sectionId: string;
     position: { top: number; left: number };
+    regionStart: number;
+    regionLength: number;
+    regionId: string;
   } | null>(null);
+  const [phraseRegions, setPhraseRegions] = useState<Array<{ id: string; sectionId: string; start: number; length: number; phrase: any; selections: Record<string, any> }>>([]);
+  const [activePhraseHint, setActivePhraseHint] = useState<{
+    regionId: string;
+    sectionId: string;
+    position: { top: number; left: number };
+    elementIndex?: number;
+  } | null>(null);
+  const [openPhraseMenuSection, setOpenPhraseMenuSection] = useState<string | null>(null);
   
   const [activeMedicalAutocomplete, setActiveMedicalAutocomplete] = useState<{
     sectionId: string;
@@ -241,6 +253,36 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
   };
 
   const handleSectionContentChange = (sectionId: string, content: string, textarea: HTMLTextAreaElement) => {
+    const prevContent = noteData.content[sectionId] || '';
+    const nextContent = content;
+
+    if (prevContent !== nextContent) {
+      const a = prevContent;
+      const b = nextContent;
+      let i = 0;
+      const minLen = Math.min(a.length, b.length);
+      while (i < minLen && a[i] === b[i]) i++;
+      let j = 0;
+      while (j < (minLen - i) && a[a.length - 1 - j] === b[b.length - 1 - j]) j++;
+      const changeStart = i;
+      const prevChangedLen = a.length - i - j;
+      const nextChangedLen = b.length - i - j;
+      const delta = nextChangedLen - prevChangedLen;
+      const changeEndPrev = changeStart + prevChangedLen;
+
+      setPhraseRegions(prev => {
+        const updated: typeof prev = [];
+        for (const r of prev) {
+          if (r.sectionId !== sectionId) { updated.push(r); continue; }
+          if (r.start + r.length <= changeStart) { updated.push(r); continue; }
+          if (r.start >= changeEndPrev) { updated.push({ ...r, start: r.start + delta }); continue; }
+          // overlap: drop linkage and close active picker if tied
+          if (activePicker && activePicker.regionId === r.id) setActivePicker(null);
+          // do not push r
+        }
+        return updated;
+      });
+    }
     setNoteData(prev => ({
       ...prev,
       content: {
@@ -713,15 +755,36 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
         if (!phrase.elements || (Array.isArray(phrase.elements) && phrase.elements.length === 0)) {
           finalContent = phrase.content;
         } else {
-          // Show picker for interactive phrases
-          const rect = document.querySelector(`[data-section-id="${activeAutocomplete.sectionId}"]`)?.getBoundingClientRect();
-          if (rect) {
-            setActivePicker({
-              phrase,
-              sectionId: activeAutocomplete.sectionId,
-              position: { top: rect.bottom + 10, left: rect.left }
-            });
-          }
+          // Live insert template at the slash and open picker
+          const textarea = document.querySelector(`[data-section-id="${activeAutocomplete.sectionId}"]`) as HTMLTextAreaElement | null;
+          const currentText = noteData.content[activeAutocomplete.sectionId] || '';
+          const lastSlashIndex = currentText.lastIndexOf('/');
+          const beforeSlash = lastSlashIndex >= 0 ? currentText.slice(0, lastSlashIndex) : currentText;
+          const template = phrase.content || '';
+          const newText = beforeSlash + template;
+
+          setNoteData(prev => ({
+            ...prev,
+            content: {
+              ...prev.content,
+              [activeAutocomplete.sectionId]: newText
+            }
+          }));
+
+          const rect = textarea?.getBoundingClientRect();
+          const regionId = `reg_${Date.now()}_${Math.floor(Math.random()*1000)}`;
+          setActivePicker({
+            phrase,
+            sectionId: activeAutocomplete.sectionId,
+            position: rect ? { top: rect.bottom + 10, left: rect.left } : { top: 200, left: 200 },
+            regionStart: beforeSlash.length,
+            regionLength: template.length,
+            regionId,
+          });
+          setPhraseRegions(prev => ([
+            ...prev,
+            { id: regionId, sectionId: activeAutocomplete.sectionId, start: beforeSlash.length, length: template.length, phrase, selections: {} }
+          ]));
           setActiveAutocomplete(null);
           return;
         }
@@ -743,13 +806,25 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     }
   };
 
+  const applyConditionalLeadingSpace = (sectionId: string, start: number, text: string) => {
+    // Add a single leading space if not at line start and previous char is not whitespace
+    if (!text) return text;
+    const content = noteData.content[sectionId] || '';
+    const lineStart = content.lastIndexOf('\n', start - 1) + 1; // -1 => 0
+    const atLineStart = start <= lineStart;
+    if (atLineStart) return text;
+    const prevChar = content[Math.max(0, start - 1)] || '';
+    if (/\s/.test(prevChar)) return text;
+    return ' ' + text;
+  };
+
   const handlePickerSelect = (result: string) => {
     if (activePicker) {
       const currentContent = noteData.content[activePicker.sectionId] || '';
-      const lastSlashIndex = currentContent.lastIndexOf('/');
-      const beforeSlash = lastSlashIndex >= 0 ? currentContent.slice(0, lastSlashIndex) : currentContent;
-      const newContent = beforeSlash + result;
-      
+      const start = activePicker.regionStart;
+      const end = start + activePicker.regionLength;
+      const adjusted = applyConditionalLeadingSpace(activePicker.sectionId, start, result);
+      const newContent = currentContent.slice(0, start) + adjusted + currentContent.slice(end);
       setNoteData(prev => ({
         ...prev,
         content: {
@@ -757,9 +832,102 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
           [activePicker.sectionId]: newContent
         }
       }));
-      
+      setPhraseRegions(prev => prev.map(r => r.id === activePicker.regionId ? { ...r, length: adjusted.length } : r));
       setActivePicker(null);
     }
+  };
+
+  const handlePickerUpdate = (result: string, selections?: Record<string, any>) => {
+    if (!activePicker) return;
+    const currentContent = noteData.content[activePicker.sectionId] || '';
+    const start = activePicker.regionStart;
+    const end = start + activePicker.regionLength;
+    const adjusted = applyConditionalLeadingSpace(activePicker.sectionId, start, result);
+    const newContent = currentContent.slice(0, start) + adjusted + currentContent.slice(end);
+    setNoteData(prev => ({
+      ...prev,
+      content: {
+        ...prev.content,
+        [activePicker.sectionId]: newContent
+      }
+    }));
+    setActivePicker(prev => (prev ? { ...prev, regionLength: adjusted.length } : prev));
+    setPhraseRegions(prev => prev.map(r => r.id === activePicker.regionId ? { ...r, length: adjusted.length, selections: selections || r.selections } : r));
+  };
+
+  const tryReopenPickerAtCaret = (sectionId: string, textarea: HTMLTextAreaElement) => {
+    // No auto-open; only show hint on caret presence
+    const pos = textarea.selectionStart ?? 0;
+    const candidates = phraseRegions.filter(r => r.sectionId === sectionId);
+    const found = candidates.find(r => pos >= r.start && pos <= r.start + r.length);
+    if (!found) { setActivePhraseHint(null); return; }
+    const rect = textarea.getBoundingClientRect();
+    setActivePhraseHint({ regionId: found.id, sectionId, position: { top: rect.top, left: rect.left } });
+  };
+
+  const handleTextareaMouseMove = (sectionId: string, textarea: HTMLTextAreaElement, e: React.MouseEvent) => {
+    const content = noteData.content[sectionId] || '';
+    const rect = textarea.getBoundingClientRect();
+    const style = window.getComputedStyle(textarea);
+    const lineHeight = parseInt(style.lineHeight) || 20;
+    const paddingTop = parseInt(style.paddingTop) || 8;
+    const paddingLeft = parseInt(style.paddingLeft) || 12;
+    const charWidth = 8;
+    const x = e.clientX - rect.left - paddingLeft;
+    const y = e.clientY - rect.top - paddingTop;
+    const line = Math.max(0, Math.floor(y / lineHeight));
+    const col = Math.max(0, Math.floor(x / charWidth));
+    const lines = content.split('\n');
+    let pos = 0;
+    for (let i = 0; i < line && i < lines.length; i++) pos += lines[i].length + 1;
+    pos += Math.min(col, (lines[line] || '').length);
+
+    const found = phraseRegions.filter(r => r.sectionId === sectionId).find(r => pos >= r.start && pos <= r.start + r.length);
+    if (!found) { setActivePhraseHint(null); return; }
+
+    // Determine which element index is nearest to pos
+    const regionText = content.slice(found.start, found.start + found.length);
+    const replacements = computeElementStrings(found.phrase, found.selections);
+    const full = formatSmartPhrase(found.phrase, found.selections);
+    let offset = 0;
+    const segments: Array<{ idx: number; start: number; end: number }> = [];
+    for (let i = 0; i < replacements.length; i++) {
+      const txt = replacements[i].text || '';
+      if (!txt) continue;
+      const at = full.indexOf(txt, offset);
+      if (at >= 0) {
+        segments.push({ idx: i, start: at, end: at + txt.length });
+        offset = at + txt.length;
+      }
+    }
+    const rel = pos - found.start;
+    let elementIndex: number | undefined = undefined;
+    for (const seg of segments) {
+      if (rel >= seg.start && rel <= seg.end) { elementIndex = seg.idx; break; }
+    }
+    const top = e.clientY + 6;
+    const left = e.clientX + 6;
+    setActivePhraseHint({ regionId: found.id, sectionId, position: { top, left }, elementIndex });
+  };
+
+  const handleTextareaMouseLeave = () => {
+    setActivePhraseHint(null);
+  };
+
+  const openPickerForRegion = (regionId: string, initialStep?: number) => {
+    const found = phraseRegions.find(r => r.id === regionId);
+    if (!found) return;
+    const textarea = document.querySelector(`[data-section-id="${found.sectionId}"]`) as HTMLTextAreaElement | null;
+    const rect = textarea?.getBoundingClientRect();
+    setActivePicker({
+      phrase: found.phrase,
+      sectionId: found.sectionId,
+      position: rect ? { top: rect.bottom + 10, left: rect.left } : { top: 200, left: 200 },
+      regionStart: found.start,
+      regionLength: found.length,
+      regionId: found.id,
+    });
+    setActivePhraseHint(null);
   };
 
   const handleMedicalConditionSelect = (condition: string, cursorPosition?: number) => {
@@ -1008,6 +1176,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
   };
 
   const handlePickerCancel = () => {
+    // Keep region as-is to allow reopening later
     setActivePicker(null);
   };
 
@@ -1585,10 +1754,10 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                         </Button>
                       </div>
                     )}
-                    {(section.type === 'historyOfPresentIllness' || 
-                      section.name.toLowerCase().includes('history of present illness') ||
-                      section.name.toLowerCase().includes('hpi')) && (
-                      <div className="flex items-center gap-2">
+                  {(section.type === 'historyOfPresentIllness' || 
+                    section.name.toLowerCase().includes('history of present illness') ||
+                    section.name.toLowerCase().includes('hpi')) && (
+                    <div className="flex items-center gap-2">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -1604,6 +1773,41 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                         />
                       </div>
                     )}
+                    {/* Smart Phrases chip per section */}
+                    {(() => {
+                      const regions = phraseRegions.filter(r => r.sectionId === section.id);
+                      if (regions.length === 0) return null;
+                      return (
+                        <div className="relative">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="text-xs px-2"
+                            onClick={() => setOpenPhraseMenuSection(prev => prev === section.id ? null : section.id)}
+                          >
+                            Smart phrases
+                            <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0">{regions.length}</Badge>
+                          </Button>
+                          {openPhraseMenuSection === section.id && (
+                            <div className="absolute right-0 mt-1 w-64 bg-white border rounded shadow z-30">
+                              <div className="p-2 text-[11px] text-muted-foreground">Click to edit</div>
+                              <div className="max-h-64 overflow-auto">
+                                {regions.map((r, idx) => (
+                                  <button
+                                    key={r.id}
+                                    className="w-full text-left px-2 py-1.5 text-sm hover:bg-muted/50"
+                                    onClick={() => { openPickerForRegion(r.id); setOpenPhraseMenuSection(null); }}
+                                  >
+                                    {r.phrase?.trigger ? `/${r.phrase.trigger}` : `Phrase ${idx + 1}`}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                     <Button 
                       variant="ghost" 
                       size="sm" 
@@ -1664,10 +1868,51 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                 </div>
               )}
               <div className="p-4">
+                {selectedTemplate?.type === 'blank' && (() => {
+                  const regions = phraseRegions.filter(r => r.sectionId === section.id);
+                  if (regions.length === 0) return null;
+                  return (
+                    <div className="flex justify-end mb-2">
+                      <div className="relative">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="text-xs px-2"
+                          onClick={() => setOpenPhraseMenuSection(prev => prev === section.id ? null : section.id)}
+                        >
+                          Smart phrases
+                          <Badge variant="secondary" className="ml-1 text-[10px] px-1 py-0">{regions.length}</Badge>
+                        </Button>
+                        {openPhraseMenuSection === section.id && (
+                          <div className="absolute right-0 mt-1 w-64 bg-white border rounded shadow z-30">
+                            <div className="p-2 text-[11px] text-muted-foreground">Click to edit</div>
+                            <div className="max-h-64 overflow-auto">
+                              {regions.map((r, idx) => (
+                                <button
+                                  key={r.id}
+                                  className="w-full text-left px-2 py-1.5 text-sm hover:bg-muted/50"
+                                  onClick={() => { openPickerForRegion(r.id); setOpenPhraseMenuSection(null); }}
+                                >
+                                  {r.phrase?.trigger ? `/${r.phrase.trigger}` : `Phrase ${idx + 1}`}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
                 <div className="relative">
+                  <div className="relative">
                   <Textarea
                     value={noteData.content[section.id] || ''}
                     onChange={(e) => handleSectionContentChange(section.id, e.target.value, e.target)}
+                    onClick={(e) => tryReopenPickerAtCaret(section.id, e.currentTarget as HTMLTextAreaElement)}
+                    onKeyUp={(e) => tryReopenPickerAtCaret(section.id, e.currentTarget as HTMLTextAreaElement)}
+                    onMouseMove={(e) => handleTextareaMouseMove(section.id, e.currentTarget as HTMLTextAreaElement, e)}
+                    onMouseLeave={handleTextareaMouseLeave}
                     placeholder={selectedTemplate?.type === 'blank' 
                       ? "Start typing your note here... (Type '/' for smart phrases, '/calc' for clinical calculators)"
                       : `Document the ${section.name.toLowerCase()}... (Type '/' for smart phrases, '/calc' for calculators${
@@ -1712,6 +1957,8 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                     data-testid={`textarea-${section.id}`}
                     data-section-id={section.id}
                   />
+                  {/* Smart phrase hover chip disabled per updated UX preference */}
+                  </div>
                   
                   {activeAutocomplete && activeAutocomplete.sectionId === section.id && (
                     <SmartPhraseAutocomplete
@@ -1728,6 +1975,11 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                       position={activePicker.position}
                       onSelect={handlePickerSelect}
                       onCancel={handlePickerCancel}
+                      onUpdate={handlePickerUpdate}
+                      initialSelections={
+                        (phraseRegions.find(r => r.id === activePicker.regionId)?.selections) || {}
+                      }
+                      initialStep={activePhraseHint?.elementIndex}
                       autoShow={true}
                     />
                   )}

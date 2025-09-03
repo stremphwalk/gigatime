@@ -33,5 +33,13 @@ export default defineConfig({
       strict: true,
       deny: ["**/.*"],
     },
+    // Proxy API calls to the Express server when running Vite standalone
+    proxy: {
+      "/api": {
+        target: process.env.API_PROXY_TARGET || "http://localhost:5000",
+        changeOrigin: true,
+        // Do not rewrite the path; keep /api prefix
+      },
+    },
   },
 });

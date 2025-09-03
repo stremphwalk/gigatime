@@ -718,7 +718,7 @@ export class DatabaseStorage implements IStorage {
   async updateAutocompleteItem(id: string, item: Partial<InsertAutocompleteItem>): Promise<AutocompleteItem> {
     const [updated] = await db
       .update(autocompleteItems)
-      .set({ ...item, updatedAt: new Date() })
+      .set(item)
       .where(eq(autocompleteItems.id, id))
       .returning();
     return updated;
