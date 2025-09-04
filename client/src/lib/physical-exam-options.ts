@@ -184,84 +184,188 @@ Skin: Warm, dry, intact, no rashes or lesions, good skin turgor, no cyanosis or 
 Psychiatric: Appropriate mood and affect, no suicidal/homicidal ideation, thought process linear and goal-directed`;
 
 export function searchPhysicalExamOptions(query: string): PhysicalExamOption[] {
-  if (!query || query.length < 2) return PHYSICAL_EXAM_OPTIONS;
-  
-  const searchTerm = query.toLowerCase();
-  
-  return PHYSICAL_EXAM_OPTIONS.map(category => ({
-    ...category,
-    findings: category.findings.filter(finding => 
-      finding.toLowerCase().includes(searchTerm) ||
-      category.category.toLowerCase().includes(searchTerm)
-    )
-  })).filter(category => category.findings.length > 0);
+  if (!query || query.trim().length === 0) return PHYSICAL_EXAM_OPTIONS;
+
+  // Fuzzy score each finding and include only reasonably relevant ones
+  const q = query.trim();
+  const threshold = 0.8; // tune for category filtering (more strict)
+
+  return PHYSICAL_EXAM_OPTIONS
+    .map(category => {
+      const scored = category.findings
+        .map(f => ({ text: f, score: scorePhysicalExamMatch(q, f) }))
+        .filter(s => s.score >= threshold)
+        .sort((a, b) => b.score - a.score)
+        .map(s => s.text);
+      return { ...category, findings: scored } as PhysicalExamOption;
+    })
+    .filter(cat => cat.findings.length > 0);
 }
 
 export function getPhysicalExamSuggestions(query: string): string[] {
-  if (!query || query.length < 1) return [];
-  
-  const searchTerm = query.toLowerCase().trim();
-  const suggestions: string[] = [];
-  
-  // Add comprehensive negative findings as top option for "normal" or "negative"
-  if (searchTerm.includes('normal') || searchTerm.includes('negative') || searchTerm.includes('unremarkable') || searchTerm === 'neg') {
-    suggestions.push(COMPREHENSIVE_NEGATIVE_FINDINGS);
+  if (!query || query.trim().length === 0) return [];
+
+  const q = query.trim();
+  const scored: Array<{ text: string; score: number }> = [];
+
+  // Special: comprehensive normal when user hints at it
+  const qn = normalize(q);
+  if (qn.includes('normal') || qn.includes('negative') || qn.includes('unremarkable') || qn === 'neg') {
+    scored.push({ text: COMPREHENSIVE_NEGATIVE_FINDINGS, score: 10 });
   }
-  
-  // Enhanced search through all findings with better matching
-  PHYSICAL_EXAM_OPTIONS.forEach(category => {
-    category.findings.forEach(finding => {
-      const findingLower = finding.toLowerCase();
-      
-      // Exact match or contains match
-      if (findingLower.includes(searchTerm)) {
-        suggestions.push(finding);
-      }
-      // Word boundary matching for abbreviations like "s1", "s2" 
-      else if (searchTerm.length >= 2) {
-        const words = findingLower.split(/[\s,]+/);
-        const searchWords = searchTerm.split(/[\s,]+/);
-        
-        const hasMatch = searchWords.every(searchWord => 
-          words.some(word => 
-            word.startsWith(searchWord) || 
-            word.includes(searchWord) ||
-            // Special handling for medical abbreviations
-            (searchWord === 's1' && word.includes('s1')) ||
-            (searchWord === 's2' && word.includes('s2')) ||
-            (searchWord === 'rrr' && findingLower.includes('regular rate')) ||
-            (searchWord === 'cta' && findingLower.includes('clear to auscultation')) ||
-            (searchWord === 'perrl' && findingLower.includes('pupils equal'))
-          )
-        );
-        
-        if (hasMatch) {
-          suggestions.push(finding);
-        }
-      }
-    });
-  });
-  
-  // Also include quick phrases with better matching
-  QUICK_PHYSICAL_EXAM_PHRASES.forEach(phrase => {
-    const phraseLower = phrase.toLowerCase();
-    if (phraseLower.includes(searchTerm)) {
-      suggestions.push(phrase);
+
+  // Score all findings
+  for (const category of PHYSICAL_EXAM_OPTIONS) {
+    for (const f of category.findings) {
+      const s = scorePhysicalExamMatch(q, f);
+      if (s > 0) scored.push({ text: f, score: s });
     }
-    // Check for abbreviation matches in quick phrases
-    else if (searchTerm.length >= 2) {
-      if ((searchTerm === 'cv' && phraseLower.includes('cv:')) ||
-          (searchTerm === 'heent' && phraseLower.includes('heent:')) ||
-          (searchTerm === 'pulm' && phraseLower.includes('pulm:')) ||
-          (searchTerm === 'abd' && phraseLower.includes('abd:')) ||
-          (searchTerm === 'msk' && phraseLower.includes('msk:')) ||
-          (searchTerm === 'neuro' && phraseLower.includes('neuro:'))) {
-        suggestions.push(phrase);
-      }
-    }
-  });
-  
-  // Remove duplicates and limit results
-  const uniqueSuggestions = [...new Set(suggestions)];
-  return uniqueSuggestions.slice(0, 10); // Increased to 10 suggestions
+  }
+  // Score quick phrases
+  for (const phrase of QUICK_PHYSICAL_EXAM_PHRASES) {
+    const s = scorePhysicalExamMatch(q, phrase);
+    if (s > 0) scored.push({ text: phrase, score: s + 0.2 }); // slight boost for templates
+  }
+
+  // Sort by score desc, dedupe preserving highest score
+  const byText = new Map<string, number>();
+  for (const item of scored) {
+    const prev = byText.get(item.text) ?? -Infinity;
+    if (item.score > prev) byText.set(item.text, item.score);
+  }
+  const sorted = Array.from(byText.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([text]) => text);
+
+  return sorted.slice(0, 12);
 }
+
+// ---------- Fuzzy matching utils ----------
+
+const ABBREV_EXPANSIONS: Record<string, string[]> = {
+  // General
+  'a&o': ['alert and oriented', 'oriented x3'],
+  'ao': ['alert and oriented'],
+  'aox3': ['alert and oriented x3'],
+  'oriented x3': ['alert and oriented x3'],
+  // HEENT / Neuro
+  'perrl': ['pupils equal round reactive to light'],
+  'perrla': ['pupils equal round reactive to light and accommodation', 'pupils equal round reactive to light'],
+  'eomi': ['extraocular movements intact'],
+  // Cardio / Pulm
+  'rrr': ['regular rate and rhythm'],
+  'mrg': ['murmurs rubs gallops'],
+  'no m/r/g': ['no murmurs no rubs no gallops'],
+  'jvd': ['jugular venous distension'],
+  'cta': ['clear to auscultation'],
+  'ra': ['room air'],
+  // Abdomen
+  'nt': ['non tender', 'non-tender'],
+  'nd': ['non distended', 'non-distended'],
+  'nt/nd': ['non-tender non-distended', 'non tender non distended'],
+  // MSK
+  'rom': ['range of motion'],
+  // Reflexes
+  'dtr': ['deep tendon reflex'],
+  'dtrs': ['deep tendon reflexes'],
+};
+
+function normalize(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9\s\/]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function tokenize(s: string): string[] {
+  return normalize(s).split(/\s+|\//).filter(Boolean);
+}
+
+function expandQueryTokens(tokens: string[]): string[] {
+  const expanded: string[] = [...tokens];
+  for (const t of tokens) {
+    if (ABBREV_EXPANSIONS[t]) {
+      for (const phrase of ABBREV_EXPANSIONS[t]) {
+        expanded.push(...tokenize(phrase));
+      }
+    }
+  }
+  return Array.from(new Set(expanded));
+}
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  const dp = Array.from({ length: m + 1 }, () => new Array<number>(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + cost
+      );
+    }
+  }
+  return dp[m][n];
+}
+
+function scorePhysicalExamMatch(query: string, candidate: string): number {
+  const qn = normalize(query);
+  const cn = normalize(candidate);
+  if (!qn || !cn) return 0;
+
+  // Immediate strong matches
+  if (cn.includes(qn)) return 5; // direct substring
+
+  const qTokens = expandQueryTokens(tokenize(query));
+  const cTokens = tokenize(candidate);
+
+  // Build token sets for quick lookups
+  const cSet = new Set(cTokens);
+
+  let score = 0;
+
+  // Token overlap and prefixes
+  for (const qt of qTokens) {
+    if (cSet.has(qt)) {
+      score += 1.2; // exact token present
+      continue;
+    }
+    // prefix match
+    const prefixHit = cTokens.some(ct => ct.startsWith(qt) && qt.length >= 2);
+    if (prefixHit) score += 0.8;
+
+    // small typo tolerance for longer tokens
+    if (qt.length >= 4) {
+      const typoHit = cTokens.some(ct => Math.min(ct.length, qt.length) >= 4 && levenshtein(ct, qt) <= 1);
+      if (typoHit) score += 0.6;
+    }
+  }
+
+  // Abbreviation phrase presence boost: if any expansion full phrase tokens are mostly present
+  for (const [abbr, phrases] of Object.entries(ABBREV_EXPANSIONS)) {
+    if (qn.includes(abbr)) {
+      for (const p of phrases) {
+        const pTokens = tokenize(p);
+        const present = pTokens.filter(t => cSet.has(t)).length / pTokens.length;
+        if (present >= 0.6) score += 1.5;
+      }
+    }
+  }
+
+  // Category-specific hints: if query mentions a category name and candidate belongs
+  // This boost is handled by calling context; optional small bonus for keywords
+  const categoryHints = ['cardio', 'cardiovascular', 'pulm', 'pulmonary', 'neuro', 'heent', 'abd', 'abdominal', 'msk', 'skin', 'psych'];
+  if (categoryHints.some(h => qn.includes(h))) score += 0.2;
+
+  // Normalize by number of query tokens to avoid long queries dominating
+  const norm = Math.max(1, qTokens.length);
+  const final = score / norm;
+  return final;
+}
+
+// Exporting for potential external reuse/tests if needed
+export { scorePhysicalExamMatch };

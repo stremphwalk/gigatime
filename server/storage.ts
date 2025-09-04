@@ -110,6 +110,28 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
   public db = db;
+  private async generateUniqueShortCodeFor(table: 'smartPhrases' | 'noteTemplates' | 'autocompleteItems'): Promise<string> {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let attempts = 0;
+    while (attempts < 200) {
+      let code = '';
+      for (let i = 0; i < 4; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+      let exists = false;
+      if (table === 'smartPhrases') {
+        const [row] = await db.select().from(smartPhrases).where(eq(smartPhrases.shortCode, code));
+        exists = !!row;
+      } else if (table === 'noteTemplates') {
+        const [row] = await db.select().from(noteTemplates).where(eq(noteTemplates.shortCode, code));
+        exists = !!row;
+      } else {
+        const [row] = await db.select().from(autocompleteItems).where(eq(autocompleteItems.shortCode, code));
+        exists = !!row;
+      }
+      if (!exists) return code;
+      attempts++;
+    }
+    throw new Error('Failed to generate unique short code');
+  }
   
   // User operations
   async getUser(id: string): Promise<User | undefined> {
@@ -327,6 +349,14 @@ export class DatabaseStorage implements IStorage {
     
     try {
       const [template] = await db.insert(noteTemplates).values(templateData).returning();
+      // Try to backfill shortCode (ignore if column doesn't exist yet)
+      try {
+        if (!(template as any).shortCode) {
+          const code = await this.generateUniqueShortCodeFor('noteTemplates');
+          await db.update(noteTemplates).set({ shortCode: code as any }).where(eq(noteTemplates.id, template.id));
+          (template as any).shortCode = code;
+        }
+      } catch {}
       console.log('[Storage.createNoteTemplate] Insert successful:', { id: template.id, name: template.name });
       return template;
     } catch (error) {
@@ -399,8 +429,36 @@ export class DatabaseStorage implements IStorage {
       userId: userId,
     };
 
-    const [newTemplate] = await db.insert(noteTemplates).values(templateCopy).returning();
+    const [newTemplate] = await db.insert(noteTemplates).values(templateCopy as any).returning();
+    try {
+      const code = await this.generateUniqueShortCodeFor('noteTemplates');
+      await db.update(noteTemplates).set({ shortCode: code as any }).where(eq(noteTemplates.id, newTemplate.id));
+      (newTemplate as any).shortCode = code;
+    } catch {}
     return { success: true, message: 'Template imported successfully', template: newTemplate };
+  }
+
+  async importNoteTemplateByShortCode(shortCode: string, userId: string): Promise<{ success: boolean; message: string; template?: NoteTemplate }> {
+    const [sourceTemplate] = await db
+      .select()
+      .from(noteTemplates)
+      .where(eq(noteTemplates.shortCode, shortCode.toUpperCase()));
+    if (!sourceTemplate) return { success: false, message: 'Template not found for code' };
+    const [newTemplate] = await db.insert(noteTemplates).values({
+      name: sourceTemplate.name,
+      type: sourceTemplate.type,
+      description: sourceTemplate.description,
+      sections: sourceTemplate.sections,
+      isDefault: false,
+      isPublic: false,
+      userId,
+    } as any).returning();
+    try {
+      const code = await this.generateUniqueShortCodeFor('noteTemplates');
+      await db.update(noteTemplates).set({ shortCode: code as any }).where(eq(noteTemplates.id, newTemplate.id));
+      (newTemplate as any).shortCode = code;
+    } catch {}
+    return { success: true, message: 'Template imported', template: newTemplate };
   }
 
   // Note operations
@@ -464,6 +522,13 @@ export class DatabaseStorage implements IStorage {
 
   async createSmartPhrase(phraseData: InsertSmartPhrase): Promise<SmartPhrase> {
     const [phrase] = await db.insert(smartPhrases).values(phraseData).returning();
+    try {
+      if (!(phrase as any).shortCode) {
+        const code = await this.generateUniqueShortCodeFor('smartPhrases');
+        await db.update(smartPhrases).set({ shortCode: code as any }).where(eq(smartPhrases.id, phrase.id));
+        (phrase as any).shortCode = code;
+      }
+    } catch {}
     return phrase;
   }
 
@@ -518,8 +583,38 @@ export class DatabaseStorage implements IStorage {
       userId: userId,
     };
 
-    const [newPhrase] = await db.insert(smartPhrases).values(phraseCopy).returning();
+    let newPhrase: SmartPhrase;
+    try {
+      [newPhrase] = await db.insert(smartPhrases).values(phraseCopy as any).returning();
+      // then try to set code
+      try {
+        const code = await this.generateUniqueShortCodeFor('smartPhrases');
+        await db.update(smartPhrases).set({ shortCode: code as any }).where(eq(smartPhrases.id, (newPhrase as any).id));
+        (newPhrase as any).shortCode = code;
+      } catch {}
+    } catch (e) {
+      throw e;
+    }
     return { success: true, message: 'Smart phrase imported successfully', phrase: newPhrase };
+  }
+
+  async importSmartPhraseByShortCode(shortCode: string, userId: string): Promise<{ success: boolean; message: string; phrase?: SmartPhrase }> {
+    const [sourcePhrase] = await db
+      .select()
+      .from(smartPhrases)
+      .where(eq(smartPhrases.shortCode, shortCode.toUpperCase()));
+    if (!sourcePhrase) return { success: false, message: 'Smart phrase not found for code' };
+    const [newPhrase] = await db.insert(smartPhrases).values({
+      trigger: sourcePhrase.trigger,
+      content: sourcePhrase.content,
+      description: sourcePhrase.description,
+      category: sourcePhrase.category,
+      elements: sourcePhrase.elements,
+      isPublic: false,
+      userId,
+      shortCode: await this.generateUniqueShortCodeFor('smartPhrases'),
+    }).returning();
+    return { success: true, message: 'Smart phrase imported', phrase: newPhrase };
   }
 
   // Team todo operations
@@ -712,6 +807,13 @@ export class DatabaseStorage implements IStorage {
 
   async createAutocompleteItem(item: InsertAutocompleteItem): Promise<AutocompleteItem> {
     const [newItem] = await db.insert(autocompleteItems).values(item).returning();
+    try {
+      if (!(newItem as any).shortCode) {
+        const code = await this.generateUniqueShortCodeFor('autocompleteItems');
+        await db.update(autocompleteItems).set({ shortCode: code as any }).where(eq(autocompleteItems.id, newItem.id));
+        (newItem as any).shortCode = code;
+      }
+    } catch {}
     return newItem;
   }
 
@@ -726,6 +828,48 @@ export class DatabaseStorage implements IStorage {
 
   async deleteAutocompleteItem(id: string): Promise<void> {
     await db.delete(autocompleteItems).where(eq(autocompleteItems.id, id));
+  }
+  async importAutocompleteByShortCode(shortCode: string, userId: string): Promise<{ success: boolean; message: string; item?: AutocompleteItem }> {
+    const [src] = await db.select().from(autocompleteItems).where(eq(autocompleteItems.shortCode, shortCode.toUpperCase()));
+    if (!src) return { success: false, message: 'Autocomplete not found for code' };
+    const [row] = await db.insert(autocompleteItems).values({
+      userId,
+      text: src.text,
+      category: src.category,
+      isPriority: false,
+      dosage: src.dosage,
+      frequency: src.frequency,
+      dosageOptions: src.dosageOptions,
+      frequencyOptions: src.frequencyOptions,
+      description: src.description,
+    } as any).returning();
+    try {
+      const code = await this.generateUniqueShortCodeFor('autocompleteItems');
+      await db.update(autocompleteItems).set({ shortCode: code as any }).where(eq(autocompleteItems.id, row.id));
+      (row as any).shortCode = code;
+    } catch {}
+    return { success: true, message: 'Autocomplete imported', item: row };
+  }
+
+  // Lab presets operations
+  async getLabPresets(userId: string) {
+    const { labPresets } = await import("@shared/schema");
+    const rows = await db.select().from(labPresets).where(eq(labPresets.userId, userId)).orderBy(desc(labPresets.createdAt));
+    return rows;
+  }
+  async createLabPreset(preset: { userId: string; name: string; settings: any }) {
+    const { labPresets } = await import("@shared/schema");
+    const [row] = await db.insert(labPresets).values({ userId: preset.userId, name: preset.name, settings: preset.settings }).returning();
+    return row;
+  }
+  async updateLabPreset(id: string, updates: Partial<{ name: string; settings: any }>) {
+    const { labPresets } = await import("@shared/schema");
+    const [row] = await db.update(labPresets).set({ ...updates, updatedAt: new Date() }).where(eq(labPresets.id, id)).returning();
+    return row;
+  }
+  async deleteLabPreset(id: string): Promise<void> {
+    const { labPresets } = await import("@shared/schema");
+    await db.delete(labPresets).where(eq(labPresets.id, id));
   }
 }
 

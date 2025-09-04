@@ -32,7 +32,8 @@ import {
   Grid3X3,
   List,
   ChevronsUpDown,
-  Check
+  Check,
+  Copy
 } from "lucide-react";
 import { SearchField } from "@/components/library/SearchField";
 import { FilterDropdown } from "@/components/library/FilterDropdown";
@@ -57,6 +58,8 @@ export function AutocompleteBuilder() {
   const [editingItem, setEditingItem] = useState<AutocompleteItem | null>(null);
   const [layout, setLayout] = useState<'grid'|'list'>('grid');
   const [density, setDensity] = useState<'compact'|'cozy'>('compact');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [exportCodes, setExportCodes] = useState<string[] | null>(null);
   
   const { 
     items: autocompleteItems, 
@@ -227,6 +230,27 @@ export function AutocompleteBuilder() {
     return SECTION_CATEGORIES.find(cat => cat.value === category)?.label || category;
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  };
+
+  const handleExportSelected = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    const resp = await fetch('/api/share/autocomplete-items/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
+    const data = await resp.json();
+    setExportCodes(data.codes || []);
+  };
+
+  const handleImportCodes = async () => {
+    const input = window.prompt('Enter autocomplete codes (comma or space separated)');
+    if (!input) return;
+    const codes = input.split(/[\s,]+/).map(s=>s.trim()).filter(Boolean);
+    if (codes.length === 0) return;
+    await fetch('/api/share/autocomplete-items/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codes }) });
+    setSelectedIds(new Set());
+  };
+
   if (isLoading) {
     return (
       <div className="flex-1 overflow-y-auto">
@@ -297,9 +321,16 @@ export function AutocompleteBuilder() {
             </div>
           </CardContent>
         </Card>
-        <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-          <span>{filteredItems.length} items</span>
-          {selectedCategory && (<><span>•</span><span>Category:</span><Badge variant="outline" className="px-1 py-0 text-[10px]">{getCategoryLabel(selectedCategory)}</Badge></>)}
+        <div className="mt-1 flex items-center gap-4 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <span>{filteredItems.length} items</span>
+            {selectedCategory && (<><span>•</span><span>Category:</span><Badge variant="outline" className="px-1 py-0 text-[10px]">{getCategoryLabel(selectedCategory)}</Badge></>)}
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <span>Selected: {selectedIds.size}</span>
+            <Button variant="outline" size="sm" onClick={handleImportCodes}>Import by Codes</Button>
+            <Button size="sm" onClick={handleExportSelected} disabled={selectedIds.size===0}>Export Codes</Button>
+          </div>
         </div>
 
         {/* Create/Edit Form */}
@@ -310,13 +341,22 @@ export function AutocompleteBuilder() {
                 <CardTitle>
                   {editingItem ? 'Edit Autocomplete Item' : 'Create New Autocomplete Item'}
                 </CardTitle>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleCancel}
-                >
-                  <X size={16} />
-                </Button>
+                <div className="flex items-center gap-2">
+                  {editingItem?.shortCode && (
+                    <>
+                      <span className="text-xs text-gray-600">Code:</span>
+                      <Badge variant="outline">{editingItem.shortCode}</Badge>
+                      <Button type="button" size="sm" variant="outline" onClick={()=>navigator.clipboard.writeText(editingItem.shortCode!)}>Copy</Button>
+                    </>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleCancel}
+                  >
+                    <X size={16} />
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -514,7 +554,10 @@ export function AutocompleteBuilder() {
             filteredItems.map((item) => (
               <Card key={item.id} className="group overflow-hidden border-muted/60 transition-shadow hover:shadow-sm">
                 <CardHeader className={`flex flex-row items-start justify-between ${padCls}`}>
-                  <div className="flex items-start justify-between">
+                  <div className="flex items-start justify-between w-full">
+                    <div className="mt-1 mr-2">
+                      <input type="checkbox" checked={selectedIds.has(item.id)} onChange={()=>toggleSelect(item.id)} />
+                    </div>
                     <div className="flex-1">
                       <div className="flex items-center space-x-2 mb-1">
                         <CardTitle className={`truncate font-medium ${densityCls}`}>
@@ -525,6 +568,14 @@ export function AutocompleteBuilder() {
                             <Star size={10} className="mr-1" />
                             Priority
                           </Badge>
+                        )}
+                        {item.shortCode && (
+                          <div className="flex items-center gap-1">
+                            <Badge variant="outline" className="text-[10px]">{item.shortCode}</Badge>
+                            <Button type="button" variant="ghost" size="icon" className="h-6 w-6" title="Copy code" onClick={()=>navigator.clipboard.writeText(item.shortCode!)}>
+                              <Copy size={12} />
+                            </Button>
+                          </div>
                         )}
                       </div>
                       <div className="flex items-center space-x-1 text-xs text-gray-500">
@@ -578,13 +629,22 @@ export function AutocompleteBuilder() {
           <div className="mt-3 divide-y rounded-xl border bg-background/40">
             {filteredItems.map(item => (
               <div key={item.id} className={`grid grid-cols-12 items-center ${padCls} gap-2`}>
-                <div className="col-span-5 min-w-0">
+                <div className="col-span-5 min-w-0 flex items-start gap-2">
+                  <input type="checkbox" className="mt-1" checked={selectedIds.has(item.id)} onChange={()=>toggleSelect(item.id)} />
                   <div className={`truncate font-medium ${densityCls}`}>{item.text}</div>
                   {item.description && <div className={`truncate text-muted-foreground ${densityCls}`}>{item.description}</div>}
                 </div>
                 <div className="col-span-3 flex items-center gap-1">
                   <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[10px] leading-4">{getCategoryLabel(item.category)}</Badge>
                   {item.isPriority && <Badge variant="outline" className="text-[10px]">Priority</Badge>}
+                  {item.shortCode && (
+                    <div className="flex items-center gap-1">
+                      <Badge variant="outline" className="text-[10px]">{item.shortCode}</Badge>
+                      <Button type="button" variant="ghost" size="icon" className="h-6 w-6" title="Copy code" onClick={()=>navigator.clipboard.writeText(item.shortCode!)}>
+                        <Copy size={12} />
+                      </Button>
+                    </div>
+                  )}
                 </div>
                 <div className="col-span-4 ml-auto flex items-center justify-end gap-2">
                   {(item.dosageOptions && item.dosageOptions.length > 0) && <Badge variant="secondary" className="text-[10px]">{item.dosageOptions.length} dosages</Badge>}
@@ -596,6 +656,16 @@ export function AutocompleteBuilder() {
           </div>
         )}
       </div>
+      {exportCodes && (
+        <div className="mt-3 p-4 border rounded-md bg-white">
+          <Label>Share these codes</Label>
+          <Textarea readOnly value={exportCodes.join(' ')} className="mt-1" />
+          <div className="mt-2 flex gap-2">
+            <Button size="sm" onClick={()=>{ navigator.clipboard.writeText(exportCodes.join(' ')); }}>Copy</Button>
+            <Button size="sm" variant="outline" onClick={()=>setExportCodes(null)}>Close</Button>
+          </div>
+        </div>
+      )}
     </div>
     </TooltipProvider>
   );

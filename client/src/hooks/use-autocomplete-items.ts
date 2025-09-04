@@ -6,6 +6,7 @@ export interface AutocompleteItem {
   text: string;
   category: string;
   isPriority: boolean;
+  shortCode?: string;
   dosage?: string;
   frequency?: string;
   dosageOptions?: string[];

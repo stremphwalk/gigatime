@@ -24,27 +24,37 @@ import {
   type ParsedLabValue,
   type UserLabPreferences 
 } from "@/lib/lab-parsing";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface LabParsingDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (formattedLabs: string) => void;
+  onConfirm: (formattedLabs: string, parsedLabs?: ParsedLabValue[]) => void;
+  initialTab?: 'paste' | 'customize' | 'global-settings' | 'preview';
 }
 
-export function LabParsingDialog({ isOpen, onClose, onConfirm }: LabParsingDialogProps) {
+export function LabParsingDialog({ isOpen, onClose, onConfirm, initialTab = 'paste' }: LabParsingDialogProps) {
   const [rawLabText, setRawLabText] = useState('');
   const [parsedLabs, setParsedLabs] = useState<ParsedLabValue[]>([]);
   const [preferences, setPreferences] = useState<UserLabPreferences>(DEFAULT_LAB_PREFERENCES);
   const [customVisibility, setCustomVisibility] = useState<{ [labName: string]: boolean }>({});
   const [customTrendCounts, setCustomTrendCounts] = useState<{ [labName: string]: number }>({});
-  const [activeTab, setActiveTab] = useState<string>('paste');
+  const [activeTab, setActiveTab] = useState<string>(initialTab);
   const [globalSearchFilter, setGlobalSearchFilter] = useState<string>('');
+  const [presets, setPresets] = useState<any[]>([]);
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
+  const [newPresetName, setNewPresetName] = useState<string>('');
   
   const queryClient = useQueryClient();
   
   // Load user lab settings
   const { data: userLabSettings } = useQuery({
     queryKey: ['/api/user-lab-settings'],
+    enabled: isOpen,
+  });
+
+  const { data: labPresetsData, refetch: refetchPresets } = useQuery({
+    queryKey: ['/api/lab-presets'],
     enabled: isOpen,
   });
   
@@ -60,6 +70,12 @@ export function LabParsingDialog({ isOpen, onClose, onConfirm }: LabParsingDialo
   });
 
   // Load saved user settings when dialog opens or settings change
+  useEffect(() => {
+    if (Array.isArray(labPresetsData)) {
+      setPresets(labPresetsData);
+    }
+  }, [labPresetsData]);
+
   useEffect(() => {
     if (Array.isArray(userLabSettings) && userLabSettings.length > 0) {
       const loadedVisibility: { [labName: string]: boolean } = {};
@@ -95,7 +111,7 @@ export function LabParsingDialog({ isOpen, onClose, onConfirm }: LabParsingDialo
     setParsedLabs([]);
     setGlobalSearchFilter('');
     // Don't reset custom settings - they should persist
-    setActiveTab('paste');
+    setActiveTab(initialTab);
   };
 
   const handleConfirm = () => {
@@ -111,7 +127,7 @@ export function LabParsingDialog({ isOpen, onClose, onConfirm }: LabParsingDialo
         customTrendCounts
       );
       
-      onConfirm(formattedLabs);
+      onConfirm(formattedLabs, parsedLabs);
       onClose();
       handleReset();
     } catch (error) {
@@ -362,6 +378,59 @@ export function LabParsingDialog({ isOpen, onClose, onConfirm }: LabParsingDialo
           </TabsContent>
 
           <TabsContent value="global-settings" className="space-y-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Presets</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-end">
+                <div className="flex-1">
+                  <Label className="text-xs">Select preset</Label>
+                  <Select value={selectedPresetId ?? ''} onValueChange={(v) => {
+                    setSelectedPresetId(v);
+                    const preset = presets.find(p => p.id === v);
+                    if (preset?.settings) {
+                      setCustomVisibility(preset.settings.customVisibility || {});
+                      setCustomTrendCounts(preset.settings.customTrendCounts || {});
+                    }
+                  }}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a preset" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {presets.map(p => (
+                        <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex-1">
+                  <Label className="text-xs">Save current as</Label>
+                  <Input value={newPresetName} onChange={(e) => setNewPresetName(e.target.value)} placeholder="Preset name" />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={async () => {
+                      if (!newPresetName.trim()) return;
+                      const body = { name: newPresetName.trim(), settings: { customVisibility, customTrendCounts } };
+                      await apiRequest('POST', '/api/lab-presets', body);
+                      setNewPresetName('');
+                      refetchPresets();
+                    }}
+                  >Save</Button>
+                  {selectedPresetId && (
+                    <Button
+                      variant="outline"
+                      onClick={async () => {
+                        await apiRequest('DELETE', `/api/lab-presets/${selectedPresetId}`);
+                        setSelectedPresetId(null);
+                        refetchPresets();
+                      }}
+                    >Delete</Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
             <div className="space-y-2">
               <Label className="text-base font-semibold">Global Lab Preferences</Label>
               <p className="text-sm text-gray-600 dark:text-gray-400">

@@ -14,13 +14,22 @@ import { SocialHistoryAutocomplete } from "./social-history-autocomplete";
 import { MedicationAutocomplete } from "./medication-autocomplete";
 import { MedicationReorderDialog } from "./medication-reorder-dialog";
 import { LabValuesPopup } from "./lab-values-popup";
+import { LabLineOverlay } from "./lab-line-overlay";
 import { LabParsingDialog } from "./lab-parsing-dialog";
 import { PhysicalExamAutocomplete } from "./physical-exam-autocomplete";
 import { PertinentNegativesPopup } from "./pertinent-negatives-popup";
 import { PertinentNegativePresetSelector } from "./pertinent-negative-preset-selector";
 import { ImagingAutocomplete } from "./imaging-autocomplete";
+import type { ImagingStudy } from "./imaging-autocomplete";
 import { ConsultationReasonAutocomplete } from "./consultation-reason-autocomplete";
 import { ClinicalCalculatorPopup } from "./clinical-calculator-popup";
+import { IcuActionBar } from "./icu-action-bar";
+import { VentilationSettingsPopup } from "./ventilation-settings-popup";
+import { IOEntryPopup } from "./io-entry-popup";
+import { MedQuickAddPopup } from "./med-quick-add-popup";
+import { ImagingQuickDialog } from "./imaging-quick-dialog";
+import type { ParsedLabValue } from "@/lib/lab-parsing";
+import { isIcuTemplateType, mapLabNameToIcuSystem, mapImagingSummaryToIcuSystem, mapMedicationToIcuSystem, findIcuSectionId } from "@/lib/icu-routing";
 import { SectionNavigator } from "./section-navigator";
 import { useNotes, useNoteTemplates } from "../hooks/use-notes";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
@@ -103,6 +112,18 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     elementIndex?: number;
   } | null>(null);
   const [openPhraseMenuSection, setOpenPhraseMenuSection] = useState<string | null>(null);
+  const [isHoveringOverlay, setIsHoveringOverlay] = useState(false);
+  const [activeLabOverlay, setActiveLabOverlay] = useState<{
+    sectionId: string;
+    top: number;
+    left: number;
+    label: string;
+    count: number;
+    lineStart: number;
+    lineEnd: number;
+    max?: number;
+  } | null>(null);
+  const [labSeriesBySection, setLabSeriesBySection] = useState<Record<string, Record<string, { current: string; trends: string[]; unit?: string }>>>({});
   
   const [activeMedicalAutocomplete, setActiveMedicalAutocomplete] = useState<{
     sectionId: string;
@@ -160,6 +181,12 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
   const [showClinicalCalculator, setShowClinicalCalculator] = useState(false);
   const [calculatorTargetSection, setCalculatorTargetSection] = useState<string | null>(null);
   const [calculatorInsertPosition, setCalculatorInsertPosition] = useState<number>(0);
+  // ICU action bar + popups state
+  const [showVentPopup, setShowVentPopup] = useState(false);
+  const [showIOPopup, setShowIOPopup] = useState(false);
+  const [showMedQuickAdd, setShowMedQuickAdd] = useState<null | { dripsOnly?: boolean }>(null);
+  const [showImagingQuick, setShowImagingQuick] = useState(false);
+  const [icuLabRouting, setIcuLabRouting] = useState(false);
   
   // Section navigator state
   const [showSectionNavigator, setShowSectionNavigator] = useState(false);
@@ -190,8 +217,8 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
         setActiveImageEditorSection(null);
         
         toast({
-          title: "Imaging template added",
-          description: "Medical imaging findings and pertinent negatives have been inserted.",
+          title: "Imaging summary added",
+          description: "Inserted concise imaging negatives summary.",
         });
       }
     }
@@ -342,6 +369,25 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       setActiveAutocomplete(null);
     }
 
+    // If a slash command is actively being typed at the caret,
+    // suppress all other autocomplete popovers for this section.
+    // We detect this by checking for the nearest '/' before the cursor
+    // and ensuring there is no whitespace between it and the cursor.
+    {
+      const lastSlashAt = beforeCursor.lastIndexOf('/');
+      const isSlashCommandActive = lastSlashAt !== -1 && !beforeCursor.slice(lastSlashAt + 1).includes(' ');
+      if (isSlashCommandActive) {
+        if (activeMedicalAutocomplete?.sectionId === sectionId) setActiveMedicalAutocomplete(null);
+        if (activeAllergyAutocomplete?.sectionId === sectionId) setActiveAllergyAutocomplete(null);
+        if (activeSocialHistoryAutocomplete?.sectionId === sectionId) setActiveSocialHistoryAutocomplete(null);
+        if (activeMedicationAutocomplete?.sectionId === sectionId) setActiveMedicationAutocomplete(null);
+        if (activePhysicalExamAutocomplete?.sectionId === sectionId) setActivePhysicalExamAutocomplete(null);
+        if (activeConsultationReasonAutocomplete?.sectionId === sectionId) setActiveConsultationReasonAutocomplete(null);
+        // Do not process other autocomplete triggers while slash is active
+        return;
+      }
+    }
+
     // Check for medical condition and allergy autocomplete
     const section = sections.find(s => s.id === sectionId);
     const isPastMedicalHistory = section?.type === 'pastMedicalHistory' || 
@@ -357,6 +403,9 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                                  section?.name.toLowerCase().includes('medications') ||
                                  section?.name.toLowerCase().includes('current medications') ||
                                  section?.name.toLowerCase().includes('meds');
+    const isPlanSection = section?.type === 'plan' ||
+                          section?.name.toLowerCase().includes('plan') ||
+                          section?.name.toLowerCase().includes('management');
     
     if (isPastMedicalHistory) {
       const cursorPosition = textarea.selectionStart;
@@ -515,7 +564,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     }
 
     // Handle medication autocomplete
-    if (isMedicationsSection) {
+    if (isMedicationsSection || isPlanSection) {
       const cursorPosition = textarea.selectionStart;
       
       // Find the current word being typed at cursor position
@@ -722,8 +771,8 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
           }));
           
           toast({
-            title: `${abbreviation} template inserted`,
-            description: "Common findings and pertinent negatives added automatically.",
+            title: `${abbreviation} summary inserted`,
+            description: "Inserted concise imaging negatives summary.",
           });
           
           // Focus back to textarea at end of inserted content
@@ -883,35 +932,164 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     pos += Math.min(col, (lines[line] || '').length);
 
     const found = phraseRegions.filter(r => r.sectionId === sectionId).find(r => pos >= r.start && pos <= r.start + r.length);
-    if (!found) { setActivePhraseHint(null); return; }
-
-    // Determine which element index is nearest to pos
-    const regionText = content.slice(found.start, found.start + found.length);
-    const replacements = computeElementStrings(found.phrase, found.selections);
-    const full = formatSmartPhrase(found.phrase, found.selections);
-    let offset = 0;
-    const segments: Array<{ idx: number; start: number; end: number }> = [];
-    for (let i = 0; i < replacements.length; i++) {
-      const txt = replacements[i].text || '';
-      if (!txt) continue;
-      const at = full.indexOf(txt, offset);
-      if (at >= 0) {
-        segments.push({ idx: i, start: at, end: at + txt.length });
-        offset = at + txt.length;
+    if (!found) {
+      setActivePhraseHint(null);
+    } else {
+      // Determine which element index is nearest to pos
+      const regionText = content.slice(found.start, found.start + found.length);
+      const replacements = computeElementStrings(found.phrase, found.selections);
+      const full = formatSmartPhrase(found.phrase, found.selections);
+      let offset = 0;
+      const segments: Array<{ idx: number; start: number; end: number }> = [];
+      for (let i = 0; i < replacements.length; i++) {
+        const txt = replacements[i].text || '';
+        if (!txt) continue;
+        const at = full.indexOf(txt, offset);
+        if (at >= 0) {
+          segments.push({ idx: i, start: at, end: at + txt.length });
+          offset = at + txt.length;
+        }
       }
+      const rel = pos - found.start;
+      let elementIndex: number | undefined = undefined;
+      for (const seg of segments) {
+        if (rel >= seg.start && rel <= seg.end) { elementIndex = seg.idx; break; }
+      }
+      const top = e.clientY + 6;
+      const left = e.clientX + 6;
+      setActivePhraseHint({ regionId: found.id, sectionId, position: { top, left }, elementIndex });
     }
-    const rel = pos - found.start;
-    let elementIndex: number | undefined = undefined;
-    for (const seg of segments) {
-      if (rel >= seg.start && rel <= seg.end) { elementIndex = seg.idx; break; }
+
+    // Now compute the lab overlay for the hovered line regardless of phrase regions
+    // Helper: measure document (content) offsets for a given index using a hidden mirror
+    const getCaretDocOffsets = (ta: HTMLTextAreaElement, idx: number) => {
+      const mirror = document.createElement('div');
+      const s = window.getComputedStyle(ta);
+      Object.assign(mirror.style, {
+        position: 'absolute',
+        top: '0px',
+        left: '0px',
+        width: `${ta.clientWidth}px`,
+        padding: s.padding,
+        border: '0',
+        boxSizing: s.boxSizing,
+        font: s.font,
+        letterSpacing: s.letterSpacing,
+        whiteSpace: 'pre-wrap',
+        overflow: 'visible',
+        visibility: 'hidden',
+        lineHeight: s.lineHeight as string,
+      } as CSSStyleDeclaration);
+      mirror.textContent = ta.value.substring(0, idx);
+      const marker = document.createElement('span');
+      marker.textContent = '\u200b';
+      mirror.appendChild(marker);
+      // Container to ensure offsetTop reflects content coordinates
+      const container = document.createElement('div');
+      Object.assign(container.style, { position: 'fixed', top: '0', left: '0', zIndex: '-1', visibility: 'hidden' } as CSSStyleDeclaration);
+      container.appendChild(mirror);
+      document.body.appendChild(container);
+      const topDoc = marker.offsetTop; // content Y offset independent of scroll
+      const leftDoc = marker.offsetLeft;
+      document.body.removeChild(container);
+      return { topDoc, leftDoc };
+    };
+
+    // Map mouse Y to nearest logical line using mirror doc offsets of each line end
+    const logicalLines = content.split('\n');
+    let startIdx = 0;
+    let best = { i: -1, dist: Number.POSITIVE_INFINITY, topDoc: 0, leftDoc: 0, start: 0, end: 0 };
+    const mouseDocY = textarea.scrollTop + (e.clientY - rect.top - paddingTop);
+    for (let i = 0; i < logicalLines.length; i++) {
+      const endIdx = startIdx + logicalLines[i].length; // exclusive
+      const c = getCaretDocOffsets(textarea, endIdx);
+      const d = Math.abs(mouseDocY - c.topDoc);
+      if (d < best.dist) {
+        best = { i, dist: d, topDoc: c.topDoc, leftDoc: c.leftDoc, start: startIdx, end: endIdx };
+      }
+      startIdx = endIdx + 1; // skip the newline
     }
-    const top = e.clientY + 6;
-    const left = e.clientX + 6;
-    setActivePhraseHint({ regionId: found.id, sectionId, position: { top, left }, elementIndex });
+    if (best.i === -1) { setActiveLabOverlay(null); return; }
+    const rawLine = content.slice(best.start, best.end);
+    const lm = rawLine.trim().match(/^([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ0-9\-]*(?: [A-Za-z0-9\-]+)*)\s+([^()\s]+)(?:\s*\(([^)]*)\))?\s*$/);
+    if (!lm) { setActiveLabOverlay(null); return; }
+    const label = lm[1];
+    const trends = (lm[3] || '').split(',').map(s => s.trim()).filter(Boolean);
+    let overlayTop = rect.top + paddingTop + (best.topDoc - textarea.scrollTop) - 4;
+    let overlayLeft = rect.left + paddingLeft + Math.min(best.leftDoc + 8, textarea.clientWidth - 150);
+    const max = labSeriesBySection[sectionId]?.[label]?.trends?.length;
+    setActiveLabOverlay({ sectionId, top: overlayTop, left: overlayLeft, label, count: trends.length, lineStart: best.start, lineEnd: best.end, max });
+
+    // Hover overlay computed above; nothing else to do
   };
 
   const handleTextareaMouseLeave = () => {
     setActivePhraseHint(null);
+    // Delay hiding slightly to allow pointer to enter overlay without flicker
+    setTimeout(() => {
+      if (!isHoveringOverlay) {
+        setActiveLabOverlay(null);
+      }
+    }, 80);
+  };
+
+  // (hover-only) no multi-line overlays
+
+  const replaceLineInSection = (sectionId: string, lineStart: number, lineEnd: number, newLine: string) => {
+    const content = noteData.content[sectionId] || '';
+    const before = content.slice(0, lineStart);
+    const after = content.slice(lineEnd);
+    const newContent = (before + newLine + (after.startsWith('\n') ? '' : '\n') + after).replace(/\n{3,}/g, '\n\n');
+    setNoteData(prev => ({ ...prev, content: { ...prev.content, [sectionId]: newContent } }));
+  };
+
+  const adjustLabTrendCount = (direction: 'inc' | 'dec') => {
+    if (!activeLabOverlay) return;
+    const { sectionId, label, lineStart, lineEnd } = activeLabOverlay;
+    const content = noteData.content[sectionId] || '';
+    const line = content.slice(lineStart, lineEnd);
+    const m = line.match(/^\s*([A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ0-9\-]*(?: [A-Za-z0-9\-]+)*)\s+([^()\s]+)(?:\s*\(([^)]*)\))?\s*$/);
+    if (!m) return;
+    const current = m[2];
+    const currentTrends = (m[3] || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (direction === 'dec') {
+      if (currentTrends.length === 0) return;
+      const nextTrends = currentTrends.slice(0, -1);
+      const newLine = nextTrends.length > 0 ? `${label} ${current} (${nextTrends.join(', ')})` : `${label} ${current}`;
+      replaceLineInSection(sectionId, lineStart, lineEnd, newLine);
+      setActiveLabOverlay(prev => prev ? { ...prev, count: Math.max(0, prev.count - 1), lineEnd: lineStart + newLine.length } : prev);
+      return;
+    }
+    // inc
+    const full = labSeriesBySection[sectionId]?.[label];
+    if (!full) {
+      // If no stored series, repeat last trend value to allow growth cycling
+      const nextTrends = currentTrends.concat([]).filter(Boolean);
+      if (nextTrends.length === 0) return;
+      const last = nextTrends[nextTrends.length - 1];
+      const newLine = `${label} ${current} (${nextTrends.concat([last]).join(', ')})`;
+      replaceLineInSection(sectionId, lineStart, lineEnd, newLine);
+      setActiveLabOverlay(prev => prev ? { ...prev, count: prev.count + 1, lineEnd: lineStart + newLine.length } : prev);
+      return;
+    }
+    const available = full.trends || [];
+    if (currentTrends.length >= available.length) return;
+    const nextValue = available[currentTrends.length];
+    const nextTrends = currentTrends.concat([nextValue]).filter(Boolean);
+    const newLine = `${label} ${current} (${nextTrends.join(', ')})`;
+    replaceLineInSection(sectionId, lineStart, lineEnd, newLine);
+    setActiveLabOverlay(prev => prev ? { ...prev, count: prev.count + 1, lineEnd: lineStart + newLine.length } : prev);
+  };
+
+  const deleteLabLine = () => {
+    if (!activeLabOverlay) return;
+    const { sectionId, lineStart, lineEnd } = activeLabOverlay;
+    const content = noteData.content[sectionId] || '';
+    const before = content.slice(0, lineStart);
+    const after = content.slice(lineEnd);
+    const newContent = (before.replace(/\n?$/, '') + '\n' + after).replace(/\n{3,}/g, '\n\n');
+    setNoteData(prev => ({ ...prev, content: { ...prev.content, [sectionId]: newContent.trimEnd() } }));
+    setActiveLabOverlay(null);
   };
 
   const openPickerForRegion = (regionId: string, initialStep?: number) => {
@@ -1204,31 +1382,119 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     setMedicationReorderSectionId(null);
   };
 
-  const handleLabParsing = (sectionId: string) => {
+  const [labParsingInitialTab, setLabParsingInitialTab] = useState<'paste' | 'customize' | 'global-settings' | 'preview'>('paste');
+
+  const handleLabParsing = (sectionId: string, initialTab: 'paste' | 'customize' | 'global-settings' | 'preview' = 'paste') => {
     setLabParsingSectionId(sectionId);
+    setLabParsingInitialTab(initialTab);
     setShowLabParsingDialog(true);
   };
 
-  const handleLabParsingConfirm = (formattedLabs: string) => {
-    if (labParsingSectionId) {
+  const handleLabParsingConfirm = async (formattedLabs: string, parsedLabs?: ParsedLabValue[]) => {
+    const isIcu = isIcuTemplateType(noteData.templateType);
+    if (isIcu && icuLabRouting && parsedLabs && parsedLabs.length > 0) {
+      // Group labs by ICU system and insert blocks into system sections
+      const groups: Record<string, ParsedLabValue[]> = {};
+      for (const lab of parsedLabs) {
+        const sys = mapLabNameToIcuSystem(lab.standardizedName);
+        if (!sys) continue;
+        if (!groups[sys]) groups[sys] = [] as ParsedLabValue[];
+        groups[sys]!.push(lab);
+      }
+      // Lazy import formatter to reuse formatting per group
+      const { formatLabsForNote, DEFAULT_LAB_PREFERENCES } = await import('@/lib/lab-parsing');
+      const updates: Record<string, string> = {};
+      for (const [sys, labs] of Object.entries(groups)) {
+        const sectionId = findIcuSectionId(sections, sys as any);
+        if (!sectionId) continue;
+        const formatted = formatLabsForNote(labs, DEFAULT_LAB_PREFERENCES, {}, {});
+        const content = noteData.content[sectionId] || '';
+        const newContent = content + (content ? '\n\n' : '') + formatted;
+        updates[sectionId] = newContent;
+      }
+      if (Object.keys(updates).length > 0) {
+        setNoteData(prev => ({ ...prev, content: { ...prev.content, ...updates } }));
+        toast({ title: 'Labs routed to systems', description: 'Parsed labs were added into ICU system sections.' });
+      } else {
+        toast({ title: 'No routable labs', description: 'Parsed labs did not match ICU systems.' });
+      }
+    } else if (labParsingSectionId) {
       const content = noteData.content[labParsingSectionId] || '';
       const newContent = content + (content ? '\n\n' : '') + formattedLabs;
-      
-      setNoteData(prev => ({
-        ...prev,
-        content: {
-          ...prev.content,
-          [labParsingSectionId]: newContent
-        }
-      }));
-      
-      toast({
-        title: "Lab values parsed and added",
-        description: "EHR lab results have been standardized and inserted with customizable trending data.",
-      });
+      setNoteData(prev => ({ ...prev, content: { ...prev.content, [labParsingSectionId]: newContent } }));
+      toast({ title: 'Lab values parsed and added', description: 'EHR lab results have been standardized and inserted.' });
     }
     setShowLabParsingDialog(false);
     setLabParsingSectionId(null);
+    setIcuLabRouting(false);
+  };
+
+  // ICU action handlers
+  const handleIcuLabsClick = () => {
+    setIcuLabRouting(true);
+    setLabParsingSectionId('nephroMetabolic'); // placeholder; content will be routed
+    setLabParsingInitialTab('paste');
+    setShowLabParsingDialog(true);
+  };
+
+  const insertIntoSection = (sectionId: string, text: string) => {
+    const content = noteData.content[sectionId] || '';
+    const newContent = content + (content ? '\n\n' : '') + text;
+    setNoteData(prev => ({ ...prev, content: { ...prev.content, [sectionId]: newContent } }));
+  };
+
+  const handleIcuImagingSelect = (study: ImagingStudy, selectedNegatives: string[]) => {
+    const formattedNegatives = (selectedNegatives || []).map((n: string) => n.replace(/^No\s+/i, 'no ')).join(', ');
+    const summary = formattedNegatives ? `${study.fullName}: ${formattedNegatives}.` : `${study.fullName}.`;
+    const sys = mapImagingSummaryToIcuSystem(summary);
+    const targetId = sys ? findIcuSectionId(sections, sys) : null;
+    if (targetId) {
+      insertIntoSection(targetId, summary);
+      toast({ title: 'Imaging added', description: `Inserted into ${sys} section.` });
+    } else if (activeImageEditorSection) {
+      insertIntoSection(activeImageEditorSection, summary);
+      toast({ title: 'Imaging added', description: 'Inserted into current section.' });
+    } else {
+      toast({ title: 'No target section', description: 'Could not determine ICU system section.' });
+    }
+  };
+
+  const handleIcuMedAdd = (medLine: string, opts?: { dripsOnly?: boolean }) => {
+    const sys = mapMedicationToIcuSystem(medLine);
+    const targetId = sys ? findIcuSectionId(sections, sys) : null;
+    if (targetId) {
+      insertIntoSection(targetId, medLine);
+      toast({ title: opts?.dripsOnly ? 'Drip added' : 'Medication added', description: `Routed to ${sys} section.` });
+    } else {
+      toast({ title: 'No target section', description: 'Could not determine system for medication.' });
+    }
+  };
+
+  const handleIcuVentConfirm = (settingsLine: string) => {
+    const targetId = findIcuSectionId(sections, 'resp');
+    if (targetId) {
+      insertIntoSection(targetId, settingsLine);
+      toast({ title: 'Vent settings added', description: 'Inserted into Respiratory section.' });
+    }
+    setShowVentPopup(false);
+  };
+
+  const handleIcuIOConfirm = (ioLine: string) => {
+    const targetId = findIcuSectionId(sections, 'nephroMetabolic');
+    if (targetId) {
+      insertIntoSection(targetId, ioLine);
+      toast({ title: 'I/O added', description: 'Inserted into Nephro-metabolic section.' });
+    }
+    setShowIOPopup(false);
+  };
+
+  // Quick helper to build series map from parsed labs
+  const buildSeriesMap = (sectionId: string, parsed: Array<{ standardizedName: string; currentValue: string; trendedValues: string[]; unit?: string }>) => {
+    const map: Record<string, { current: string; trends: string[]; unit?: string }> = {};
+    for (const p of parsed) {
+      map[p.standardizedName] = { current: p.currentValue, trends: p.trendedValues, unit: p.unit };
+    }
+    setLabSeriesBySection(prev => ({ ...prev, [sectionId]: map }));
   };
 
   const handleCalculatorComplete = (resultText: string) => {
@@ -1606,7 +1872,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                     <SelectContent>
                       {/* Local templates - only blank note */}
                       {noteTemplates
-                        .filter(template => template.type === 'blank')
+                        .filter(template => ['blank','icu-admission','icu-progress'].includes(template.type as string))
                         .map((template) => (
                         <SelectItem key={`local-${template.id}`} value={template.type}>
                           {template.name}
@@ -1732,13 +1998,73 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                           type="button"
                           size="sm"
                           variant="outline"
-                          onClick={() => handleLabParsing(section.id)}
+                          onClick={async () => {
+                            try {
+                              const text = await navigator.clipboard.readText();
+                              if (!text || !text.trim()) {
+                                toast({ title: 'Clipboard empty', description: 'No text found in clipboard.' });
+                                return;
+                              }
+                              const { parseLabText, formatLabsForNote, DEFAULT_LAB_PREFERENCES } = await import('@/lib/lab-parsing');
+                              const parsed = parseLabText(text);
+                              if (parsed.length === 0) {
+                                toast({ title: 'No labs detected', description: 'Could not parse labs from clipboard.' });
+                                return;
+                              }
+                              // store full series for overlay expansion
+                              buildSeriesMap(section.id, parsed);
+                              // Try to load user's most recent preset
+                              let customVisibility: Record<string, boolean> | undefined;
+                              let customTrendCounts: Record<string, number> | undefined;
+                              try {
+                                const resp = await fetch('/api/lab-presets');
+                                if (resp.ok) {
+                                  const list = await resp.json();
+                                  if (Array.isArray(list) && list.length > 0) {
+                                    customVisibility = list[0]?.settings?.customVisibility;
+                                    customTrendCounts = list[0]?.settings?.customTrendCounts;
+                                  }
+                                }
+                              } catch {}
+                              const formatted = formatLabsForNote(parsed, DEFAULT_LAB_PREFERENCES, customVisibility, customTrendCounts);
+                              const content = noteData.content[section.id] || '';
+                              const newContent = content + (content ? '\n\n' : '') + formatted;
+                              setNoteData(prev => ({
+                                ...prev,
+                                content: { ...prev.content, [section.id]: newContent }
+                              }));
+                              toast({ title: 'Quick parse added', description: 'Labs parsed from clipboard and appended.' });
+                            } catch (err) {
+                              console.error(err);
+                              toast({ title: 'Clipboard access denied', description: 'Allow clipboard permission to use Quick Parse.' });
+                            }
+                          }}
+                          className="flex items-center gap-1 text-xs px-2"
+                          title="Quickly parse labs from clipboard and append"
+                        >
+                          Quick Parse
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleLabParsing(section.id, 'paste')}
                           className="flex items-center gap-1 text-xs px-2"
                           data-testid={`lab-smart-parser-button-${section.id}`}
                           title="Parse and standardize EHR lab results with customizable trending"
                         >
                           <FileSearch size={12} />
                           Smart Parser
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleLabParsing(section.id, 'global-settings')}
+                          className="flex items-center gap-1 text-xs px-2"
+                          title="Lab settings and presets"
+                        >
+                          Settings
                         </Button>
                         <Button
                           type="button"
@@ -1908,11 +2234,12 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                   <div className="relative">
                   <Textarea
                     value={noteData.content[section.id] || ''}
-                    onChange={(e) => handleSectionContentChange(section.id, e.target.value, e.target)}
-                    onClick={(e) => tryReopenPickerAtCaret(section.id, e.currentTarget as HTMLTextAreaElement)}
-                    onKeyUp={(e) => tryReopenPickerAtCaret(section.id, e.currentTarget as HTMLTextAreaElement)}
-                    onMouseMove={(e) => handleTextareaMouseMove(section.id, e.currentTarget as HTMLTextAreaElement, e)}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleSectionContentChange(section.id, e.target.value, e.target)}
+                    onClick={(e: React.MouseEvent<HTMLTextAreaElement>) => { tryReopenPickerAtCaret(section.id, e.currentTarget as HTMLTextAreaElement); }}
+                    onKeyUp={(e: React.KeyboardEvent<HTMLTextAreaElement>) => { tryReopenPickerAtCaret(section.id, e.currentTarget as HTMLTextAreaElement); }}
+                    onMouseMove={(e: React.MouseEvent<HTMLTextAreaElement>) => handleTextareaMouseMove(section.id, e.currentTarget as HTMLTextAreaElement, e)}
                     onMouseLeave={handleTextareaMouseLeave}
+                    
                     placeholder={selectedTemplate?.type === 'blank' 
                       ? "Start typing your note here... (Type '/' for smart phrases, '/calc' for clinical calculators)"
                       : `Document the ${section.name.toLowerCase()}... (Type '/' for smart phrases, '/calc' for calculators${
@@ -1957,6 +2284,21 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                     data-testid={`textarea-${section.id}`}
                     data-section-id={section.id}
                   />
+                  {/* Lab line overlay controls */}
+                  {activeLabOverlay && activeLabOverlay.sectionId === section.id && (
+                    <LabLineOverlay
+                      visible={true}
+                      top={activeLabOverlay.top}
+                      left={activeLabOverlay.left}
+                      count={activeLabOverlay.count}
+                      max={activeLabOverlay.max}
+                      onIncrease={() => adjustLabTrendCount('inc')}
+                      onDecrease={() => adjustLabTrendCount('dec')}
+                      onDelete={() => deleteLabLine()}
+                      onMouseEnter={() => setIsHoveringOverlay(true)}
+                      onMouseLeave={() => setIsHoveringOverlay(false)}
+                    />
+                  )}
                   {/* Smart phrase hover chip disabled per updated UX preference */}
                   </div>
                   
@@ -2080,8 +2422,21 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
               </Button>
             </div>
           </div>
+          {/* ICU Right Action Bar floating (fixed) */}
         </div>
-        </div>
+        {isIcuTemplateType(noteData.templateType) && (
+          <div className="hidden xl:block fixed right-6 top-24 z-40">
+            <IcuActionBar
+              onLabs={handleIcuLabsClick}
+              onImaging={() => setShowImagingQuick(true)}
+              onMeds={() => setShowMedQuickAdd({})}
+              onDrips={() => setShowMedQuickAdd({ dripsOnly: true })}
+              onVent={() => setShowVentPopup(true)}
+              onIO={() => setShowIOPopup(true)}
+            />
+          </div>
+        )}
+      </div>
       </div>
       {/* Pertinent Negatives Popup */}
       <PertinentNegativesPopup
@@ -2131,12 +2486,38 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
         isOpen={showLabParsingDialog}
         onClose={() => setShowLabParsingDialog(false)}
         onConfirm={handleLabParsingConfirm}
+        initialTab={labParsingInitialTab}
+      />
+      {/* ICU Imaging Quick Dialog */}
+      <ImagingQuickDialog
+        isOpen={showImagingQuick}
+        onClose={() => setShowImagingQuick(false)}
+        onSelect={handleIcuImagingSelect}
       />
       {/* Clinical Calculator Popup */}
       <ClinicalCalculatorPopup
         isOpen={showClinicalCalculator}
         onClose={() => setShowClinicalCalculator(false)}
         onCalculationComplete={handleCalculatorComplete}
+      />
+      {/* ICU Ventilation Popup */}
+      <VentilationSettingsPopup
+        isOpen={showVentPopup}
+        onClose={() => setShowVentPopup(false)}
+        onConfirm={handleIcuVentConfirm}
+      />
+      {/* ICU I&O Popup */}
+      <IOEntryPopup
+        isOpen={showIOPopup}
+        onClose={() => setShowIOPopup(false)}
+        onConfirm={handleIcuIOConfirm}
+      />
+      {/* ICU Med Quick Add */}
+      <MedQuickAddPopup
+        isOpen={!!showMedQuickAdd}
+        onClose={() => setShowMedQuickAdd(null)}
+        onConfirm={(line) => handleIcuMedAdd(line, showMedQuickAdd || undefined)}
+        dripsOnly={showMedQuickAdd?.dripsOnly}
       />
 
 

@@ -63,6 +63,7 @@ export const teamMembers = pgTable("team_members", {
 export const noteTemplates = pgTable("note_templates", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   shareableId: varchar("shareable_id", { length: 12 }).unique().notNull().default(sql`upper(substring(replace(gen_random_uuid()::text, '-', ''), 1, 12))`),
+  shortCode: varchar("short_code", { length: 4 }).unique(),
   name: varchar("name", { length: 100 }).notNull(),
   type: varchar("type", { length: 50 }).notNull(), // admission, progress, consult
   description: text("description"),
@@ -95,6 +96,7 @@ export const notes = pgTable("notes", {
 export const smartPhrases = pgTable("smart_phrases", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   shareableId: varchar("shareable_id", { length: 12 }).unique().notNull().default(sql`upper(substring(replace(gen_random_uuid()::text, '-', ''), 1, 12))`),
+  shortCode: varchar("short_code", { length: 4 }).unique(),
   trigger: varchar("trigger", { length: 50 }).notNull(), // the phrase after /
   content: text("content").notNull(), // template with placeholders like {{picker1}}, {{date1}}, etc.
   description: varchar("description", { length: 200 }),
@@ -147,11 +149,29 @@ export const userLabSettings = pgTable("user_lab_settings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Named Lab Presets (per-user)
+export const labPresets = pgTable("lab_presets", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  name: varchar("name", { length: 120 }).notNull(),
+  settings: jsonb("settings").$type<{
+    customVisibility?: Record<string, boolean>;
+    customTrendCounts?: Record<string, number>;
+    panelDefaults?: Record<string, number>;
+  }>().notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type LabPreset = typeof labPresets.$inferSelect;
+export type InsertLabPreset = typeof labPresets.$inferInsert;
+
 // Autocomplete items table for note section autocompletions
 export const autocompleteItems = pgTable(
   "autocomplete_items",
   {
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    shortCode: varchar("short_code", { length: 4 }).unique(),
     text: varchar("text", { length: 500 }).notNull(),
     category: varchar("category", { length: 100 }).notNull(), // consultation-reasons, past-medical-history, etc.
     isPriority: boolean("is_priority").default(false),

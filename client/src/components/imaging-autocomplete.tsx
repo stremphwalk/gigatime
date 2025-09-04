@@ -15,7 +15,7 @@ interface ImagingStudy {
   category: string;
 }
 
-const IMAGING_STUDIES: ImagingStudy[] = [
+export const IMAGING_STUDIES: ImagingStudy[] = [
   {
     abbreviation: "CXR",
     fullName: "Chest X-Ray",

@@ -13,6 +13,48 @@ export const noteTemplates = [
       }
     ]
   },
+  {
+    id: "icu-admission-template",
+    name: "ICU Admission Note",
+    type: "icu-admission",
+    isDefault: false,
+    description: "ICU-style admission note organized by systems",
+    sections: [
+      { id: "reason", name: "Reason for Admission", type: "textarea", required: true },
+      { id: "hpi", name: "History of Present Illness", type: "textarea", required: true },
+      { id: "pmh", name: "Past Medical History", type: "textarea", required: false },
+      { id: "allergies", name: "Allergies", type: "textarea", required: true },
+      { id: "social", name: "Social History", type: "textarea", required: false },
+      { id: "medications", name: "Medications", type: "textarea", required: true },
+      // ICU systems begin here (instead of Physical Exam / Labs / Imaging)
+      { id: "neuro", name: "Neurological", type: "textarea", required: true },
+      { id: "cardio", name: "Cardiovascular", type: "textarea", required: true },
+      { id: "resp", name: "Respiratory", type: "textarea", required: true },
+      { id: "gi", name: "Gastrointestinal", type: "textarea", required: false },
+      { id: "nephroMetabolic", name: "Nephro-metabolic", type: "textarea", required: false },
+      { id: "hemaInfectious", name: "Hematology/Infectious", type: "textarea", required: false },
+      { id: "impression", name: "Impression", type: "textarea", required: true },
+      { id: "plan", name: "Plan", type: "textarea", required: true }
+    ]
+  },
+  {
+    id: "icu-progress-template",
+    name: "ICU Progress Note",
+    type: "icu-progress",
+    isDefault: false,
+    description: "ICU progress note organized by systems",
+    sections: [
+      { id: "hpi", name: "Interval Events / HPI", type: "textarea", required: true },
+      { id: "neuro", name: "Neurological", type: "textarea", required: true },
+      { id: "cardio", name: "Cardiovascular", type: "textarea", required: true },
+      { id: "resp", name: "Respiratory", type: "textarea", required: true },
+      { id: "gi", name: "Gastrointestinal", type: "textarea", required: false },
+      { id: "nephroMetabolic", name: "Nephro-metabolic", type: "textarea", required: false },
+      { id: "hemaInfectious", name: "Hematology/Infectious", type: "textarea", required: false },
+      { id: "impression", name: "Impression", type: "textarea", required: true },
+      { id: "plan", name: "Plan", type: "textarea", required: true }
+    ]
+  },
 
   {
     id: "admission-template",

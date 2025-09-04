@@ -12,9 +12,13 @@ import {
   insertTeamCalendarEventSchema,
   insertUserSchema,
   insertUserLabSettingSchema,
-  insertAutocompleteItemSchema
+  insertAutocompleteItemSchema,
+  smartPhrases,
+  noteTemplates,
+  autocompleteItems
 } from "../shared/schema.js";
 import { z } from "zod";
+import { eq, or } from "drizzle-orm";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up Auth0 if configured, otherwise use session for development
@@ -526,9 +530,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Smart phrase routes
-  app.get("/api/smart-phrases", requireAuth, async (req, res) => {
+  app.get("/api/smart-phrases", optionalAuth, async (req, res) => {
     try {
-      const userId = getCurrentUserId(req);
+      const userId = (req as any).user?.claims?.sub || 'default-user';
       
       // Ensure user exists
       let user = await storage.getUser(userId);
@@ -580,9 +584,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/smart-phrases", requireAuth, async (req, res) => {
+  app.post("/api/smart-phrases", optionalAuth, async (req, res) => {
     try {
-      const userId = getCurrentUserId(req);
+      const userId = (req as any).user?.claims?.sub || 'default-user';
       
       // Ensure user exists
       let user = await storage.getUser(userId);
@@ -642,6 +646,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error creating smart phrase:", error);
       res.status(500).json({ message: "Failed to create smart phrase" });
+    }
+  });
+  // Batch export/import via short codes
+  app.post('/api/share/:type/export', requireAuth, async (req: any, res) => {
+    const userId = req.user?.id;
+    const { type } = req.params;
+    const { ids } = req.body as { ids: string[] };
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids required' });
+    try {
+      if (type === 'smart-phrases') {
+        const rows = await storage.db.select().from(smartPhrases).where(or(...ids.map(id => eq(smartPhrases.id, id))));
+        const codes: string[] = [];
+        for (const r of rows) {
+          let code = r.shortCode;
+          if (!code) {
+            // Generate and persist
+            const gen = await (storage as any).generateUniqueShortCodeFor('smartPhrases');
+            await storage.updateSmartPhrase(r.id, { shortCode: gen } as any);
+            code = gen;
+          }
+          codes.push(code);
+        }
+        return res.json({ type, codes });
+      } else if (type === 'note-templates') {
+        const rows = await storage.db.select().from(noteTemplates).where(or(...ids.map(id => eq(noteTemplates.id, id))));
+        const codes: string[] = [];
+        for (const r of rows) {
+          let code = (r as any).shortCode as string | null;
+          if (!code) {
+            const gen = await (storage as any).generateUniqueShortCodeFor('noteTemplates');
+            await storage.updateNoteTemplate(r.id, { shortCode: gen } as any);
+            code = gen;
+          }
+          codes.push(code);
+        }
+        return res.json({ type, codes });
+      } else if (type === 'autocomplete-items') {
+        const rows = await storage.db.select().from(autocompleteItems).where(or(...ids.map(id => eq(autocompleteItems.id, id))));
+        const codes: string[] = [];
+        for (const r of rows) {
+          let code = (r as any).shortCode as string | null;
+          if (!code) {
+            const gen = await (storage as any).generateUniqueShortCodeFor('autocompleteItems');
+            await storage.updateAutocompleteItem(r.id, { shortCode: gen } as any);
+            code = gen;
+          }
+          codes.push(code);
+        }
+        return res.json({ type, codes });
+      }
+      return res.status(400).json({ error: 'Unsupported type' });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Export failed' });
+    }
+  });
+
+  app.post('/api/share/:type/import', requireAuth, async (req: any, res) => {
+    const userId = req.user?.id;
+    const { type } = req.params;
+    const { codes } = req.body as { codes: string[] };
+    if (!Array.isArray(codes) || codes.length === 0) return res.status(400).json({ error: 'codes required' });
+    try {
+      const results: any[] = [];
+      for (const codeRaw of codes) {
+        const code = String(codeRaw || '').toUpperCase().trim();
+        if (!code) continue;
+        if (type === 'smart-phrases') {
+          const r = await (storage as any).importSmartPhraseByShortCode(code, userId);
+          results.push({ code, success: r.success, message: r.message });
+        } else if (type === 'note-templates') {
+          const r = await (storage as any).importNoteTemplateByShortCode(code, userId);
+          results.push({ code, success: r.success, message: r.message });
+        } else if (type === 'autocomplete-items') {
+          const r = await (storage as any).importAutocompleteByShortCode(code, userId);
+          results.push({ code, success: r.success, message: r.message });
+        }
+      }
+      return res.json({ type, results });
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ error: 'Import failed' });
     }
   });
 
@@ -1109,9 +1195,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Initialize default templates
-  app.post("/api/init", requireAuth, async (req, res) => {
+  app.post("/api/init", optionalAuth, async (req, res) => {
     try {
-      const userId = getCurrentUserId(req);
+      const userId = (req as any).user?.claims?.sub || 'default-user';
       // Ensure user exists before creating default content that references the user
       let user = await storage.getUser(userId);
       if (!user) {
@@ -1403,6 +1489,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching user lab settings:", error);
       res.status(500).json({ message: "Failed to fetch lab settings" });
+    }
+  });
+
+  // Lab presets routes
+  app.get("/api/lab-presets", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const userId = user?.sub || 'default-user';
+      const presets = await storage.getLabPresets(userId);
+      res.json(presets);
+    } catch (error) {
+      console.error("Error fetching lab presets:", error);
+      res.status(500).json({ message: "Failed to fetch lab presets" });
+    }
+  });
+
+  app.post("/api/lab-presets", requireAuth, async (req, res) => {
+    try {
+      const user = (req as any).user;
+      const userId = user?.sub || 'default-user';
+      const { name, settings } = req.body || {};
+      if (!name || !settings) return res.status(400).json({ message: 'name and settings required' });
+      const created = await storage.createLabPreset({ userId, name, settings });
+      res.json(created);
+    } catch (error) {
+      console.error("Error creating lab preset:", error);
+      res.status(500).json({ message: "Failed to create lab preset" });
+    }
+  });
+
+  app.put("/api/lab-presets/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params as any;
+      const updated = await storage.updateLabPreset(id, req.body || {});
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating lab preset:", error);
+      res.status(500).json({ message: "Failed to update lab preset" });
+    }
+  });
+
+  app.delete("/api/lab-presets/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params as any;
+      await storage.deleteLabPreset(id);
+      res.json({ message: 'Deleted' });
+    } catch (error) {
+      console.error("Error deleting lab preset:", error);
+      res.status(500).json({ message: "Failed to delete lab preset" });
     }
   });
 

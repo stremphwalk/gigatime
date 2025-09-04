@@ -53,6 +53,8 @@ export function TemplateBuilderManager() {
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [layout, setLayout] = useState<"grid" | "list">("grid");
   const [density, setDensity] = useState<"compact" | "cozy">("compact");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [exportCodes, setExportCodes] = useState<string[] | null>(null);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -143,6 +145,27 @@ export function TemplateBuilderManager() {
     });
     setEditingTemplate(null);
     setActiveTab('create');
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  };
+
+  const handleExportSelected = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    const resp = await fetch('/api/share/note-templates/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
+    const data = await resp.json();
+    setExportCodes(data.codes || []);
+  };
+
+  const handleImportCodes = async () => {
+    const input = window.prompt('Enter template codes (comma or space separated)');
+    if (!input) return;
+    const codes = input.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
+    if (codes.length === 0) return;
+    await fetch('/api/share/note-templates/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codes }) });
+    setSelectedIds(new Set());
   };
 
   const handleEdit = (template: NoteTemplate) => {
@@ -379,7 +402,16 @@ export function TemplateBuilderManager() {
             {/* Template Basic Info */}
             <Card>
               <CardHeader>
-                <CardTitle>Template Information</CardTitle>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Template Information</CardTitle>
+                  {editingTemplate && (editingTemplate as any).shortCode && (
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="text-gray-600">Code:</span>
+                      <Badge variant="outline">{(editingTemplate as any).shortCode}</Badge>
+                      <Button type="button" size="sm" variant="outline" onClick={()=>navigator.clipboard.writeText((editingTemplate as any).shortCode)}>Copy</Button>
+                    </div>
+                  )}
+                </div>
                 <CardDescription>Basic details about your template</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -764,8 +796,19 @@ export function TemplateBuilderManager() {
                 return (
                   <Card key={template.id} className="group overflow-hidden border-muted/60 transition-shadow hover:shadow-sm">
                     <CardHeader className={`flex flex-row items-start justify-between ${padCls}`}>
-                      <div className="min-w-0">
-                        <CardTitle className={`truncate font-medium ${densityCls}`}>{template.name}</CardTitle>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <input type="checkbox" className="mt-1" checked={selectedIds.has(template.id)} onChange={()=>setSelectedIds(prev=>{const next=new Set(prev); if(next.has(template.id)) next.delete(template.id); else next.add(template.id); return next;})} />
+                          <CardTitle className={`truncate font-medium ${densityCls}`}>{template.name}</CardTitle>
+                          {(template as any).shortCode && (
+                            <div className="flex items-center gap-1">
+                              <Badge variant="outline" className="text-[10px]">{(template as any).shortCode}</Badge>
+                              <Button type="button" variant="ghost" size="icon" className="h-6 w-6" title="Copy code" onClick={()=>navigator.clipboard.writeText((template as any).shortCode)}>
+                                <Copy size={12} />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
                         <div className="mt-1 flex flex-wrap items-center gap-1">
                           <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[10px] leading-4">{templateTypes.find(t=>t.value===template.type)?.label || template.type}</Badge>
                         </div>
@@ -794,7 +837,16 @@ export function TemplateBuilderManager() {
                 return (
                   <div key={t.id} className={`grid grid-cols-12 items-center ${padCls} gap-2 hover:bg-muted/40`}>
                     <div className="col-span-4 flex items-center gap-2 min-w-0">
+                      <input type="checkbox" className="mt-0.5" checked={selectedIds.has(t.id)} onChange={()=>setSelectedIds(prev=>{const next=new Set(prev); if(next.has(t.id)) next.delete(t.id); else next.add(t.id); return next;})} />
                       <span className={`truncate font-medium ${densityCls}`}>{t.name}</span>
+                      {(t as any).shortCode && (
+                        <div className="flex items-center gap-1">
+                          <Badge variant="outline" className="text-[10px]">{(t as any).shortCode}</Badge>
+                          <Button type="button" variant="ghost" size="icon" className="h-6 w-6" title="Copy code" onClick={()=>navigator.clipboard.writeText((t as any).shortCode)}>
+                            <Copy size={12} />
+                          </Button>
+                        </div>
+                      )}
                     </div>
                     <div className="col-span-4 min-w-0">
                       <p className={`truncate text-muted-foreground ${densityCls}`}>{t.description}</p>
@@ -813,6 +865,18 @@ export function TemplateBuilderManager() {
           )
         )}
       </div>
+      {exportCodes && (
+        <div className="p-4 border-t bg-white">
+          <div className="max-w-2xl mx-auto">
+            <Label>Share these codes</Label>
+            <Textarea readOnly value={exportCodes.join(' ')} className="mt-1" />
+            <div className="mt-2 flex gap-2">
+              <Button size="sm" onClick={()=>{ navigator.clipboard.writeText(exportCodes.join(' ')); }}>Copy</Button>
+              <Button size="sm" variant="outline" onClick={()=>setExportCodes(null)}>Close</Button>
+            </div>
+          </div>
+        </div>
+      )}
       <ImportTemplateDialog 
         open={showImportDialog} 
         onOpenChange={setShowImportDialog} 

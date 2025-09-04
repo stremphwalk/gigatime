@@ -12,26 +12,16 @@ export function useImagingAutocomplete({ onInsert }: UseImagingAutocompleteProps
       onInsert(study.fullName);
       return;
     }
-    // Generate the formatted text to insert
-    let insertText = `${study.fullName} (${study.abbreviation}):\n\n`;
-    
-    // Add common findings
-    insertText += "FINDINGS:\n";
-    study.commonFindings.forEach(finding => {
-      insertText += `• ${finding}\n`;
-    });
-    
-    // Add selected pertinent negatives if any
-    if (selectedNegatives.length > 0) {
-      insertText += "\nPERTINENT NEGATIVES:\n";
-      selectedNegatives.forEach(negative => {
-        insertText += `• ${negative}\n`;
-      });
-    }
-    
-    insertText += "\nIMPRESSION:\n[Insert impression here]\n";
-    
-    onInsert(insertText);
+    // Generate concise summary text with selected negatives only
+    const formattedNegatives = selectedNegatives
+      .map(n => n.replace(/^No\s+/i, "no "))
+      .join(", ");
+
+    const summary = formattedNegatives
+      ? `${study.fullName}: ${formattedNegatives}.`
+      : `${study.fullName}.`;
+
+    onInsert(summary);
   }, [onInsert]);
 
   const formatImagingTemplate = useCallback((abbreviation: string, negatives: string[] = []) => {
@@ -54,22 +44,19 @@ export function useImagingAutocomplete({ onInsert }: UseImagingAutocompleteProps
     const template = commonTemplates[abbreviation.toUpperCase()];
     if (!template) return null;
 
-    let text = `${template.fullName}:\n\n`;
-    text += "FINDINGS:\n";
-    text += "• [Insert findings here]\n\n";
-    
-    if (negatives.length > 0 || template.negatives.length > 0) {
-      text += "PERTINENT NEGATIVES:\n";
-      const negativesToUse = negatives.length > 0 ? negatives : template.negatives;
-      negativesToUse.forEach(negative => {
-        text += `• ${negative}\n`;
-      });
-      text += "\n";
-    }
-    
-    text += "IMPRESSION:\n[Insert impression here]\n";
-    
-    return text;
+    const negativesToUse = (negatives && negatives.length > 0)
+      ? negatives
+      : template.negatives;
+
+    const formattedNegatives = negativesToUse
+      .map(n => n.replace(/^No\s+/i, "no "))
+      .join(", ");
+
+    const summary = formattedNegatives
+      ? `${template.fullName}: ${formattedNegatives}.`
+      : `${template.fullName}.`;
+
+    return summary;
   }, []);
 
   return {

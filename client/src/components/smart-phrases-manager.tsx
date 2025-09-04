@@ -21,6 +21,8 @@ export function SmartPhrasesManager() {
   const [activeTab, setActiveTab] = useState<'library' | 'create' | 'edit'>('library');
   const [editingPhrase, setEditingPhrase] = useState<UISmartPhrase | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [exportCodes, setExportCodes] = useState<string[] | null>(null);
   const [formData, setFormData] = useState({
     trigger: "",
     content: "",
@@ -148,6 +150,37 @@ export function SmartPhrasesManager() {
     setActiveTab('create');
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleExportSelected = async () => {
+    try {
+      const ids = Array.from(selectedIds);
+      if (ids.length === 0) return;
+      const resp = await fetch('/api/share/smart-phrases/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
+      const data = await resp.json();
+      setExportCodes(data.codes || []);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleImportCodes = async () => {
+    const input = window.prompt('Enter codes (comma or space separated)');
+    if (!input) return;
+    const codes = input.split(/[\s,]+/).map(s => s.trim()).filter(Boolean);
+    if (codes.length === 0) return;
+    const resp = await fetch('/api/share/smart-phrases/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codes }) });
+    const data = await resp.json();
+    toast({ title: 'Import complete', description: `${(data.results||[]).filter((r: any) => r.success).length} imported` });
+    setSelectedIds(new Set());
+  };
+
   const handleEdit = (phrase: UISmartPhrase) => {
     setFormData({
       trigger: phrase.trigger,
@@ -232,6 +265,15 @@ export function SmartPhrasesManager() {
         <div className="flex-1 overflow-y-auto p-6">
           <div className="max-w-2xl mx-auto">
             <form onSubmit={handleSubmit} className="space-y-6">
+              {editingPhrase?.shortCode && (
+                <div className="flex items-center justify-between p-3 rounded-md bg-gray-50 border">
+                  <div className="text-xs text-gray-600">
+                    Code: <span className="font-mono font-medium">{editingPhrase.shortCode}</span>
+                    <span className="ml-2 text-gray-400">Others can import via Smart Phrases → Import by Codes</span>
+                  </div>
+                  <Button type="button" size="sm" variant="outline" onClick={()=>navigator.clipboard.writeText(editingPhrase.shortCode!)}>Copy code</Button>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="trigger">Trigger</Label>
@@ -527,6 +569,13 @@ export function SmartPhrasesManager() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-sm text-gray-500">Selected: {selectedIds.size}</div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={handleImportCodes}>Import by Codes</Button>
+            <Button size="sm" onClick={handleExportSelected} disabled={selectedIds.size === 0}>Export Codes</Button>
+          </div>
+        </div>
         {filteredPhrases.length === 0 ? (
           <div className="text-center py-12">
             <Zap size={48} className="mx-auto text-gray-400 mb-4" />
@@ -552,6 +601,9 @@ export function SmartPhrasesManager() {
               <Card key={phrase.id} className="hover:shadow-md transition-shadow">
                 <CardHeader className="pb-3">
                   <div className="flex items-start justify-between">
+                    <div className="flex items-center mr-2">
+                      <input type="checkbox" className="mr-2" checked={selectedIds.has(phrase.id)} onChange={() => toggleSelect(phrase.id)} />
+                    </div>
                     <div className="flex-1">
                       <div className="flex items-center space-x-2">
                         <CardTitle className="text-lg font-semibold">
@@ -581,6 +633,14 @@ export function SmartPhrasesManager() {
                             <Zap size={10} className="mr-1" />
                             Text
                           </Badge>
+                        )}
+                        {phrase.shortCode && (
+                          <div className="flex items-center gap-1">
+                            <Badge variant="outline" className="text-[10px]">{phrase.shortCode}</Badge>
+                            <Button type="button" size="sm" variant="ghost" className="h-6 px-1" title="Copy code" onClick={()=>navigator.clipboard.writeText(phrase.shortCode!)}>
+                              Copy
+                            </Button>
+                          </div>
                         )}
                       </div>
                       {phrase.description && (
@@ -632,6 +692,18 @@ export function SmartPhrasesManager() {
           </div>
         )}
       </div>
+      {exportCodes && (
+        <div className="p-4 border-t bg-white">
+          <div className="max-w-2xl mx-auto">
+            <Label>Share these codes</Label>
+            <Textarea readOnly value={exportCodes.join(' ')} className="mt-1" />
+            <div className="mt-2 flex gap-2">
+              <Button size="sm" onClick={() => { navigator.clipboard.writeText(exportCodes.join(' ')); toast({ title: 'Copied', description: 'Codes copied to clipboard' }); }}>Copy</Button>
+              <Button size="sm" variant="outline" onClick={() => setExportCodes(null)}>Close</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

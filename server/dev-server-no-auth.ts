@@ -1059,6 +1059,53 @@ app.get("/api/user-lab-settings", async (req, res) => {
   }
 });
 
+// Lab presets routes (no auth dev)
+app.get("/api/lab-presets", async (req, res) => {
+  try {
+    const userId = 'default-user';
+    const presets = await storage.getLabPresets(userId);
+    res.json(presets);
+  } catch (error) {
+    console.error("Error fetching lab presets:", error);
+    res.status(500).json({ message: "Failed to fetch lab presets" });
+  }
+});
+
+app.post("/api/lab-presets", async (req, res) => {
+  try {
+    const userId = 'default-user';
+    const { name, settings } = req.body || {};
+    if (!name || !settings) return res.status(400).json({ message: 'name and settings required' });
+    const created = await storage.createLabPreset({ userId, name, settings });
+    res.json(created);
+  } catch (error) {
+    console.error("Error creating lab preset:", error);
+    res.status(500).json({ message: "Failed to create lab preset" });
+  }
+});
+
+app.put("/api/lab-presets/:id", async (req, res) => {
+  try {
+    const { id } = req.params as any;
+    const updated = await storage.updateLabPreset(id, req.body || {});
+    res.json(updated);
+  } catch (error) {
+    console.error("Error updating lab preset:", error);
+    res.status(500).json({ message: "Failed to update lab preset" });
+  }
+});
+
+app.delete("/api/lab-presets/:id", async (req, res) => {
+  try {
+    const { id } = req.params as any;
+    await storage.deleteLabPreset(id);
+    res.json({ message: 'Deleted' });
+  } catch (error) {
+    console.error("Error deleting lab preset:", error);
+    res.status(500).json({ message: "Failed to delete lab preset" });
+  }
+});
+
 app.post("/api/user-lab-settings", async (req, res) => {
   try {
     const userId = getMockUserId();

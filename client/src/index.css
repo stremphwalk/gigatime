@@ -150,12 +150,25 @@
   }
 
   body {
-    @apply font-sans antialiased bg-clinical-white text-text-primary;
+    @apply font-sans antialiased;
+    background-color: var(--background);
+    color: var(--foreground);
     font-family: var(--font-sans);
   }
 }
 
 @layer utilities {
+  /* Dark mode compatibility shims for legacy classes */
+  .dark .bg-white { background-color: var(--card) !important; }
+  .dark .bg-gray-50 { background-color: var(--muted) !important; }
+  .dark .bg-gray-100 { background-color: var(--muted) !important; }
+  .dark .text-gray-900 { color: var(--foreground) !important; }
+  .dark .text-gray-800 { color: var(--foreground) !important; }
+  .dark .text-gray-700 { color: var(--muted-foreground) !important; }
+  .dark .border-gray-50 { border-color: var(--border) !important; }
+  .dark .border-gray-100 { border-color: var(--border) !important; }
+  .dark .border-gray-200 { border-color: var(--border) !important; }
+  .dark .shadow { box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.35); }
   .medical-teal {
     color: var(--medical-teal);
   }
