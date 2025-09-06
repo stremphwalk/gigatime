@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -17,8 +17,10 @@ import { FlexibleSmartPhraseBuilder } from "./flexible-smart-phrase-builder";
 import { ImportSmartPhraseDialog } from "./import-smart-phrase-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { useTranslation } from 'react-i18next';
 
 export function SmartPhrasesManager() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<"library" | "create" | "edit">("library");
   const [searchQuery, setSearchQuery] = useState("");
   const [category, setCategory] = useState<string>("");
@@ -52,16 +54,16 @@ export function SmartPhrasesManager() {
   };
 
   const handleDelete = async (phraseId: string) => {
-    if (window.confirm("Are you sure you want to delete this phrase?")) {
+    if (window.confirm(t('common.delete') + " this phrase?")) {
       try {
         await deletePhrase(phraseId);
         toast({
-          title: "Success",
+          title: t('success.saved'),
           description: "Smart phrase deleted successfully",
         });
       } catch (error) {
         toast({
-          title: "Error",
+          title: t('errors.generic'),
           description: "Failed to delete smart phrase",
           variant: "destructive",
         });
@@ -81,7 +83,7 @@ export function SmartPhrasesManager() {
       const data = await resp.json();
       setExportCodes(data.codes || []);
     } catch (e) {
-      toast({ title: 'Export Failed', description: 'Could not export codes', variant: 'destructive' });
+      toast({ title: t('errors.generic'), description: 'Could not export codes', variant: 'destructive' });
     }
   };
 
@@ -90,13 +92,13 @@ export function SmartPhrasesManager() {
       if (editingPhrase) {
         await updatePhrase({ id: editingPhrase.id, ...data });
         toast({
-          title: "Success",
+          title: t('success.saved'),
           description: "Smart phrase updated successfully",
         });
       } else {
         await createPhrase(data);
         toast({
-          title: "Success", 
+          title: t('success.saved'),
           description: "Smart phrase created successfully",
         });
       }

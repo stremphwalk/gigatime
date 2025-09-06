@@ -5,12 +5,13 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { ArrowUpDown, Shuffle, Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { 
-  parseMedicationsFromText, 
-  smartReorderMedications, 
+import { useTranslation } from 'react-i18next';
+import {
+  parseMedicationsFromText,
+  smartReorderMedications,
   manualReorderMedications,
   medicationsToText,
-  type ParsedMedication 
+  type ParsedMedication
 } from "@/lib/medication-ordering";
 
 interface MedicationReorderDialogProps {
@@ -20,12 +21,13 @@ interface MedicationReorderDialogProps {
   onReorder: (reorderedText: string) => void;
 }
 
-export function MedicationReorderDialog({ 
-  isOpen, 
-  onClose, 
-  medicationText, 
-  onReorder 
+export function MedicationReorderDialog({
+  isOpen,
+  onClose,
+  medicationText,
+  onReorder
 }: MedicationReorderDialogProps) {
+  const { t } = useTranslation();
   const [medications, setMedications] = useState<ParsedMedication[]>([]);
   const [mode, setMode] = useState<'manual' | 'smart'>('manual');
   const [selectedOrder, setSelectedOrder] = useState<number[]>([]);
@@ -210,9 +212,9 @@ export function MedicationReorderDialog({
         <DialogFooter>
           <Button variant="outline" onClick={onClose} data-testid="button-cancel-reorder">
             <X size={14} className="mr-2" />
-            Cancel
+            {t('common.cancel')}
           </Button>
-          <Button 
+          <Button
             onClick={mode === 'manual' ? handleManualConfirm : handleSmartConfirm}
             disabled={!isComplete}
             data-testid="button-confirm-reorder"

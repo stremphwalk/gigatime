@@ -30,6 +30,7 @@ import {
   AlertTriangle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useTranslation } from 'react-i18next';
 
 interface ClinicalCalculatorPopupProps {
   isOpen: boolean;
@@ -47,12 +48,13 @@ const SYSTEM_ICONS: Record<string, React.ReactNode> = {
   'Emergency Medicine': <AlertTriangle className="h-4 w-4" />
 };
 
-export function ClinicalCalculatorPopup({ 
-  isOpen, 
-  onClose, 
+export function ClinicalCalculatorPopup({
+  isOpen,
+  onClose,
   onCalculationComplete,
-  position 
+  position
 }: ClinicalCalculatorPopupProps) {
+  const { t } = useTranslation();
   const [currentView, setCurrentView] = useState<'systems' | 'calculators' | 'calculator'>('systems');
   const [selectedSystem, setSelectedSystem] = useState<string>('');
   const [selectedCalculator, setSelectedCalculator] = useState<Calculator | null>(null);
@@ -225,7 +227,7 @@ export function ClinicalCalculatorPopup({
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input
-            placeholder="Search calculators..."
+            placeholder={t('common.search') + " calculators..."}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
@@ -258,7 +260,7 @@ export function ClinicalCalculatorPopup({
         {searchQuery && (
           <div className="space-y-2">
             <Separator />
-            <h4 className="font-medium text-sm">Search Results</h4>
+            <h4 className="font-medium text-sm">{t('common.search')} Results</h4>
             {searchCalculators(searchQuery).map((calculator) => (
               <Card 
                 key={calculator.id}
@@ -298,7 +300,7 @@ export function ClinicalCalculatorPopup({
             data-testid="button-back-to-systems"
           >
             <ArrowLeft className="h-4 w-4 mr-1" />
-            Back
+            {t('common.back')}
           </Button>
           <div className="flex items-center space-x-2">
             {SYSTEM_ICONS[selectedSystem]}

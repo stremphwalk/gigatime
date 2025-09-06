@@ -1,4 +1,5 @@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { useTranslation } from 'react-i18next';
 
 interface ConfirmLeaveModalProps {
   open: boolean;
@@ -7,6 +8,8 @@ interface ConfirmLeaveModalProps {
 }
 
 export function ConfirmLeaveModal({ open, onConfirm, onCancel }: ConfirmLeaveModalProps) {
+  const { t } = useTranslation();
+
   return (
     <AlertDialog open={open} onOpenChange={(v) => { if (!v) onCancel(); }}>
       <AlertDialogContent>
@@ -17,8 +20,8 @@ export function ConfirmLeaveModal({ open, onConfirm, onCancel }: ConfirmLeaveMod
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel onClick={onCancel}>Stay</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm}>Leave</AlertDialogAction>
+          <AlertDialogCancel onClick={onCancel}>{t('common.cancel')}</AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm}>{t('common.confirm')}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

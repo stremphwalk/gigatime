@@ -25,6 +25,7 @@ import {
   type UserLabPreferences 
 } from "@/lib/lab-parsing";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useTranslation } from 'react-i18next';
 
 interface LabParsingDialogProps {
   isOpen: boolean;
@@ -34,6 +35,7 @@ interface LabParsingDialogProps {
 }
 
 export function LabParsingDialog({ isOpen, onClose, onConfirm, initialTab = 'paste' }: LabParsingDialogProps) {
+  const { t } = useTranslation();
   const [rawLabText, setRawLabText] = useState('');
   const [parsedLabs, setParsedLabs] = useState<ParsedLabValue[]>([]);
   const [preferences, setPreferences] = useState<UserLabPreferences>(DEFAULT_LAB_PREFERENCES);

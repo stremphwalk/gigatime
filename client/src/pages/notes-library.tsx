@@ -5,12 +5,14 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useNotes, useNoteTemplates } from '@/hooks/use-notes';
 import type { Note } from '@shared/schema';
+import { useTranslation } from 'react-i18next';
 
 interface NotesLibraryProps {
   onOpenNote: (note: Note) => void;
 }
 
 export default function NotesLibrary({ onOpenNote }: NotesLibraryProps) {
+  const { t } = useTranslation();
   const { notes = [], deleteNote } = useNotes();
   const { templates = [] } = useNoteTemplates();
 
@@ -60,7 +62,7 @@ export default function NotesLibrary({ onOpenNote }: NotesLibraryProps) {
       <div className="border-b border-gray-200 p-4 bg-white">
         <div className="mb-1 flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">Notes Library</h1>
+            <h1 className="text-xl font-semibold tracking-tight">{t('notes.library')}</h1>
             <p className="text-muted-foreground text-xs">Browse, open, and manage your saved notes</p>
           </div>
         </div>
@@ -69,7 +71,7 @@ export default function NotesLibrary({ onOpenNote }: NotesLibraryProps) {
             <input
               value={q}
               onChange={(e)=>setQ(e.target.value)}
-              placeholder="Search notes..."
+              placeholder={t('common.search') + " notes..."}
               className="flex-1 min-w-[180px] px-2 py-1 text-xs rounded border border-gray-200"
             />
             <Separator orientation="vertical" className="h-6"/>
@@ -78,7 +80,7 @@ export default function NotesLibrary({ onOpenNote }: NotesLibraryProps) {
               onChange={(e)=>setTemplateFilter(e.target.value)}
               className="px-2 py-1 text-xs rounded border border-gray-200"
             >
-              <option value="">All templates</option>
+              <option value="">{t('common.filter')} templates</option>
               {Array.from(new Set(templates?.map(t => t.type) || [])).map(t => (
                 <option key={t} value={t}>{t}</option>
               ))}

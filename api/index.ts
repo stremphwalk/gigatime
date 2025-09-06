@@ -475,11 +475,11 @@ async function initializeRoutes() {
     const { type } = req.params;
     const { codes } = req.body as { codes: string[] };
     if (!Array.isArray(codes) || codes.length === 0) return res.status(400).json({ error: 'codes required' });
-    try {
-      const results: any[] = [];
-      for (const codeRaw of codes) {
+    const results: any[] = [];
+    for (const codeRaw of codes) {
+      try {
         const code = String(codeRaw || '').toUpperCase().trim();
-        if (!code) continue;
+        if (!code) { results.push({ code: codeRaw, success: false, message: 'empty code' }); continue; }
         if (type === 'smart-phrases') {
           const r = await (storage as any).importSmartPhraseByShortCode(code, userId);
           results.push({ code, success: r.success, message: r.message });
@@ -489,13 +489,15 @@ async function initializeRoutes() {
         } else if (type === 'autocomplete-items') {
           const r = await (storage as any).importAutocompleteByShortCode(code, userId);
           results.push({ code, success: r.success, message: r.message });
+        } else {
+          results.push({ code, success: false, message: 'Unsupported type' });
         }
+      } catch (err: any) {
+        console.error('[Share Import] Error for code', codeRaw, err?.message || err);
+        results.push({ code: codeRaw, success: false, message: err?.message || 'Import failed' });
       }
-      return res.json({ type, results });
-    } catch (err) {
-      console.error('[Share Import] Error:', err);
-      return res.status(500).json({ error: 'Import failed' });
     }
+    return res.json({ type, results });
   });
 
   app.post("/api/smart-phrases", requireAuth, async (req, res) => {

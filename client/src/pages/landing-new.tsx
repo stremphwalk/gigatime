@@ -7,6 +7,7 @@ import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/
 import { Input } from "@/components/ui/input";
 import { Check, ArrowRight, Mic, FileText, Shield, Sparkles, Clock, Headphones, Workflow } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth0";
+import { useTranslation } from 'react-i18next';
 
 // --- Brand ---
 const Logo = ({ className = "h-8 w-auto" }) => {
@@ -35,6 +36,7 @@ const container = {
 
 export default function LandingNew() {
   const { loginWithRedirect, isAuthenticated } = useAuth();
+  const { t } = useTranslation();
 
   const handleGetStarted = () => {
     if (isAuthenticated) {
@@ -60,18 +62,18 @@ export default function LandingNew() {
           <Logo />
 
           <nav className="hidden md:flex items-center gap-6 text-sm">
-            <a href="#features" className="hover:text-[color:var(--brand-700)] transition">Features</a>
-            <a href="#how" className="hover:text-[color:var(--brand-700)] transition">How it works</a>
-            <a href="#pricing" className="hover:text-[color:var(--brand-700)] transition">Pricing</a>
-            <a href="#faq" className="hover:text-[color:var(--brand-700)] transition">FAQ</a>
+            <a href="#features" className="hover:text-[color:var(--brand-700)] transition">{t('landing.hero.features')}</a>
+            <a href="#how" className="hover:text-[color:var(--brand-700)] transition">{t('landing.hero.howItWorks')}</a>
+            <a href="#pricing" className="hover:text-[color:var(--brand-700)] transition">{t('landing.hero.pricing')}</a>
+            <a href="#faq" className="hover:text-[color:var(--brand-700)] transition">{t('landing.hero.faq')}</a>
           </nav>
 
           <div className="flex items-center gap-2">
             <Button variant="ghost" className="hidden md:inline-flex" onClick={handleSignIn}>
-              {isAuthenticated ? 'Dashboard' : 'Sign in'}
+              {isAuthenticated ? t('nav.dashboard') : t('auth.signIn')}
             </Button>
             <Button className="bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] text-white shadow-sm hover:opacity-95" onClick={handleGetStarted}>
-              {isAuthenticated ? 'Go to App' : 'Get started'}
+              {isAuthenticated ? 'Go to App' : t('landing.hero.cta.getStarted')}
             </Button>
           </div>
         </div>
@@ -88,18 +90,18 @@ export default function LandingNew() {
             <div className="text-center md:text-left">
               <Badge className="mb-4 bg-[color:var(--brand-100)] text-[color:var(--brand-700)] border-[color:var(--brand-200)]">Built for medical professionals</Badge>
               <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
-                Medical notes <span className="bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] bg-clip-text text-transparent">perfected</span>.
+                {t('landing.hero.title')}
               </h1>
               <p className="mt-4 text-slate-600 text-lg md:text-xl">
-                Arinote transforms voice into structured medical documentation with AI-powered dictation, smart templates, and seamless workflow integration.
+                {t('landing.hero.subtitle')}
               </p>
 
               <div className="mt-6 flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center md:justify-start">
                 <Button size="lg" className="h-12 px-6 bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] hover:opacity-95" onClick={handleGetStarted}>
-                  Try it free <ArrowRight className="ml-2 h-4 w-4" />
+                  {t('landing.hero.cta.tryFree')} <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
                 <Button size="lg" variant="outline" className="h-12 px-6">
-                  Watch demo
+                  {t('landing.hero.cta.watchDemo')}
                 </Button>
               </div>
 
@@ -115,7 +117,7 @@ export default function LandingNew() {
               <Card className="rounded-2xl shadow-xl border-slate-200">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Mic className="h-5 w-5 text-[color:var(--brand-700)]" /> 
+                    <Mic className="h-5 w-5 text-[color:var(--brand-700)]" />
                     Live Medical Dictation
                   </CardTitle>
                 </CardHeader>
@@ -133,8 +135,8 @@ export default function LandingNew() {
                       <Card className="border-slate-200">
                         <CardHeader className="py-3">
                           <CardTitle className="text-base flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-[color:var(--brand-700)]"/> 
-                            SOAP Note
+                            <FileText className="h-4 w-4 text-[color:var(--brand-700)]"/>
+                            {t('medical.soap')} {t('notes.title')}
                           </CardTitle>
                         </CardHeader>
                         <CardContent className="text-xs text-slate-600 space-y-1">
@@ -147,7 +149,7 @@ export default function LandingNew() {
                       <Card className="border-slate-200">
                         <CardHeader className="py-3">
                           <CardTitle className="text-base flex items-center gap-2">
-                            <Workflow className="h-4 w-4 text-[color:var(--brand-700)]"/> 
+                            <Workflow className="h-4 w-4 text-[color:var(--brand-700)]"/>
                             Smart Templates
                           </CardTitle>
                         </CardHeader>

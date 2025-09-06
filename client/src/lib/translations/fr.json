@@ -1,0 +1,139 @@
+{
+  "common": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "create": "Créer",
+    "new": "Nouveau",
+    "loading": "Chargement...",
+    "search": "Rechercher",
+    "filter": "Filtrer",
+    "close": "Fermer",
+    "back": "Retour",
+    "next": "Suivant",
+    "previous": "Précédent",
+    "submit": "Soumettre",
+    "confirm": "Confirmer",
+    "yes": "Oui",
+    "no": "Non",
+    "ok": "OK",
+    "error": "Erreur",
+    "success": "Succès",
+    "warning": "Avertissement",
+    "info": "Information"
+  },
+  "nav": {
+    "dashboard": "Tableau de bord",
+    "notes": "Notes",
+    "smartPhrases": "Phrases intelligentes",
+    "templates": "Créateur de modèles",
+    "community": "Communauté",
+    "teams": "Équipes",
+    "settings": "Paramètres",
+    "profile": "Profil",
+    "logout": "Déconnexion"
+  },
+  "settings": {
+    "title": "Paramètres",
+    "description": "Configurez vos préférences et le comportement de l'application",
+    "appearance": "Apparence",
+    "shortcuts": "Raccourcis",
+    "privacy": "Confidentialité",
+    "language": "Langue",
+    "notifications": "Notifications",
+    "account": "Compte"
+  },
+  "landing": {
+    "hero": {
+      "title": "Notes médicales perfectionnées.",
+      "subtitle": "Arinote transforme la voix en documentation médicale structurée avec dictée alimentée par IA, modèles intelligents et intégration transparente du flux de travail.",
+      "cta": {
+        "tryFree": "Essayez gratuitement",
+        "watchDemo": "Voir la démo",
+        "getStarted": "Commencer"
+      },
+      "features": "Fonctionnalités",
+      "howItWorks": "Comment ça marche",
+      "pricing": "Tarification",
+      "faq": "FAQ"
+    }
+  },
+  "auth": {
+    "signIn": "Se connecter",
+    "signUp": "S'inscrire",
+    "signOut": "Se déconnecter",
+    "loading": "Chargement...",
+    "email": "Email",
+    "password": "Mot de passe",
+    "forgotPassword": "Mot de passe oublié ?",
+    "rememberMe": "Se souvenir de moi",
+    "loginWith": "Se connecter avec {{provider}}"
+  },
+  "notes": {
+    "title": "Notes",
+    "create": "Nouvelle note vierge",
+    "library": "Bibliothèque de notes",
+    "patientName": "Nom du patient",
+    "patientMrn": "IPP",
+    "patientDob": "Date de naissance",
+    "template": "Modèle",
+    "status": "Statut",
+    "created": "Créé",
+    "modified": "Modifié",
+    "draft": "Brouillon",
+    "finalized": "Finalisé",
+    "deleteConfirm": "Êtes-vous sûr de vouloir supprimer cette note ?",
+    "saveSuccess": "Note enregistrée avec succès",
+    "createSuccess": "Note créée avec succès"
+  },
+  "medical": {
+    "soap": "SOAP",
+    "subjective": "Subjectif",
+    "objective": "Objectif",
+    "assessment": "Évaluation",
+    "plan": "Plan",
+    "history": "Antécédents",
+    "physicalExam": "Examen physique",
+    "vitals": "Signes vitaux",
+    "labs": "Analyses",
+    "imaging": "Imagerie",
+    "medications": "Médicaments",
+    "allergies": "Allergies",
+    "diagnosis": "Diagnostic",
+    "treatment": "Traitement",
+    "followUp": "Suivi",
+    "discharge": "Sortie"
+  },
+  "errors": {
+    "generic": "Une erreur s'est produite",
+    "network": "Erreur réseau",
+    "save": "Échec de l'enregistrement",
+    "load": "Échec du chargement",
+    "delete": "Échec de la suppression",
+    "create": "Échec de la création",
+    "validation": "Erreur de validation",
+    "unauthorized": "Accès non autorisé",
+    "notFound": "Non trouvé"
+  },
+  "success": {
+    "saved": "Enregistré avec succès",
+    "created": "Créé avec succès",
+    "deleted": "Supprimé avec succès",
+    "updated": "Mis à jour avec succès"
+  },
+  "sidebar": {
+    "recentNotes": "Notes récentes",
+    "noNotes": "Aucune note pour le moment",
+    "loadingNotes": "Chargement des notes..."
+  },
+  "teams": {
+    "title": "Équipes",
+    "create": "Créer une équipe",
+    "join": "Rejoindre une équipe",
+    "members": "Membres",
+    "invite": "Inviter des membres",
+    "leave": "Quitter l'équipe",
+    "manage": "Gérer l'équipe"
+  }
+}

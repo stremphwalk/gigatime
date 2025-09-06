@@ -232,6 +232,7 @@ export const userPreferences = pgTable("user_preferences", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }).unique(),
   data: jsonb("data").$type<{
+    language?: 'en'|'fr';
     view?: {
       templates?: 'grid'|'list';
       smartPhrases?: 'grid'|'list';

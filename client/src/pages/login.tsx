@@ -4,6 +4,7 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { ClipboardList, User, Shield } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth0";
 import BrandSpinner from "@/components/brand-spinner";
+import { useTranslation } from 'react-i18next';
 
 const isDevelopment = window.location.hostname === 'localhost';
 const hasAuth0 = !!import.meta.env.VITE_AUTH0_DOMAIN && !!import.meta.env.VITE_AUTH0_CLIENT_ID;
@@ -11,6 +12,7 @@ const hasAuth0 = !!import.meta.env.VITE_AUTH0_DOMAIN && !!import.meta.env.VITE_A
 export function LoginPage() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const { loginWithRedirect } = useAuth();
+  const { t } = useTranslation();
 
   const handleLogin = async () => {
     setIsLoggingIn(true);
@@ -59,12 +61,12 @@ export function LoginPage() {
             {isLoggingIn ? (
               <div className="flex items-center space-x-2">
                 <BrandSpinner size={16} />
-                <span>Signing In...</span>
+                <span>{t('auth.loading')}</span>
               </div>
             ) : (
               <div className="flex items-center space-x-2">
                 {hasAuth0 ? <Shield size={16} /> : <User size={16} />}
-                <span>{hasAuth0 ? 'Sign In with Auth0' : 'Sign In (Dev Mode)'}</span>
+                <span>{hasAuth0 ? t('auth.signIn') + ' with Auth0' : t('auth.signIn') + ' (Dev Mode)'}</span>
               </div>
             )}
           </Button>

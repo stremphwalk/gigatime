@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -286,16 +286,6 @@ export function AutocompleteBuilder() {
           </div>
         </div>
 
-        {/* Header + Toolbar */}
-        <div className="mb-3 flex items-center justify-between">
-          <div>
-            <h2 className="text-xl font-semibold tracking-tight">Autocomplete</h2>
-            <p className="text-muted-foreground text-xs">Manage custom suggestions for note sections</p>
-          </div>
-          <Button onClick={handleCreateNew} className="bg-medical-teal hover:bg-medical-teal/90" size="sm" data-testid="button-create-autocomplete-item">
-            <Plus size={16} className="mr-2"/>New Item
-          </Button>
-        </div>
         <Card className="border-muted/60">
           <CardContent className={`flex flex-wrap items-center gap-2 ${padCls}`}>
             <SearchField value={searchQuery} onChange={setSearchQuery} placeholder="Search items…" />

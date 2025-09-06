@@ -81,6 +81,12 @@ export function MedicalConditionAutocomplete({
         e.preventDefault();
         setSelectedIndex(prev => prev === 0 ? suggestions.length - 1 : prev - 1);
         break;
+      case 'Enter':
+        e.preventDefault();
+        if (suggestions[selectedIndex]) {
+          onSelect(suggestions[selectedIndex], cursorPosition);
+        }
+        break;
       case 'Tab':
         e.preventDefault();
         if (suggestions[selectedIndex]) {

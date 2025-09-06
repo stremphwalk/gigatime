@@ -217,7 +217,7 @@ function CustomItemPicker({ medText, position, dosageOptions = [], frequencyOpti
   };
 
   return (
-    <div ref={containerRef} className="fixed z-50" style={{ top: `${position.top + 10}px`, left: `${position.left}px`, maxWidth: "300px", minWidth: "280px" }}>
+    <div ref={containerRef} className="fixed z-50" style={{ top: `${position.top + 10}px`, left: `${position.left}px`, maxWidth: "300px", minWidth: "280px" }} data-testid="custom-medication-picker">
       <Card className="shadow-lg border border-gray-200">
         <CardContent className="p-3">
           <div className="text-sm font-medium mb-2">{medText}</div>
@@ -320,12 +320,14 @@ export function MedicationAutocomplete({
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      // Don't close if clicking on the dosage popup
       const target = event.target as Node;
       if (containerRef.current && !containerRef.current.contains(target)) {
-        // Check if click is on dosage popup
+        // Allow interactions inside dosage popup OR custom picker popup without closing
         const dosagePopup = document.querySelector('[data-testid="medication-dosage-popup"]');
-        if (!dosagePopup || !dosagePopup.contains(target)) {
+        const customPickerEl = document.querySelector('[data-testid="custom-medication-picker"]');
+        const clickedInDosage = !!(dosagePopup && dosagePopup.contains(target));
+        const clickedInCustomPicker = !!(customPickerEl && customPickerEl.contains(target));
+        if (!clickedInDosage && !clickedInCustomPicker) {
           onClose();
         }
       }

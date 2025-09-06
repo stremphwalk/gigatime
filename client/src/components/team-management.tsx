@@ -19,8 +19,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getSupabaseClient } from "@/lib/supabase";
 import { Users, Plus, LogIn, Copy, Calendar, Clock, Shield, User, ArrowLeft, CheckSquare, CalendarDays, Pin, PinOff, Trash2, Edit2, Save } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
+import { useTranslation } from 'react-i18next';
 
 export function TeamManagement() {
+  const { t } = useTranslation();
   const { data: userTeams = [], isLoading } = useTeams();
   const { toast } = useToast();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -143,6 +145,10 @@ export function TeamManagement() {
   const createPost = useCreateBulletinPost(teamId);
   const updatePost = useUpdateBulletinPost(teamId);
   const deletePost = useDeleteBulletinPost(teamId);
+  const renameTeam = useRenameTeam(teamId);
+  const disbandTeam = useDisbandTeam(teamId);
+  const removeMember = useRemoveMember(teamId);
+  const transferAdmin = useTransferAdmin(teamId);
 
   const [newTask, setNewTask] = useState({ title: "", priority: "medium", dueDate: "", assignees: [] as string[], status: "backlog" });
   const [newEvent, setNewEvent] = useState({ title: "", startDate: "", endDate: "", allDay: false, type: "other" });
@@ -412,7 +418,7 @@ export function TeamManagement() {
               <div className="border rounded p-3 space-y-2">
                 <div className="font-medium text-sm">New Post</div>
                 <Input placeholder="Title" value={newPost.title} onChange={(e) => setNewPost(prev => ({ ...prev, title: e.target.value }))} />
-                <Textarea placeholder="Write something (markdown supported)" value={newPost.content} onChange={(e) => setNewPost(prev => ({ ...prev, content: e.target.value }))} />
+                <Textarea placeholder="Write something (markdown supported)" value={newPost.content} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewPost(prev => ({ ...prev, content: e.target.value }))} />
                 <Button size="sm" onClick={() => {
                   if (!newPost.title) return;
                   createPost.mutate(newPost as any, { onSuccess: () => setNewPost({ title: "", content: "" }) });
@@ -577,7 +583,7 @@ export function TeamManagement() {
                   <Textarea
                     id="team-description"
                     value={createForm.description}
-                    onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setCreateForm({ ...createForm, description: e.target.value })}
                     placeholder="Brief description of the team's purpose..."
                     data-testid="input-team-description"
                   />
@@ -591,12 +597,12 @@ export function TeamManagement() {
                   >
                     Cancel
                   </Button>
-                  <Button 
-                    type="submit" 
+                  <Button
+                    type="submit"
                     disabled={createTeamMutation.isPending || !createForm.name.trim()}
                     data-testid="button-create-team"
                   >
-                    {createTeamMutation.isPending ? "Creating..." : "Create Team"}
+                    {createTeamMutation.isPending ? t('common.loading') : t('teams.create')}
                   </Button>
                 </div>
               </form>
@@ -608,7 +614,7 @@ export function TeamManagement() {
               <Card className="cursor-pointer hover:shadow-md transition-shadow border-dashed">
                 <CardContent className="p-6 text-center">
                   <LogIn className="h-12 w-12 mx-auto mb-3 text-green-500" />
-                  <CardTitle className="mb-2">Join Team</CardTitle>
+                  <CardTitle className="mb-2">{t('teams.join')}</CardTitle>
                   <CardDescription>
                     Enter a 6-character group code to join an existing team
                   </CardDescription>
@@ -648,12 +654,12 @@ export function TeamManagement() {
                   >
                     Cancel
                   </Button>
-                  <Button 
-                    type="submit" 
+                  <Button
+                    type="submit"
                     disabled={joinTeamMutation.isPending || joinForm.groupCode.length !== 6}
                     data-testid="button-join-team"
                   >
-                    {joinTeamMutation.isPending ? "Joining..." : "Join Team"}
+                    {joinTeamMutation.isPending ? t('common.loading') : t('teams.join')}
                   </Button>
                 </div>
               </form>
@@ -668,7 +674,7 @@ export function TeamManagement() {
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-bold">My Teams</h2>
+          <h2 className="text-2xl font-bold">{t('teams.title')}</h2>
           <p className="text-gray-600">Collaborate with your medical teams</p>
         </div>
         <div className="flex space-x-2">
@@ -676,12 +682,12 @@ export function TeamManagement() {
             <DialogTrigger asChild>
               <Button data-testid="button-create-new-team">
                 <Plus className="h-4 w-4 mr-2" />
-                Create Team
+                {t('teams.create')}
               </Button>
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Create New Team</DialogTitle>
+                <DialogTitle>{t('teams.create')}</DialogTitle>
                 <DialogDescription>
                   Create a team to collaborate with up to 8 members. Teams automatically disband after 7 days.
                 </DialogDescription>
@@ -702,7 +708,7 @@ export function TeamManagement() {
                   <Textarea
                     id="team-description"
                     value={createForm.description}
-                    onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setCreateForm({ ...createForm, description: e.target.value })}
                     placeholder="Brief description of the team's purpose..."
                   />
                 </div>
@@ -849,7 +855,7 @@ export function TeamManagement() {
                     className="w-full text-red-600 hover:text-red-700 hover:bg-red-50"
                     data-testid={`button-leave-${userTeam.team.id}`}
                   >
-                    {leaveTeamMutation.isPending ? "Leaving..." : "Leave Team"}
+                    {leaveTeamMutation.isPending ? t('common.loading') : t('teams.leave')}
                   </Button>
                 </div>
               </div>

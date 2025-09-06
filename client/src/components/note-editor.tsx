@@ -70,6 +70,7 @@ import { cn } from "@/lib/utils";
 import { formatSmartPhrase, computeElementStrings } from "@/lib/smart-phrase-format";
 import { noteTemplates } from "../lib/note-templates";
 import { COMMON_ALLERGIES, TOP_MEDICAL_ALLERGIES } from "@/lib/medical-conditions";
+import { useTranslation } from 'react-i18next';
 import type { Note, NoteTemplate } from "@shared/schema";
 
 interface NoteEditorProps {
@@ -91,6 +92,7 @@ interface NoteSection {
 }
 
 export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType, onDirtyChange, onRequestReturn, onRequestOpenNote }: NoteEditorProps) {
+  const { t } = useTranslation();
   const [noteData, setNoteData] = useState({
     title: "",
     patientName: "",
@@ -2115,13 +2117,13 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
             value={noteData.title}
             onChange={(e) => setNoteData(prev => ({ ...prev, title: e.target.value }))}
             className="text-base sm:text-lg font-medium border-none p-0 h-auto focus-visible:ring-0 bg-transparent text-gray-900 dark:text-gray-100 min-w-0"
-            placeholder="Untitled Note"
+            placeholder={t('notes.title')}
             data-testid="input-note-title"
           />
           <div className="hidden md:flex items-center gap-2">
             <Select value={noteData.templateType} onValueChange={handleTemplateChange}>
               <SelectTrigger className="h-8 w-[170px]" data-testid="header-select-template">
-                <SelectValue placeholder="Template" />
+                <SelectValue placeholder={t('notes.template')} />
               </SelectTrigger>
               <SelectContent>
                 {(templates || []).map((t) => (
@@ -2147,7 +2149,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
             data-testid="button-save-note"
           >
             <Save size={14} className="mr-1.5" />
-            {isSaving ? "Saving..." : "Save"}
+            {isSaving ? t('common.loading') : t('common.save')}
           </Button>
           <Button 
             variant="outline"
@@ -2185,7 +2187,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
             className="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-xs px-3"
             data-testid="button-return-welcome"
           >
-            Return
+            {t('common.back')}
           </Button>
         </div>
       </div>

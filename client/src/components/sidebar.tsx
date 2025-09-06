@@ -4,13 +4,13 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { 
-  FileText, 
-  Plus, 
-  Folder, 
-  Settings, 
-  Zap, 
-  Users, 
+import {
+  FileText,
+  Plus,
+  Folder,
+  Settings,
+  Zap,
+  Users,
   ChevronDown,
   ClipboardList,
   User
@@ -18,6 +18,7 @@ import {
 import { useNoteTemplates } from "../hooks/use-notes";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
 import { useSimpleAuth as useAuth } from "../hooks/useSimpleAuth";
+import { useTranslation } from 'react-i18next';
 
 import { cn } from "@/lib/utils";
 import type { Note } from "@shared/schema";
@@ -33,6 +34,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, notes, currentView, onViewChange }: SidebarProps) {
+  const { t } = useTranslation();
   const [expandedSections, setExpandedSections] = useState({
     notes: true,
     smartPhrases: false
@@ -94,7 +96,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
           >
             <div className="flex items-center space-x-3">
               <FileText className="text-medical-teal dark:text-blue-400" size={16} />
-              <span className="font-medium text-gray-900 dark:text-gray-100">Notes</span>
+              <span className="font-medium text-gray-900 dark:text-gray-100">{t('nav.notes')}</span>
             </div>
             <ChevronDown 
               className={cn(
@@ -114,7 +116,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
                 data-testid="button-create-blank-note"
               >
                 <Plus size={12} className="mr-2" />
-                New Blank Note
+                {t('notes.create')}
               </Button>
               {/* Removed template dropdown from sidebar */}
               <Button
@@ -125,7 +127,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
                 onClick={() => onViewChange('notes-library')}
               >
                 <Folder size={12} className="mr-2" />
-                Notes Library
+                {t('notes.library')}
                 <Badge variant="secondary" className="ml-auto text-xs dark:bg-gray-600 dark:text-gray-200">
                   {notes.length}
                 </Badge>
@@ -143,7 +145,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
                 data-testid="button-template-builder"
               >
                 <Settings size={12} className="mr-2" />
-                Template Builder
+                {t('nav.templates')}
                 <Badge variant="secondary" className="ml-auto text-xs dark:bg-gray-600 dark:text-gray-200">
                   {templates?.length || 0}
                 </Badge>
@@ -164,7 +166,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
           >
             <div className="flex items-center space-x-3">
               <Zap className="text-medical-teal dark:text-blue-400" size={16} />
-              <span className="font-medium text-gray-900 dark:text-gray-100">Smart Phrases</span>
+              <span className="font-medium text-gray-900 dark:text-gray-100">{t('nav.smartPhrases')}</span>
             </div>
             <ChevronDown 
               className={cn(
@@ -187,7 +189,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
                 data-testid="button-smart-phrases-library"
               >
                 <Zap size={12} className="mr-2" />
-                Create New Smart Phrase
+                {t('common.create')} {t('nav.smartPhrases')}
                 <Badge variant="secondary" className="ml-auto text-xs dark:bg-gray-600 dark:text-gray-200">
                   {phrases?.length || 0}
                 </Badge>
@@ -240,20 +242,20 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
             data-testid="community-menu-button"
           >
             <Users className="text-medical-teal dark:text-blue-400" size={16} />
-            <span className="font-medium text-gray-900 dark:text-gray-100">Community</span>
+            <span className="font-medium text-gray-900 dark:text-gray-100">{t('nav.community')}</span>
           </Button>
         </div>
 
         {/* Recent Notes */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
           <div className="p-3 border-b border-gray-100 dark:border-gray-700">
-            <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300">Recent Notes</h3>
+            <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300">{t('sidebar.recentNotes')}</h3>
           </div>
           <div className="p-2 space-y-2 max-h-40 overflow-y-auto">
             {isLoading ? (
-              <div className="p-2 text-xs text-gray-500 dark:text-gray-400">Loading notes...</div>
+              <div className="p-2 text-xs text-gray-500 dark:text-gray-400">{t('sidebar.loadingNotes')}</div>
             ) : notes.length === 0 ? (
-              <div className="p-2 text-xs text-gray-500 dark:text-gray-400">No notes yet</div>
+              <div className="p-2 text-xs text-gray-500 dark:text-gray-400">{t('sidebar.noNotes')}</div>
             ) : (
               notes.slice(0, 5).map((note) => (
                 <div
@@ -309,8 +311,8 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => onViewChange('settings')} data-testid="open-settings">Settings</DropdownMenuItem>
-                <DropdownMenuItem onClick={logout} data-testid="logout-or-switch">Log out / Switch user</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onViewChange('settings')} data-testid="open-settings">{t('nav.settings')}</DropdownMenuItem>
+                <DropdownMenuItem onClick={logout} data-testid="logout-or-switch">{t('nav.logout')}</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

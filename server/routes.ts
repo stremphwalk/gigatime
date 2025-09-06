@@ -913,15 +913,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.post('/api/share/:type/import', requireAuth, async (req: any, res) => {
-    const userId = req.user?.id;
+    // Ensure schema resiliency (cold starts / fresh envs)
+    try { await storage.ensureCoreSchema(); } catch {}
+    const userId = getCurrentUserId(req);
+    // Ensure user exists to satisfy FK constraints
+    try {
+      let user = await storage.getUser(userId);
+      if (!user) {
+        user = await storage.createUser({
+          id: userId,
+          email: "doctor@hospital.com",
+          firstName: "Dr. Sarah",
+          lastName: "Mitchell",
+          specialty: "Emergency Medicine"
+        });
+      }
+    } catch {}
     const { type } = req.params;
     const { codes } = req.body as { codes: string[] };
     if (!Array.isArray(codes) || codes.length === 0) return res.status(400).json({ error: 'codes required' });
-    try {
-      const results: any[] = [];
-      for (const codeRaw of codes) {
+    const results: any[] = [];
+    for (const codeRaw of codes) {
+      try {
         const code = String(codeRaw || '').toUpperCase().trim();
-        if (!code) continue;
+        if (!code) { results.push({ code: codeRaw, success: false, message: 'empty code' }); continue; }
         if (type === 'smart-phrases') {
           const r = await (storage as any).importSmartPhraseByShortCode(code, userId);
           results.push({ code, success: r.success, message: r.message });
@@ -931,13 +946,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } else if (type === 'autocomplete-items') {
           const r = await (storage as any).importAutocompleteByShortCode(code, userId);
           results.push({ code, success: r.success, message: r.message });
+        } else {
+          results.push({ code, success: false, message: 'Unsupported type' });
         }
+      } catch (err: any) {
+        console.error('[Import] Error for code', codeRaw, err?.message || err);
+        results.push({ code: codeRaw, success: false, message: err?.message || 'Import failed' });
       }
-      return res.json({ type, results });
-    } catch (err) {
-      console.error(err);
-      return res.status(500).json({ error: 'Import failed' });
     }
+    return res.json({ type, results });
   });
 
   app.put("/api/smart-phrases/:id", requireAuth, async (req, res) => {

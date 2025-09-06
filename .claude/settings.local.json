@@ -32,7 +32,9 @@
       "Bash(ls:*)",
       "Bash(git reset:*)",
       "Bash(convert:*)",
-      "Bash(brew install:*)"
+      "Bash(brew install:*)",
+      "Bash(magick:*)",
+      "Bash(git rm:*)"
     ],
     "deny": [],
     "ask": [],
