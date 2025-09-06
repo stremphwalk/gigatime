@@ -38,6 +38,7 @@ export function useDictation() {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttemptsRef = useRef(0);
   const lastFinalTranscriptRef = useRef('');
+  const finalBufferRef = useRef<string[]>([]);
   const currentModelRef = useRef<string>('nova-3-medical'); // Use latest medical model for best medical terminology accuracy
   const currentSessionRef = useRef<string>('');
   const processedTranscriptsRef = useRef<Set<string>>(new Set());
@@ -67,6 +68,7 @@ export function useDictation() {
       }
       reconnectAttemptsRef.current = 0;
       lastFinalTranscriptRef.current = '';
+      finalBufferRef.current = [];
       currentSessionRef.current = newSessionId;
       processedTranscriptsRef.current.clear();
 
@@ -214,7 +216,12 @@ export function useDictation() {
             };
             
             if (isFinal) {
-              newState.finalTranscript = formattedTranscript;
+              // Accumulate all final chunks during this session
+              try {
+                finalBufferRef.current.push(formattedTranscript);
+              } catch {}
+              const aggregated = finalBufferRef.current.join('\n').trim();
+              newState.finalTranscript = aggregated || formattedTranscript;
               newState.interimTranscript = '';
             } else {
               newState.interimTranscript = formattedTranscript;
@@ -430,8 +437,15 @@ export function useDictation() {
 
     // Close Deepgram connection
     if (connectionRef.current) {
-      connectionRef.current.finish();
-      connectionRef.current = null;
+      try {
+        const conn: any = connectionRef.current;
+        if (conn._pcmFlush) clearInterval(conn._pcmFlush);
+        if (typeof conn.finish === 'function') conn.finish();
+      } catch (e) {
+        // ignore cleanup errors
+      } finally {
+        connectionRef.current = null;
+      }
     }
 
     // Reset model to latest medical model

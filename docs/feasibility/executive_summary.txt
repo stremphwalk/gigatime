@@ -1,0 +1,42 @@
+Executive Summary — Feasibility of a Resident-Driven Documentation Companion for Ariane
+
+Problem
+- Internal medicine documentation in Quebec’s Ariane EHR is slow and variable due to plain‑text notes, limited customizable templates, extensive tab‑switching to collate data, and manual lab assembly/trending. Existing AI scribe tools are costly, hard to control, and often impractical in clinical environments.
+
+Proposed Solution
+- A lightweight, resident‑driven companion (AriNote) that generates structured plain text for copy/paste into Ariane. Core features: modular templates and smart/dot‑phrases, deterministic lab parsing/trending tailored to Quebec FR/EN labels, and optional segment‑level dictation and AI parsing (disabled by default in restricted environments).
+
+Feasibility Lens
+- Integration posture: Copy/paste export; no EHR API dependency, no PHI persistence required for research pilots. 
+- Implementation outcomes: Acceptability, practicality, appropriateness/integration, adoption intent; limited efficacy signals: time per note, lab assembly time, clarity/formatting, workload/usability.
+
+Methods (Pilot Overview)
+- Within‑participant, counterbalanced comparison: Ariane‑only vs AriNote→paste. 
+- Standardized vignettes (admission, progress, consult). 
+- Metrics: Time per note; lab assembly time; SUS/UMUX‑Lite, AIM/IAM/FIM; NASA‑TLX short; blinded clarity ratings; paste‑fidelity; lab accuracy/trending; adoption intent.
+- Restricted mode for firewalled sites: deterministic features only (no outbound ASR/LLM).
+
+Preliminary Signals (Expected/Observed)
+- Directional reductions in total note time with pronounced gains in lab section assembly. 
+- Acceptable‑to‑good usability; strong perceived control via modular content. 
+- High paste‑fidelity with predictable plain‑text formatting; occasional spacing tweaks.
+
+Barriers and Mitigations
+- Network/firewall: Disable ASR/LLM; restricted mode (deterministic features). 
+- Governance/PHI: No PHI persistence; simulated cases for research; transparent data‑flow docs.
+- No Ariane API: Copy/paste posture; pursue sandbox discussions with IT. 
+- Training: One‑page quick start; starter EN/FR content packs; peer champions.
+
+Conclusion
+- A resident‑driven companion is feasible within Ariane’s constraints, addressing core pain points (structured composition, lab trending) without deep integration. Institutional barriers dominate scale‑up risk but are navigable via restricted mode and governance alignment.
+
+Roadmap (Select Milestones)
+- 0–3 months: Restricted‑mode hardening, paste‑fidelity presets, EN/FR content packs, lab mapping QA. 
+- 3–6 months: Sharing/versioning for team libraries; on‑prem options; export pathways. 
+- 6–12 months: If available, sandbox/API pilot under IT oversight; opt‑in non‑PHI analytics; governance workflows.
+
+Asks
+- Approve a restricted‑mode pilot (n≈10–16) with simulated vignettes. 
+- Assign IT/privacy liaisons for data‑flow review and sandbox exploration. 
+- Nominate clinical champions to curate EN/FR content packs per service.
+

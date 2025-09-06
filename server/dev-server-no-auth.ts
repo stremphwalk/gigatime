@@ -13,6 +13,7 @@ import {
   insertUserLabSettingSchema
 } from "../shared/schema.ts";
 import { z } from "zod";
+import { MEDICATIONS_SYSTEM_PROMPT, LABS_SYSTEM_PROMPT, PMH_SYSTEM_PROMPT } from "./ai/prompts.ts";
 
 // Mock authentication middleware that always passes
 const mockAuth = (req: any, res: any, next: any) => {
@@ -322,6 +323,186 @@ app.delete("/api/notes/:id", async (req, res) => {
 // Deepgram API key endpoint
 app.get("/api/deepgram-key", (req, res) => {
   res.json({ apiKey: process.env.DEEPGRAM_API_KEY });
+});
+
+// AI: Parse medications from dictation via OpenAI (no auth in dev)
+app.post("/api/ai/medications", async (req, res) => {
+  try {
+    const dictation = (req.body?.dictation ?? '').toString();
+    if (!dictation.trim()) {
+      return res.status(400).json({ message: "Missing dictation" });
+    }
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ message: "OPENAI_API_KEY not configured" });
+    }
+
+    const systemPrompt = MEDICATIONS_SYSTEM_PROMPT;
+
+    const body = {
+      model: "gpt-4o-mini",
+      temperature: 0,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: dictation }
+      ]
+    } as const;
+
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!resp.ok) {
+      const errTxt = await resp.text().catch(() => "");
+      console.error("[dev] /api/ai/medications upstream error:", resp.status, errTxt);
+      return res.status(502).json({ message: "AI service error" });
+    }
+
+    const data: any = await resp.json();
+    const raw = data?.choices?.[0]?.message?.content || "";
+
+    const sanitize = (t: string) => (
+      t
+        .replace(/[\r]+/g, "\n")
+        .split("\n")
+        .map(l => l.trim())
+        .filter(l => l.length > 0)
+        .map(l => l.replace(/^[\-*•\d+\.\)]\s*/, ""))
+        .map(l => l.replace(/[\.\s]+$/, ""))
+        .join("\n")
+    );
+
+    const text = sanitize(raw);
+    return res.json({ text });
+  } catch (error: any) {
+    console.error("[dev] Error in /api/ai/medications:", error);
+    const message = error?.message || "Failed to process dictation";
+    res.status(500).json({ message });
+  }
+});
+
+// AI: Parse labs from dictation via OpenAI (no auth in dev)
+app.post("/api/ai/labs", async (req, res) => {
+  try {
+    const dictation = (req.body?.dictation ?? '').toString();
+    if (!dictation.trim()) {
+      return res.status(400).json({ message: "Missing dictation" });
+    }
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ message: "OPENAI_API_KEY not configured" });
+    }
+
+    const systemPrompt = LABS_SYSTEM_PROMPT;
+
+    const body = {
+      model: "gpt-4o-mini",
+      temperature: 0,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: dictation }
+      ]
+    } as const;
+
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!resp.ok) {
+      const errTxt = await resp.text().catch(() => "");
+      console.error("[dev] /api/ai/labs upstream error:", resp.status, errTxt);
+      return res.status(502).json({ message: "AI service error" });
+    }
+
+    const data: any = await resp.json();
+    const raw = data?.choices?.[0]?.message?.content || "";
+
+    const sanitize = (t: string) => (
+      t
+        .replace(/[\r]+/g, "\n")
+        .split("\n")
+        .map(l => l.replace(/\s+$/g, ""))
+        .join("\n")
+    );
+
+    const text = sanitize(raw);
+    return res.json({ text });
+  } catch (error: any) {
+    console.error("[dev] Error in /api/ai/labs:", error);
+    const message = error?.message || "Failed to process dictation";
+    res.status(500).json({ message });
+  }
+});
+
+// AI: Parse PMH from dictation via OpenAI (no auth in dev)
+app.post("/api/ai/pmh", async (req, res) => {
+  try {
+    const dictation = (req.body?.dictation ?? '').toString();
+    if (!dictation.trim()) {
+      return res.status(400).json({ message: "Missing dictation" });
+    }
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ message: "OPENAI_API_KEY not configured" });
+    }
+
+    const systemPrompt = PMH_SYSTEM_PROMPT;
+
+    const body = {
+      model: "gpt-4o-mini",
+      temperature: 0,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: dictation }
+      ]
+    } as const;
+
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!resp.ok) {
+      const errTxt = await resp.text().catch(() => "");
+      console.error("[dev] /api/ai/pmh upstream error:", resp.status, errTxt);
+      return res.status(502).json({ message: "AI service error" });
+    }
+
+    const data: any = await resp.json();
+    const raw = data?.choices?.[0]?.message?.content || "";
+
+    const sanitize = (t: string) => (
+      t
+        .replace(/[\r]+/g, "\n")
+        .split("\n")
+        .map(l => l.replace(/\s+$/g, ""))
+        .join("\n")
+    );
+
+    const text = sanitize(raw);
+    return res.json({ text });
+  } catch (error: any) {
+    console.error("[dev] Error in /api/ai/pmh:", error);
+    const message = error?.message || "Failed to process dictation";
+    res.status(500).json({ message });
+  }
 });
 
 // Smart phrase routes

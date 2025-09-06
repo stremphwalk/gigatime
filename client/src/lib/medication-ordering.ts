@@ -117,9 +117,9 @@ function parseMedicationLine(line: string, lineNumber: number): ParsedMedication
   // Common medication patterns to match
   const medicationPatterns = [
     // Pattern: Medication dosage frequency
-    /^([A-Za-z\s\-]+?)\s+(\d+(?:\.\d+)?\s*(?:mg|g|mcg|units|mL|tablets?|caps?)\b)\s*(.*?)(?:\s+for\s+(.+))?$/i,
+    /^([A-Za-z\s\-]+?)\s+(\d+(?:\.\d+)?\s*(?:mg|g|mcg|IU|mL|puffs?|units|tablets?|caps?)\b)\s*(.*?)(?:\s+for\s+(.+))?$/i,
     // Pattern: Medication with dosage and route
-    /^([A-Za-z\s\-]+?)\s+(\d+(?:\.\d+)?\s*(?:mg|g|mcg|units|mL)\b)\s*(PO|IV|IM|SC|SL|topical|inhaled|PR|PV)?\s*(.*?)$/i,
+    /^([A-Za-z\s\-]+?)\s+(\d+(?:\.\d+)?\s*(?:mg|g|mcg|IU|mL|puffs?|units)\b)\s*(PO|IV|IM|SC|SL|IN|topical|inhaled|PR|PV)?\s*(.*?)$/i,
     // Simple pattern: Just medication name (possibly with dosage/frequency after)
     /^([A-Za-z\s\-]+?)(?:\s+(.+))?$/
   ];
@@ -212,7 +212,7 @@ function isMedicationName(name: string): boolean {
  * Extract dosage information from text
  */
 function extractDosage(text: string): string | undefined {
-  const dosageMatch = text.match(/(\d+(?:\.\d+)?\s*(?:mg|g|mcg|units|mL|tablets?|caps?))/i);
+  const dosageMatch = text.match(/(\d+(?:\.\d+)?\s*(?:mg|g|mcg|IU|mL|puffs?|units|tablets?|caps?))/i);
   return dosageMatch ? dosageMatch[1] : undefined;
 }
 
@@ -239,7 +239,7 @@ function extractFrequency(text: string): string | undefined {
  * Extract route information from text
  */
 function extractRoute(text: string): string | undefined {
-  const routeMatch = text.match(/\b(PO|IV|IM|SC|SL|topical|inhaled|PR|PV|oral|by mouth)\b/i);
+  const routeMatch = text.match(/\b(PO|IV|IM|SC|SL|IN|topical|inhaled|intranasal|PR|PV|oral|by mouth)\b/i);
   return routeMatch ? routeMatch[1] : undefined;
 }
 

@@ -21,6 +21,7 @@ export interface CreateAutocompleteItem {
   text: string;
   category: string;
   isPriority: boolean;
+  isPublic?: boolean;
   dosage?: string;
   frequency?: string;
   dosageOptions?: string[];

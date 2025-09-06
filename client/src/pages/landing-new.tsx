@@ -5,18 +5,28 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 import { Input } from "@/components/ui/input";
-import { Check, ArrowRight, Mic, FileText, Shield, Sparkles, Clock, Headphones, Workflow, Stethoscope } from "lucide-react";
+import { Check, ArrowRight, Mic, FileText, Shield, Sparkles, Clock, Headphones, Workflow } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth0";
 
 // --- Brand ---
-const Logo = ({ className = "h-8 w-auto" }) => (
-  <div className={`flex items-center gap-2 ${className}`}>
-    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm">
-      <Stethoscope className="h-5 w-5 text-white" />
+const Logo = ({ className = "h-8 w-auto" }) => {
+  const [imgOk, setImgOk] = React.useState(true);
+  return (
+    <div className={`flex items-center gap-2 ${className}`}>
+      {imgOk ? (
+        <img
+          src="/brand/arinote_full_256px.png"
+          alt="Arinote"
+          className="h-8 w-8 rounded-xl object-contain"
+          onError={() => setImgOk(false)}
+        />
+      ) : (
+        <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[var(--brand-from)] to-[var(--brand-to)]" />
+      )}
+      <span className="font-semibold tracking-tight text-xl">Arinote</span>
     </div>
-    <span className="font-semibold tracking-tight text-xl">Gigatime</span>
-  </div>
-);
+  );
+};
 
 const container = {
   hidden: { opacity: 0, y: 12 },
@@ -43,24 +53,24 @@ export default function LandingNew() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 via-white to-white text-slate-900">
+    <div className="min-h-screen bg-gradient-to-b from-[var(--brand-50)] via-white to-white text-slate-900">
       {/* Header */}
       <header className="sticky top-0 z-40 backdrop-blur supports-[backdrop-filter]:bg-white/60 bg-white/50 border-b">
         <div className="mx-auto max-w-7xl px-4 py-3 flex items-center justify-between">
           <Logo />
 
           <nav className="hidden md:flex items-center gap-6 text-sm">
-            <a href="#features" className="hover:text-blue-600 transition">Features</a>
-            <a href="#how" className="hover:text-blue-600 transition">How it works</a>
-            <a href="#pricing" className="hover:text-blue-600 transition">Pricing</a>
-            <a href="#faq" className="hover:text-blue-600 transition">FAQ</a>
+            <a href="#features" className="hover:text-[color:var(--brand-700)] transition">Features</a>
+            <a href="#how" className="hover:text-[color:var(--brand-700)] transition">How it works</a>
+            <a href="#pricing" className="hover:text-[color:var(--brand-700)] transition">Pricing</a>
+            <a href="#faq" className="hover:text-[color:var(--brand-700)] transition">FAQ</a>
           </nav>
 
           <div className="flex items-center gap-2">
             <Button variant="ghost" className="hidden md:inline-flex" onClick={handleSignIn}>
               {isAuthenticated ? 'Dashboard' : 'Sign in'}
             </Button>
-            <Button className="bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-sm hover:from-blue-600 hover:to-blue-700" onClick={handleGetStarted}>
+            <Button className="bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] text-white shadow-sm hover:opacity-95" onClick={handleGetStarted}>
               {isAuthenticated ? 'Go to App' : 'Get started'}
             </Button>
           </div>
@@ -70,22 +80,22 @@ export default function LandingNew() {
       {/* Hero */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 -z-10 [mask-image:radial-gradient(60%_60%_at_50%_20%,#000_40%,transparent_100%)]">
-          <div className="absolute -top-32 left-1/2 -translate-x-1/2 h-[560px] w-[1200px] bg-blue-200/40 blur-3xl rounded-full" />
-          <div className="absolute top-16 left-1/3 h-72 w-72 bg-indigo-200/40 blur-3xl rounded-full" />
+          <div className="absolute -top-32 left-1/2 -translate-x-1/2 h-[560px] w-[1200px] bg-[color:var(--brand-100)]/40 blur-3xl rounded-full" />
+          <div className="absolute top-16 left-1/3 h-72 w-72 bg-[color:var(--brand-200)]/40 blur-3xl rounded-full" />
         </div>
         <div className="mx-auto max-w-7xl px-4 pt-16 pb-8 md:pt-24 md:pb-16">
           <motion.div variants={container} initial="hidden" animate="show" className="grid md:grid-cols-2 gap-10 items-center">
             <div className="text-center md:text-left">
-              <Badge className="mb-4 bg-blue-100 text-blue-700 border-blue-200">Built for medical professionals</Badge>
+              <Badge className="mb-4 bg-[color:var(--brand-100)] text-[color:var(--brand-700)] border-[color:var(--brand-200)]">Built for medical professionals</Badge>
               <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
-                Medical notes <span className="bg-gradient-to-r from-blue-500 to-indigo-600 bg-clip-text text-transparent">perfected</span>.
+                Medical notes <span className="bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] bg-clip-text text-transparent">perfected</span>.
               </h1>
               <p className="mt-4 text-slate-600 text-lg md:text-xl">
-                Gigatime transforms voice into structured medical documentation with AI-powered dictation, smart templates, and seamless workflow integration.
+                Arinote transforms voice into structured medical documentation with AI-powered dictation, smart templates, and seamless workflow integration.
               </p>
 
               <div className="mt-6 flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center md:justify-start">
-                <Button size="lg" className="h-12 px-6 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700" onClick={handleGetStarted}>
+                <Button size="lg" className="h-12 px-6 bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] hover:opacity-95" onClick={handleGetStarted}>
                   Try it free <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
                 <Button size="lg" variant="outline" className="h-12 px-6">
@@ -101,11 +111,11 @@ export default function LandingNew() {
 
             {/* Mockup */}
             <motion.div className="relative">
-              <div className="absolute -inset-6 -z-10 bg-gradient-to-tr from-blue-200/40 to-indigo-200/40 rounded-[2rem] blur-2xl" />
+              <div className="absolute -inset-6 -z-10 bg-gradient-to-tr from-[color:var(--brand-100)]/40 to-[color:var(--brand-200)]/40 rounded-[2rem] blur-2xl" />
               <Card className="rounded-2xl shadow-xl border-slate-200">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Mic className="h-5 w-5 text-blue-600" /> 
+                    <Mic className="h-5 w-5 text-[color:var(--brand-700)]" /> 
                     Live Medical Dictation
                   </CardTitle>
                 </CardHeader>
@@ -116,14 +126,14 @@ export default function LandingNew() {
                       "65-year-old male presents with chest pain, radiating to left arm, associated with diaphoresis and nausea..."
                     </p>
                     <p className="mb-2">
-                      <span className="font-medium text-blue-700">Gigatime:</span> 
+                      <span className="font-medium text-[color:var(--brand-700)]">Arinote:</span> 
                       <em>Generating structured SOAP note with cardiac assessment templates.</em>
                     </p>
                     <div className="mt-3 grid md:grid-cols-2 gap-3">
                       <Card className="border-slate-200">
                         <CardHeader className="py-3">
                           <CardTitle className="text-base flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-blue-600"/> 
+                            <FileText className="h-4 w-4 text-[color:var(--brand-700)]"/> 
                             SOAP Note
                           </CardTitle>
                         </CardHeader>
@@ -137,7 +147,7 @@ export default function LandingNew() {
                       <Card className="border-slate-200">
                         <CardHeader className="py-3">
                           <CardTitle className="text-base flex items-center gap-2">
-                            <Workflow className="h-4 w-4 text-blue-600"/> 
+                            <Workflow className="h-4 w-4 text-[color:var(--brand-700)]"/> 
                             Smart Templates
                           </CardTitle>
                         </CardHeader>
@@ -222,7 +232,7 @@ export default function LandingNew() {
           ].map((f) => (
             <Card key={f.title} className="rounded-2xl border-slate-200 hover:shadow-lg transition-shadow">
               <CardHeader>
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-100 to-indigo-100 flex items-center justify-center text-blue-700">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[color:var(--brand-100)] to-[color:var(--brand-200)] flex items-center justify-center text-[color:var(--brand-700)]">
                   {f.icon}
                 </div>
                 <CardTitle className="mt-3 text-lg">{f.title}</CardTitle>
@@ -239,7 +249,7 @@ export default function LandingNew() {
           <div>
             <h3 className="text-2xl md:text-3xl font-semibold tracking-tight">Integrates with your workflow</h3>
             <p className="mt-3 text-slate-600">
-              Open Gigatime, press record, and speak naturally. Use smart phrases to expand sections, 
+              Open Arinote, press record, and speak naturally. Use smart phrases to expand sections, 
               then export directly to your EHR or copy-paste formatted notes.
             </p>
 
@@ -250,14 +260,14 @@ export default function LandingNew() {
                 "Export to Epic, Cerner, or any EHR system",
               ].map((t) => (
                 <li key={t} className="flex items-center gap-2">
-                  <Check className="h-4 w-4 text-blue-600" /> {t}
+                  <Check className="h-4 w-4 text-[color:var(--brand-700)]" /> {t}
                 </li>
               ))}
             </ul>
 
             <div className="mt-6 flex gap-2">
               <Input placeholder="Your email" className="h-11" />
-              <Button className="h-11 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700">
+              <Button className="h-11 bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] hover:opacity-95">
                 Get Early Access
               </Button>
             </div>
@@ -276,7 +286,7 @@ export default function LandingNew() {
                 ].map((s) => (
                   <li key={s.step} className="p-4 rounded-xl border bg-slate-50">
                     <div className="flex items-center gap-2">
-                      <span className="h-6 w-6 rounded-full bg-blue-600 text-white text-xs flex items-center justify-center">
+                      <span className="h-6 w-6 rounded-full bg-[color:var(--brand-700)] text-white text-xs flex items-center justify-center">
                         {s.step}
                       </span>
                       <span className="font-medium">{s.label}</span>
@@ -322,12 +332,12 @@ export default function LandingNew() {
               cta: "Contact sales" 
             },
           ].map((tier) => (
-            <Card key={tier.name} className={`rounded-2xl border-slate-200 ${tier.highlight ? "ring-2 ring-blue-500 scale-105" : ""}`}>
+            <Card key={tier.name} className={`rounded-2xl border-slate-200 ${tier.highlight ? "ring-2 ring-[color:var(--brand-600)] scale-105" : ""}`}>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
                   <span>{tier.name}</span>
                   {tier.highlight && (
-                    <Badge className="bg-blue-100 text-blue-700 border-blue-200">Most Popular</Badge>
+                    <Badge className="bg-[color:var(--brand-100)] text-[color:var(--brand-700)] border-[color:var(--brand-200)]">Most Popular</Badge>
                   )}
                 </CardTitle>
               </CardHeader>
@@ -337,12 +347,12 @@ export default function LandingNew() {
                 <ul className="mt-6 space-y-2 text-sm">
                   {tier.features.map((f) => (
                     <li key={f} className="flex items-center gap-2">
-                      <Check className="h-4 w-4 text-blue-600" /> {f}
+                      <Check className="h-4 w-4 text-[color:var(--brand-700)]" /> {f}
                     </li>
                   ))}
                 </ul>
                 <Button 
-                  className="mt-6 w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700"
+                  className="mt-6 w-full bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] hover:opacity-95"
                   onClick={tier.cta === "Start free" || tier.cta === "Start 14-day trial" ? handleGetStarted : undefined}
                 >
                   {tier.cta}
@@ -358,7 +368,7 @@ export default function LandingNew() {
         <div className="grid md:grid-cols-3 gap-6">
           {[
             {
-              quote: "Gigatime has revolutionized my documentation workflow. I save hours every day and my notes are more comprehensive than ever.",
+              quote: "Arinote has revolutionized my documentation workflow. I save hours every day and my notes are more comprehensive than ever.",
               author: "Dr. Sarah Chen, Emergency Medicine"
             },
             {
@@ -386,12 +396,12 @@ export default function LandingNew() {
         <Accordion type="single" collapsible className="mt-6">
           {[
             {
-              q: "Is Gigatime HIPAA compliant?",
-              a: "Yes, Gigatime is fully HIPAA compliant with end-to-end encryption, secure data handling, and comprehensive audit trails. We follow all healthcare data protection standards."
+              q: "Is Arinote HIPAA compliant?",
+              a: "Yes, Arinote is fully HIPAA compliant with end-to-end encryption, secure data handling, and comprehensive audit trails. We follow all healthcare data protection standards."
             },
             {
               q: "Does it integrate with my EHR system?",
-              a: "Gigatime works with all major EHR systems including Epic, Cerner, AllScripts, and more. You can copy-paste formatted notes or use our direct integration features where available."
+              a: "Arinote works with all major EHR systems including Epic, Cerner, AllScripts, and more. You can copy-paste formatted notes or use our direct integration features where available."
             },
             {
               q: "How accurate is the medical dictation?",
@@ -399,7 +409,7 @@ export default function LandingNew() {
             },
             {
               q: "Can I customize templates for my specialty?",
-              a: "Absolutely. Gigatime includes specialty-specific templates and allows you to create custom templates tailored to your practice and documentation needs."
+              a: "Absolutely. Arinote includes specialty-specific templates and allows you to create custom templates tailored to your practice and documentation needs."
             },
           ].map((i, idx) => (
             <AccordionItem key={idx} value={`item-${idx}`}>
@@ -412,7 +422,7 @@ export default function LandingNew() {
 
       {/* Call to action */}
       <section className="mx-auto max-w-6xl px-4 pb-24">
-        <div className="relative overflow-hidden rounded-3xl border bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-10 md:p-12">
+        <div className="relative overflow-hidden rounded-3xl border bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] text-white p-10 md:p-12">
           <div className="absolute inset-0 opacity-20 [mask-image:radial-gradient(70%_70%_at_30%_30%,#000,transparent)]">
             <div className="absolute -top-16 -right-16 w-96 h-96 rounded-full bg-white/20 blur-3xl" />
           </div>
@@ -420,7 +430,7 @@ export default function LandingNew() {
             <div>
               <h4 className="text-2xl md:text-3xl font-semibold">Document less. Care more.</h4>
               <p className="mt-2 text-white/90">
-                Join thousands of healthcare professionals using Gigatime to improve documentation efficiency and patient care quality.
+                Join thousands of healthcare professionals using Arinote to improve documentation efficiency and patient care quality.
               </p>
             </div>
             <div className="flex gap-3 md:justify-end">
@@ -446,18 +456,18 @@ export default function LandingNew() {
           <div>
             <div className="font-medium mb-3">Product</div>
             <ul className="space-y-2 text-slate-600">
-              <li><a className="hover:text-blue-600" href="#features">Features</a></li>
-              <li><a className="hover:text-blue-600" href="#pricing">Pricing</a></li>
-              <li><a className="hover:text-blue-600" href="#faq">FAQ</a></li>
+              <li><a className="hover:text-[color:var(--brand-700)]" href="#features">Features</a></li>
+              <li><a className="hover:text-[color:var(--brand-700)]" href="#pricing">Pricing</a></li>
+              <li><a className="hover:text-[color:var(--brand-700)]" href="#faq">FAQ</a></li>
             </ul>
           </div>
           <div>
             <div className="font-medium mb-3">Company</div>
             <ul className="space-y-2 text-slate-600">
-              <li><a className="hover:text-blue-600" href="#">About</a></li>
-              <li><a className="hover:text-blue-600" href="#">Security</a></li>
-              <li><a className="hover:text-blue-600" href="#">Privacy</a></li>
-              <li><a className="hover:text-blue-600" href="#">Contact</a></li>
+              <li><a className="hover:text-[color:var(--brand-700)]" href="#">About</a></li>
+              <li><a className="hover:text-[color:var(--brand-700)]" href="#">Security</a></li>
+              <li><a className="hover:text-[color:var(--brand-700)]" href="#">Privacy</a></li>
+              <li><a className="hover:text-[color:var(--brand-700)]" href="#">Contact</a></li>
             </ul>
           </div>
           <div>
@@ -465,14 +475,14 @@ export default function LandingNew() {
             <p className="text-slate-600 mb-3">Get product updates and healthcare insights.</p>
             <div className="flex gap-2">
               <Input placeholder="Email address" className="text-xs" />
-              <Button className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700">
+              <Button className="bg-gradient-to-r from-[var(--brand-from)] to-[var(--brand-to)] hover:opacity-95">
                 Subscribe
               </Button>
             </div>
           </div>
         </div>
         <div className="border-t py-6 text-center text-xs text-slate-500">
-          © {new Date().getFullYear()} Gigatime. All rights reserved.
+          © {new Date().getFullYear()} Arinote. All rights reserved.
         </div>
       </footer>
     </div>

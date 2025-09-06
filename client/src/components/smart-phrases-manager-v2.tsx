@@ -3,26 +3,33 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+// Removed density tabs
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Edit2, Trash2, Zap, Calendar, MousePointer, ChevronRight, Download } from "lucide-react";
+import { Plus, Edit2, Trash2, Zap, Calendar, MousePointer, ChevronRight, Download, Copy } from "lucide-react";
 import { SearchField } from "@/components/library/SearchField";
 import { FilterDropdown } from "@/components/library/FilterDropdown";
 import { LayoutDensityControls } from "@/components/library/LayoutDensityControls";
+import { usePreferences } from "@/hooks/use-preferences";
 import { ActionButtons as SharedActions } from "@/components/library/ActionButtons";
 import { FlexibleSmartPhraseBuilder } from "./flexible-smart-phrase-builder";
 import { ImportSmartPhraseDialog } from "./import-smart-phrase-dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 
 export function SmartPhrasesManager() {
   const [activeTab, setActiveTab] = useState<"library" | "create" | "edit">("library");
   const [searchQuery, setSearchQuery] = useState("");
   const [category, setCategory] = useState<string>("");
   const [layout, setLayout] = useState<"grid" | "list">("grid");
-  const [density, setDensity] = useState<"compact" | "cozy">("compact");
+  const { prefs, updateView } = usePreferences();
+  useEffect(() => { if (prefs.view?.smartPhrases) setLayout(prefs.view.smartPhrases); }, [prefs.view?.smartPhrases]);
+  useEffect(() => { updateView('smartPhrases', layout); }, [layout]);
   const [editingPhrase, setEditingPhrase] = useState<any>(null);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [exportCodes, setExportCodes] = useState<string[] | null>(null);
 
   const { phrases, createPhrase, updatePhrase, deletePhrase, isCreating } = useSmartPhrases();
   const { toast } = useToast();
@@ -59,6 +66,22 @@ export function SmartPhrasesManager() {
           variant: "destructive",
         });
       }
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+  };
+
+  const handleExportSelected = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    try {
+      const resp = await fetch('/api/share/smart-phrases/export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }) });
+      const data = await resp.json();
+      setExportCodes(data.codes || []);
+    } catch (e) {
+      toast({ title: 'Export Failed', description: 'Could not export codes', variant: 'destructive' });
     }
   };
 
@@ -99,7 +122,7 @@ export function SmartPhrasesManager() {
 
   const getElementTypeColor = (type: string) => {
     switch (type) {
-      case 'multipicker': return "bg-blue-50 text-blue-700 border-blue-200";
+      case 'multipicker': return "bg-[color:var(--brand-50)] text-[color:var(--brand-700)] border-[color:var(--brand-200)]";
       case 'nested_multipicker': return "bg-purple-50 text-purple-700 border-purple-200";  
       case 'date': return "bg-green-50 text-green-700 border-green-200";
       default: return "bg-gray-50 text-gray-600 border-gray-200";
@@ -126,8 +149,8 @@ export function SmartPhrasesManager() {
   }
 
   const categories = Array.from(new Set((phrases || []).map(p => p.category).filter(Boolean))) as string[];
-  const densityCls = density === 'compact' ? 'text-[12px] leading-5' : 'text-sm';
-  const padCls = density === 'compact' ? 'p-2' : 'p-3';
+  const densityCls = 'text-[12px] leading-5';
+  const padCls = 'p-2';
 
   function ActionButtons({ phrase }: { phrase: any }) {
     return (
@@ -142,8 +165,19 @@ export function SmartPhrasesManager() {
     return (
       <Card className="group overflow-hidden border-muted/60 transition-shadow hover:shadow-sm">
         <CardHeader className={`flex flex-row items-start justify-between ${padCls}`}>
-          <div className="min-w-0">
-            <CardTitle className={`truncate font-medium ${densityCls}`}>/{phrase.trigger}</CardTitle>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <input type="checkbox" className="mt-0.5" checked={selectedIds.has(phrase.id)} onChange={()=>toggleSelect(phrase.id)} />
+              <CardTitle className={`truncate font-medium ${densityCls}`}>/{phrase.trigger}</CardTitle>
+              {phrase.shortCode && (
+                <div className="flex items-center gap-1">
+                  <Badge variant="outline" className="text-[10px]">{phrase.shortCode}</Badge>
+                  <button className="h-6 w-6 rounded-md hover:bg-muted/70 grid place-items-center" title="Copy code" onClick={()=>navigator.clipboard.writeText(phrase.shortCode)}>
+                    <Copy className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+            </div>
             <div className="mt-1 flex flex-wrap items-center gap-1">
               <Badge variant="secondary" className="rounded-md px-1.5 py-0 text-[10px] leading-4">{phrase.category || 'general'}</Badge>
               {(Array.isArray(phrase.elements) && phrase.elements.length > 0) ? (
@@ -171,7 +205,16 @@ export function SmartPhrasesManager() {
     return (
       <div className={`grid grid-cols-12 items-center ${padCls} gap-2 hover:bg-muted/40`}>
         <div className="col-span-4 flex items-center gap-2 min-w-0">
+          <input type="checkbox" className="mt-0.5" checked={selectedIds.has(phrase.id)} onChange={()=>toggleSelect(phrase.id)} />
           <span className={`truncate font-medium ${densityCls}`}>/{phrase.trigger}</span>
+          {phrase.shortCode && (
+            <div className="flex items-center gap-1">
+              <Badge variant="outline" className="text-[10px]">{phrase.shortCode}</Badge>
+              <button className="h-6 w-6 rounded-md hover:bg-muted/70 grid place-items-center" title="Copy code" onClick={()=>navigator.clipboard.writeText(phrase.shortCode)}>
+                <Copy className="h-3 w-3" />
+              </button>
+            </div>
+          )}
         </div>
         <div className="col-span-4 min-w-0">
           <p className={`truncate text-muted-foreground ${densityCls}`}>{phrase.description || phrase.content}</p>
@@ -208,13 +251,17 @@ export function SmartPhrasesManager() {
               <SearchField value={searchQuery} onChange={setSearchQuery} placeholder="Search phrases…" />
               <Separator orientation="vertical" className="h-6"/>
               <FilterDropdown label="Category" options={categories.map(c=>({ value: c, label: c }))} value={category} onChange={setCategory} menuLabel="Filter by category" />
-              <LayoutDensityControls layout={layout} onLayoutChange={setLayout} density={density} onDensityChange={setDensity} />
+              <LayoutDensityControls layout={layout} onLayoutChange={setLayout} />
             </CardContent>
           </Card>
 
           <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
             <span>{filteredPhrases.length} phrases</span>
             {category && (<><span>•</span><span>Category:</span><Badge variant="outline" className="px-1 py-0 text-[10px]">{category}</Badge></>)}
+            <div className="ml-auto flex items-center gap-2">
+              <span>Selected: {selectedIds.size}</span>
+              <Button size="sm" onClick={handleExportSelected} disabled={selectedIds.size===0}>Export Codes</Button>
+            </div>
           </div>
         </div>
 
@@ -253,7 +300,19 @@ export function SmartPhrasesManager() {
             )
           )}
         </div>
-        <ImportSmartPhraseDialog open={showImportDialog} onOpenChange={setShowImportDialog} />
+        {exportCodes && (
+          <div className="p-4 border-t bg-white">
+            <div className="max-w-2xl mx-auto">
+              <Label>Share these codes</Label>
+              <Textarea readOnly value={exportCodes.join(' ')} className="mt-1" />
+              <div className="mt-2 flex gap-2">
+                <Button size="sm" onClick={()=>{ navigator.clipboard.writeText(exportCodes.join(' ')); }}>Copy</Button>
+                <Button size="sm" variant="outline" onClick={()=>setExportCodes(null)}>Close</Button>
+              </div>
+            </div>
+          </div>
+        )}
+        <ImportSmartPhraseDialog open={showImportDialog} onOpenChange={(o)=>{ if (!o) setSelectedIds(new Set()); setShowImportDialog(o); }} />
       </div>
     </TooltipProvider>
   );

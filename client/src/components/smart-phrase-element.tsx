@@ -33,7 +33,7 @@ export function SmartPhraseElement({
   return (
     <span
       className={cn(
-        "smart-phrase inline-flex items-center bg-blue-100 border border-blue-300 rounded px-1 mx-0.5",
+        "smart-phrase inline-flex items-center bg-[color:var(--brand-50)] border border-[color:var(--brand-200)] rounded px-1 mx-0.5 text-[color:var(--brand-700)]",
         "cursor-pointer relative group"
       )}
       contentEditable={false}
@@ -48,7 +48,7 @@ export function SmartPhraseElement({
           <Button
             variant="ghost"
             size="sm"
-            className="h-5 w-5 p-0 bg-blue-200 hover:bg-blue-300"
+            className="h-5 w-5 p-0 bg-[color:var(--brand-100)] hover:bg-[color:var(--brand-200)]"
             onClick={(e) => {
               e.stopPropagation();
               onEdit?.(phraseId);

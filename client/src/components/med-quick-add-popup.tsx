@@ -116,9 +116,9 @@ export function MedQuickAddPopup({ isOpen, onClose, onConfirm, dripsOnly }: MedQ
                         <div className="flex-1 min-w-0">
                           <div className="font-medium text-sm">{m.name}</div>
                           {m.genericName && (<div className="text-xs text-gray-400 italic">{m.genericName}</div>)}
-                          {m.brandNames && m.brandNames.length > 0 && (<div className="text-xs text-blue-600">Brand: {m.brandNames.slice(0,2).join(', ')}{m.brandNames.length>2?'...':''}</div>)}
+                          {m.brandNames && m.brandNames.length > 0 && (<div className="text-xs text-[color:var(--brand-700)]">Brand: {m.brandNames.slice(0,2).join(', ')}{m.brandNames.length>2?'...':''}</div>)}
                           <div className="flex items-center gap-1 flex-wrap">
-                            <Badge variant="outline" className="text-xs px-1 py-0 bg-blue-50 text-blue-700 border-blue-200">{m.subcategory || m.category}</Badge>
+                            <Badge variant="outline" className="text-xs px-1 py-0 bg-[color:var(--brand-50)] text-[color:var(--brand-700)] border-[color:var(--brand-200)]">{m.subcategory || m.category}</Badge>
                             {m.indication && (<span className="text-xs text-gray-500 truncate max-w-32">{m.indication}</span>)}
                           </div>
                           <div className="flex items-center gap-2">

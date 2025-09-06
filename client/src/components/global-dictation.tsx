@@ -165,10 +165,11 @@ export function GlobalDictation() {
           const newValue = beforeInterim + text + afterInterim;
           
           input.value = newValue;
-          input.setSelectionRange(
-            beforeInterim.length + text.length, 
-            beforeInterim.length + text.length
-          );
+          {
+            const len = (input.value || '').length;
+            const pos = Math.max(0, Math.min(beforeInterim.length + text.length, len));
+            input.setSelectionRange(pos, pos);
+          }
           lastInterimRef.current = text;
           console.log('🎤 Interim text inserted, length:', text.length);
         } else {
@@ -179,7 +180,11 @@ export function GlobalDictation() {
           const newValue = beforeFinal + text + afterFinal;
           
           input.value = newValue;
-          input.setSelectionRange(beforeFinal.length + text.length, beforeFinal.length + text.length);
+          {
+            const len = (input.value || '').length;
+            const pos = Math.max(0, Math.min(beforeFinal.length + text.length, len));
+            input.setSelectionRange(pos, pos);
+          }
           lastInterimRef.current = '';
           lastInsertedSessionRef.current = session;
           console.log('🎤 Final text inserted, length:', text.length);
@@ -415,7 +420,7 @@ export function GlobalDictation() {
         />
       </div>
       
-      <div className="flex items-center space-x-2 bg-blue-600 text-white px-3 py-2 rounded-lg shadow-lg border border-blue-400">
+      <div className="flex items-center space-x-2 bg-[color:var(--brand-700)] text-white px-3 py-2 rounded-lg shadow-lg border border-[color:var(--brand-600)]">
         {isListening ? (
           <Mic className="w-4 h-4 animate-pulse text-green-300" />
         ) : (
@@ -426,7 +431,7 @@ export function GlobalDictation() {
             {error ? '❌ Error' : isListening ? '🎤 Listening...' : '⏳ Starting...'}
           </span>
           {currentModel && (
-            <span className="text-xs text-blue-200">
+            <span className="text-xs text-white/80">
               {currentModel.replace('nova-', '').replace('-', ' ')}
             </span>
           )}

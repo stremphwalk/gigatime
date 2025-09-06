@@ -42,8 +42,8 @@ export const teams = pgTable("teams", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name", { length: 100 }).notNull(),
   description: text("description"),
-  groupCode: varchar("group_code", { length: 4 }).notNull().unique(), // 4-character unique identifier
-  maxMembers: integer("max_members").default(6),
+  groupCode: varchar("group_code", { length: 6 }).notNull().unique(), // 6-character unique identifier
+  maxMembers: integer("max_members").default(8),
   createdById: varchar("created_by_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -70,6 +70,7 @@ export const noteTemplates = pgTable("note_templates", {
   sections: jsonb("sections").notNull(), // array of section objects
   isDefault: boolean("is_default").default(false),
   isPublic: boolean("is_public").default(false), // allows importing by other users
+  downloadCount: integer("download_count").default(0),
   userId: varchar("user_id").references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -90,6 +91,7 @@ export const notes = pgTable("notes", {
   teamId: uuid("team_id").references(() => teams.id, { onDelete: 'set null' }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  expiresAt: timestamp("expires_at"),
 });
 
 // Smart phrases table - flexible system with mixed interactive elements
@@ -103,6 +105,7 @@ export const smartPhrases = pgTable("smart_phrases", {
   category: varchar("category", { length: 50 }),
   elements: jsonb("elements"), // array of interactive elements: [{id: "picker1", type: "multipicker", options: [...]}]
   isPublic: boolean("is_public").default(false),
+  downloadCount: integer("download_count").default(0),
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -114,13 +117,26 @@ export const teamTodos = pgTable("team_todos", {
   title: varchar("title", { length: 200 }).notNull(),
   description: text("description"),
   completed: boolean("completed").default(false),
-  priority: varchar("priority", { length: 20 }).default("medium"), // low, medium, high
+  // priority supports: low, medium, high, urgent
+  priority: varchar("priority", { length: 20 }).default("medium"),
   dueDate: timestamp("due_date"),
+  // task status: backlog | in_progress | ready_to_review | completed
+  status: varchar("status", { length: 30 }).default("backlog"),
+  completedAt: timestamp("completed_at"),
+  // legacy single assignee; kept for compatibility but superseded by team_todo_assignees
   assignedToId: varchar("assigned_to_id").references(() => users.id, { onDelete: 'set null' }),
   teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: 'cascade' }),
   createdById: varchar("created_by_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Many-to-many assignees for team todos
+export const teamTodoAssignees = pgTable("team_todo_assignees", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  todoId: uuid("todo_id").notNull().references(() => teamTodos.id, { onDelete: 'cascade' }),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 // Team calendar events table
@@ -131,8 +147,23 @@ export const teamCalendarEvents = pgTable("team_calendar_events", {
   startDate: timestamp("start_date").notNull(),
   endDate: timestamp("end_date").notNull(),
   allDay: boolean("all_day").default(false),
+  // event type/category for color coding: rounds | presentation | absence | other
+  type: varchar("type", { length: 30 }).default("other"),
   teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: 'cascade' }),
   createdById: varchar("created_by_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Team bulletin posts (shared dashboard)
+export const teamBulletinPosts = pgTable("team_bulletin_posts", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  teamId: uuid("team_id").notNull().references(() => teams.id, { onDelete: 'cascade' }),
+  createdById: varchar("created_by_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  title: varchar("title", { length: 200 }).notNull(),
+  content: text("content").notNull(), // markdown allowed
+  pinned: boolean("pinned").default(false),
+  isAdminPost: boolean("is_admin_post").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -171,10 +202,13 @@ export const autocompleteItems = pgTable(
   "autocomplete_items",
   {
     id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+    shareableId: varchar("shareable_id", { length: 12 }).unique().default(sql`upper(substring(replace(gen_random_uuid()::text, '-', ''), 1, 12))`),
     shortCode: varchar("short_code", { length: 4 }).unique(),
     text: varchar("text", { length: 500 }).notNull(),
     category: varchar("category", { length: 100 }).notNull(), // consultation-reasons, past-medical-history, etc.
     isPriority: boolean("is_priority").default(false),
+    isPublic: boolean("is_public").default(false),
+    downloadCount: integer("download_count").default(0),
     dosage: varchar("dosage", { length: 100 }),
     frequency: varchar("frequency", { length: 100 }),
     dosageOptions: jsonb("dosage_options").$type<string[]>(),
@@ -192,6 +226,24 @@ export const autocompleteItems = pgTable(
     ),
   ],
 );
+
+// User preferences for UI layout and other settings
+export const userPreferences = pgTable("user_preferences", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }).unique(),
+  data: jsonb("data").$type<{
+    view?: {
+      templates?: 'grid'|'list';
+      smartPhrases?: 'grid'|'list';
+      autocomplete?: 'grid'|'list';
+      community?: 'grid'|'list';
+    };
+  }>().notNull().default(sql`'{}'::jsonb`),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export type UserPreferences = typeof userPreferences.$inferSelect;
 
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
@@ -211,6 +263,7 @@ export const teamsRelations = relations(teams, ({ one, many }) => ({
   notes: many(notes),
   todos: many(teamTodos),
   calendarEvents: many(teamCalendarEvents),
+  bulletinPosts: many(teamBulletinPosts),
   createdBy: one(users, { fields: [teams.createdById], references: [users.id] }),
 }));
 
@@ -295,6 +348,12 @@ export const insertTeamCalendarEventSchema = createInsertSchema(teamCalendarEven
   updatedAt: true,
 });
 
+export const insertTeamBulletinPostSchema = createInsertSchema(teamBulletinPosts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Pertinent Negatives Presets table
 export const pertinentNegativePresets = pgTable("pertinent_negative_presets", {
   id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -350,6 +409,9 @@ export type InsertTeamTodo = z.infer<typeof insertTeamTodoSchema>;
 
 export type TeamCalendarEvent = typeof teamCalendarEvents.$inferSelect;
 export type InsertTeamCalendarEvent = z.infer<typeof insertTeamCalendarEventSchema>;
+
+export type TeamBulletinPost = typeof teamBulletinPosts.$inferSelect;
+export type InsertTeamBulletinPost = z.infer<typeof insertTeamBulletinPostSchema>;
 
 export type UserLabSetting = typeof userLabSettings.$inferSelect;
 export type InsertUserLabSetting = z.infer<typeof insertUserLabSettingSchema>;

@@ -4,10 +4,10 @@ import { storage } from "./storage.js";
 import { requireAuth, optionalAuth, getCurrentUserId } from "./auth.js";
 import { verifyClerkToken, syncClerkUser, getClerkUserId } from "./clerkAuth.js";
 import session from "express-session";
-import { 
-  insertNoteSchema, 
-  insertNoteTemplateSchema, 
-  insertSmartPhraseSchema,
+  import { 
+    insertNoteSchema, 
+    insertNoteTemplateSchema, 
+    insertSmartPhraseSchema,
   insertTeamTodoSchema,
   insertTeamCalendarEventSchema,
   insertUserSchema,
@@ -15,10 +15,12 @@ import {
   insertAutocompleteItemSchema,
   smartPhrases,
   noteTemplates,
-  autocompleteItems
+  autocompleteItems,
+  users
 } from "../shared/schema.js";
 import { z } from "zod";
 import { eq, or } from "drizzle-orm";
+import { MEDICATIONS_SYSTEM_PROMPT, LABS_SYSTEM_PROMPT, PMH_SYSTEM_PROMPT } from "./ai/prompts.js";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Set up Auth0 if configured, otherwise use session for development
@@ -37,6 +39,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         maxAge: 7 * 24 * 60 * 60 * 1000 // 1 week
       }
     }));
+  }
+
+  // Ensure DB schema (helpful in dev and cold starts)
+  try {
+    await storage.ensureCoreSchema();
+  } catch (err) {
+    console.error('[Routes] Failed to ensure core schema:', err);
   }
 
   // Clerk sync endpoint (when Clerk is configured)
@@ -524,9 +533,209 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // User preferences routes
+  app.get('/api/user-preferences', requireAuth, async (req, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const prefs = await storage.getUserPreferences(userId);
+      res.json(prefs || { userId, data: {} });
+    } catch (error) {
+      console.error('Error fetching user preferences:', error);
+      res.status(500).json({ message: 'Failed to fetch preferences' });
+    }
+  });
+  app.put('/api/user-preferences', requireAuth, async (req, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const data = req.body?.data ?? {};
+      const saved = await storage.upsertUserPreferences(userId, data);
+      res.json(saved);
+    } catch (error) {
+      console.error('Error updating user preferences:', error);
+      res.status(500).json({ message: 'Failed to update preferences' });
+    }
+  });
+
   // Deepgram API key endpoint
   app.get("/api/deepgram-key", requireAuth, (req, res) => {
     res.json({ apiKey: process.env.DEEPGRAM_API_KEY });
+  });
+
+  // AI: Parse medications from dictation via OpenAI
+  app.post("/api/ai/medications", requireAuth, async (req, res) => {
+    try {
+      const schema = z.object({ dictation: z.string().min(1) });
+      const { dictation } = schema.parse(req.body);
+
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ message: "OPENAI_API_KEY not configured" });
+      }
+
+      const systemPrompt = MEDICATIONS_SYSTEM_PROMPT;
+
+      const body = {
+        model: "gpt-4o-mini",
+        temperature: 0,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: dictation }
+        ]
+      } as const;
+
+      const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify(body)
+      });
+
+      if (!resp.ok) {
+        const errTxt = await resp.text().catch(() => "");
+        console.error("/api/ai/medications upstream error:", resp.status, errTxt);
+        return res.status(502).json({ message: "AI service error" });
+      }
+
+      const data: any = await resp.json();
+      const raw = data?.choices?.[0]?.message?.content || "";
+
+      // Sanitize to ensure strict format and compatibility with reordering
+      const sanitize = (t: string) => (
+        t
+          .replace(/[\r]+/g, "\n")
+          .split("\n")
+          .map(l => l.trim())
+          .filter(l => l.length > 0)
+          .map(l => l.replace(/^[\-*•\d+\.\)]\s*/, "")) // remove bullets/numbering
+          .map(l => l.replace(/[\.\s]+$/, "")) // remove trailing periods/spaces
+          .join("\n")
+      );
+
+      const text = sanitize(raw);
+      return res.json({ text });
+    } catch (error: any) {
+      console.error("Error in /api/ai/medications:", error);
+      const message = error?.message || "Failed to process dictation";
+      res.status(500).json({ message });
+    }
+  });
+
+  // AI: Parse labs from dictation via OpenAI
+  app.post("/api/ai/labs", requireAuth, async (req, res) => {
+    try {
+      const schema = z.object({ dictation: z.string().min(1) });
+      const { dictation } = schema.parse(req.body);
+
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ message: "OPENAI_API_KEY not configured" });
+      }
+
+      const systemPrompt = LABS_SYSTEM_PROMPT;
+
+      const body = {
+        model: "gpt-4o-mini",
+        temperature: 0,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: dictation }
+        ]
+      } as const;
+
+      const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify(body)
+      });
+
+      if (!resp.ok) {
+        const errTxt = await resp.text().catch(() => "");
+        console.error("/api/ai/labs upstream error:", resp.status, errTxt);
+        return res.status(502).json({ message: "AI service error" });
+      }
+
+      const data: any = await resp.json();
+      const raw = data?.choices?.[0]?.message?.content || "";
+
+      // Minimal sanitize: normalize CR, trim lines, keep punctuation/arrows
+      const sanitize = (t: string) => (
+        t
+          .replace(/[\r]+/g, "\n")
+          .split("\n")
+          .map(l => l.replace(/\s+$/g, ""))
+          .join("\n")
+      );
+
+      const text = sanitize(raw);
+      return res.json({ text });
+    } catch (error: any) {
+      console.error("Error in /api/ai/labs:", error);
+      const message = error?.message || "Failed to process dictation";
+      res.status(500).json({ message });
+    }
+  });
+
+  // AI: Parse Past Medical History (PMH) from dictation via OpenAI
+  app.post("/api/ai/pmh", requireAuth, async (req, res) => {
+    try {
+      const schema = z.object({ dictation: z.string().min(1) });
+      const { dictation } = schema.parse(req.body);
+
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ message: "OPENAI_API_KEY not configured" });
+      }
+
+      const systemPrompt = PMH_SYSTEM_PROMPT;
+
+      const body = {
+        model: "gpt-4o-mini",
+        temperature: 0,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: dictation }
+        ]
+      } as const;
+
+      const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`
+        },
+        body: JSON.stringify(body)
+      });
+
+      if (!resp.ok) {
+        const errTxt = await resp.text().catch(() => "");
+        console.error("/api/ai/pmh upstream error:", resp.status, errTxt);
+        return res.status(502).json({ message: "AI service error" });
+      }
+
+      const data: any = await resp.json();
+      const raw = data?.choices?.[0]?.message?.content || "";
+
+      // Minimal sanitize: normalize CR, trim trailing spaces; keep exact formatting otherwise
+      const sanitize = (t: string) => (
+        t
+          .replace(/[\r]+/g, "\n")
+          .split("\n")
+          .map(l => l.replace(/\s+$/g, ""))
+          .join("\n")
+      );
+
+      const text = sanitize(raw);
+      return res.json({ text });
+    } catch (error: any) {
+      console.error("Error in /api/ai/pmh:", error);
+      const message = error?.message || "Failed to process dictation";
+      res.status(500).json({ message });
+    }
   });
 
   // Smart phrase routes
@@ -666,7 +875,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.updateSmartPhrase(r.id, { shortCode: gen } as any);
             code = gen;
           }
-          codes.push(code);
+          codes.push(code as string);
         }
         return res.json({ type, codes });
       } else if (type === 'note-templates') {
@@ -679,7 +888,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.updateNoteTemplate(r.id, { shortCode: gen } as any);
             code = gen;
           }
-          codes.push(code);
+          codes.push(code as string);
         }
         return res.json({ type, codes });
       } else if (type === 'autocomplete-items') {
@@ -692,7 +901,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.updateAutocompleteItem(r.id, { shortCode: gen } as any);
             code = gen;
           }
-          codes.push(code);
+          codes.push(code as string);
         }
         return res.json({ type, codes });
       }
@@ -857,9 +1066,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Teams management routes
+  // Simple per-user rate limiter for joins
+  const joinRate: Map<string, { count: number; resetAt: number }> = new Map();
+
+  async function ensureTeamMember(userId: string, teamId: string) {
+    const members = await storage.getTeamMembers(teamId);
+    const isMember = members.some(m => m.userId === userId);
+    if (!isMember) {
+      const err: any = new Error('Forbidden');
+      err.status = 403;
+      throw err;
+    }
+    return members;
+  }
+
   app.get("/api/teams", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
+      // Cleanup expired teams on access
+      try { await storage.deleteExpiredTeams(); } catch {}
       const userTeams = await storage.getUserTeams(userId);
       res.json(userTeams);
     } catch (error) {
@@ -871,6 +1096,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/teams/create", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
+      try { await storage.deleteExpiredTeams(); } catch {}
       const { name, description } = req.body;
 
       if (!name || !name.trim()) {
@@ -896,11 +1122,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/teams/join", requireAuth, async (req, res) => {
     try {
       const userId = getCurrentUserId(req);
+      try { await storage.deleteExpiredTeams(); } catch {}
       const { groupCode } = req.body;
 
       if (!groupCode || !groupCode.trim()) {
         return res.status(400).json({ error: "Group code is required" });
       }
+
+       // Basic rate limit: 20 join attempts/hour per user
+      const now = Date.now();
+      const rl = joinRate.get(userId);
+      if (!rl || rl.resetAt < now) {
+        joinRate.set(userId, { count: 0, resetAt: now + 60 * 60 * 1000 });
+      }
+      const current = joinRate.get(userId)!;
+      if (current.count >= 20) {
+        return res.status(429).json({ error: "Too many join attempts. Try again later." });
+      }
+      current.count++;
 
       const result = await storage.joinTeamByGroupCode(groupCode.trim(), userId);
       
@@ -920,6 +1159,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = getCurrentUserId(req);
       const { teamId } = req.params;
 
+      await ensureTeamMember(userId, teamId);
       const result = await storage.leaveTeam(teamId, userId);
       
       if (result.success) {
@@ -936,6 +1176,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/teams/:teamId/members", requireAuth, async (req, res) => {
     try {
       const { teamId } = req.params;
+      const userId = getCurrentUserId(req);
+      await ensureTeamMember(userId, teamId);
       const members = await storage.getTeamMembers(teamId);
       res.json(members);
     } catch (error) {
@@ -948,6 +1190,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/teams/:teamId/todos", requireAuth, async (req, res) => {
     try {
       const { teamId } = req.params;
+      const userId = getCurrentUserId(req);
+      await ensureTeamMember(userId, teamId);
       const todos = await storage.getTeamTodos(teamId);
       res.json(todos);
     } catch (error) {
@@ -960,12 +1204,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { teamId } = req.params;
       const userId = getCurrentUserId(req);
+      await ensureTeamMember(userId, teamId);
       const todoData = insertTeamTodoSchema.parse({ 
         ...req.body, 
         teamId, 
         createdById: userId 
       });
       const todo = await storage.createTeamTodo(todoData);
+      // Optional: handle assigneeIds array
+      if (Array.isArray((req.body as any).assigneeIds)) {
+        const { teamTodoAssignees } = await import("../shared/schema.js");
+        // Clear existing links
+        await storage.db.delete(teamTodoAssignees).where(eq(teamTodoAssignees.todoId, todo.id));
+        for (const uid of (req.body as any).assigneeIds) {
+          await storage.db.insert(teamTodoAssignees).values({ todoId: todo.id, userId: uid } as any);
+        }
+      }
       res.json(todo);
     } catch (error) {
       console.error("Error creating team todo:", error);
@@ -977,7 +1231,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const todoData = insertTeamTodoSchema.partial().parse(req.body);
+      // Enforce membership by fetching todo and checking its team
+      const { teamTodos } = await import("../shared/schema.js");
+      const [row]: any = await storage.db.select().from(teamTodos).where(eq(teamTodos.id, id));
+      if (!row) return res.status(404).json({ message: 'Todo not found' });
+      await ensureTeamMember(getCurrentUserId(req), row.teamId);
       const todo = await storage.updateTeamTodo(id, todoData);
+      // Update assignees if provided
+      if (Array.isArray((req.body as any).assigneeIds)) {
+        const { teamTodoAssignees } = await import("../shared/schema.js");
+        await storage.db.delete(teamTodoAssignees).where(eq(teamTodoAssignees.todoId, id));
+        for (const uid of (req.body as any).assigneeIds) {
+          await storage.db.insert(teamTodoAssignees).values({ todoId: id, userId: uid } as any);
+        }
+      }
       res.json(todo);
     } catch (error) {
       console.error("Error updating team todo:", error);
@@ -988,6 +1255,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/todos/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
+      const { teamTodos, teamMembers } = await import("../shared/schema.js");
+      const [row]: any = await storage.db.select().from(teamTodos).where(eq(teamTodos.id, id));
+      if (!row) return res.status(404).json({ message: 'Todo not found' });
+      const userId = getCurrentUserId(req);
+      const members = await ensureTeamMember(userId, row.teamId);
+      // Prevent non-admin from deleting admin-created tasks
+      const creatorMembership = members.find(m => m.userId === row.createdById);
+      const me = members.find(m => m.userId === userId);
+      if (creatorMembership?.role === 'admin' && me?.role !== 'admin') {
+        return res.status(403).json({ message: 'Cannot delete admin-created task' });
+      }
       await storage.deleteTeamTodo(id);
       res.json({ message: "Todo deleted successfully" });
     } catch (error) {
@@ -996,10 +1274,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Teams: transfer admin
+  app.post("/api/teams/:teamId/transfer-admin", requireAuth, async (req, res) => {
+    try {
+      const { teamId } = req.params;
+      const userId = getCurrentUserId(req);
+      const { newAdminUserId } = req.body as { newAdminUserId?: string };
+      if (!newAdminUserId) return res.status(400).json({ error: 'newAdminUserId is required' });
+      const members = await ensureTeamMember(userId, teamId);
+      const me = members.find(m => m.userId === userId);
+      if (me?.role !== 'admin') return res.status(403).json({ error: 'Only admin can transfer admin role' });
+      const target = members.find(m => m.userId === newAdminUserId);
+      if (!target) return res.status(404).json({ error: 'Target user is not a member' });
+      const { teamMembers } = await import("../shared/schema.js");
+      // Promote target to admin
+      await storage.db.update(teamMembers).set({ role: 'admin' } as any).where(eq(teamMembers.id, target.id));
+      // Demote current admin to member
+      await storage.db.update(teamMembers).set({ role: 'member' } as any).where(eq(teamMembers.id, me!.id));
+      res.json({ message: 'Admin role transferred' });
+    } catch (error) {
+      console.error('Error transferring admin:', error);
+      res.status(500).json({ error: 'Failed to transfer admin role' });
+    }
+  });
+
   // Team calendar routes
   app.get("/api/teams/:teamId/calendar", requireAuth, async (req, res) => {
     try {
       const { teamId } = req.params;
+      await ensureTeamMember(getCurrentUserId(req), teamId);
       const events = await storage.getTeamCalendarEvents(teamId);
       res.json(events);
     } catch (error) {
@@ -1012,11 +1315,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { teamId } = req.params;
       const userId = getCurrentUserId(req);
+      await ensureTeamMember(userId, teamId);
+      // Enforce event dates within team's active 7-day window
+      const team = await storage.getTeam(teamId);
+      if (!team) return res.status(404).json({ message: 'Team not found' });
+      const expiresAt = new Date(team.expiresAt);
+      const startWindow = new Date(expiresAt);
+      startWindow.setDate(expiresAt.getDate() - 6);
       const eventData = insertTeamCalendarEventSchema.parse({ 
         ...req.body, 
         teamId, 
         createdById: userId 
       });
+      const s = new Date(eventData.startDate as any);
+      const e = new Date(eventData.endDate as any);
+      if (s < startWindow || e > expiresAt) {
+        return res.status(400).json({ message: 'Event must be within the team\'s active week' });
+      }
       const event = await storage.createTeamCalendarEvent(eventData);
       res.json(event);
     } catch (error) {
@@ -1029,6 +1344,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const eventData = insertTeamCalendarEventSchema.partial().parse(req.body);
+      const { teamCalendarEvents } = await import("../shared/schema.js");
+      const [row]: any = await storage.db.select().from(teamCalendarEvents).where(eq(teamCalendarEvents.id, id));
+      if (!row) return res.status(404).json({ message: 'Event not found' });
+      await ensureTeamMember(getCurrentUserId(req), row.teamId);
       const event = await storage.updateTeamCalendarEvent(id, eventData);
       res.json(event);
     } catch (error) {
@@ -1040,11 +1359,165 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/calendar/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
+      const { teamCalendarEvents } = await import("../shared/schema.js");
+      const [row]: any = await storage.db.select().from(teamCalendarEvents).where(eq(teamCalendarEvents.id, id));
+      if (!row) return res.status(404).json({ message: 'Event not found' });
+      await ensureTeamMember(getCurrentUserId(req), row.teamId);
       await storage.deleteTeamCalendarEvent(id);
       res.json({ message: "Calendar event deleted successfully" });
     } catch (error) {
       console.error("Error deleting calendar event:", error);
       res.status(500).json({ message: "Failed to delete calendar event" });
+    }
+  });
+
+  // Teams: prolong expiry (admin only)
+  app.post("/api/teams/:teamId/prolong", requireAuth, async (req, res) => {
+    try {
+      const { teamId } = req.params;
+      const userId = getCurrentUserId(req);
+      const members = await ensureTeamMember(userId, teamId);
+      const me = members.find(m => m.userId === userId);
+      if (me?.role !== 'admin') return res.status(403).json({ error: 'Only admin can prolong team' });
+      const team = await storage.getTeam(teamId);
+      if (!team) return res.status(404).json({ error: 'Team not found' });
+      const current = new Date(team.expiresAt);
+      current.setDate(current.getDate() + 7);
+      const [updated] = await storage.db
+        .update((await import("../shared/schema.js")).teams)
+        .set({ expiresAt: current, updatedAt: new Date() } as any)
+        .where(eq((await import("../shared/schema.js")).teams.id, teamId))
+        .returning();
+      res.json(updated);
+    } catch (error) {
+      console.error('Error prolonging team:', error);
+      res.status(500).json({ error: 'Failed to prolong team' });
+    }
+  });
+
+  // Teams: rename (admin only)
+  app.post("/api/teams/:teamId/rename", requireAuth, async (req, res) => {
+    try {
+      const { teamId } = req.params;
+      const userId = getCurrentUserId(req);
+      const members = await ensureTeamMember(userId, teamId);
+      const me = members.find(m => m.userId === userId);
+      if (me?.role !== 'admin') return res.status(403).json({ error: 'Only admin can rename team' });
+      const { name, description } = req.body as { name?: string; description?: string | null };
+      if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
+      const { teams } = await import("../shared/schema.js");
+      const [updated] = await storage.db
+        .update(teams)
+        .set({ name: name.trim(), description: description ?? null, updatedAt: new Date() } as any)
+        .where(eq(teams.id, teamId))
+        .returning();
+      res.json(updated);
+    } catch (error) {
+      console.error('Error renaming team:', error);
+      res.status(500).json({ error: 'Failed to rename team' });
+    }
+  });
+
+  // Teams: disband (admin only)
+  app.post("/api/teams/:teamId/disband", requireAuth, async (req, res) => {
+    try {
+      const { teamId } = req.params;
+      const userId = getCurrentUserId(req);
+      const members = await ensureTeamMember(userId, teamId);
+      const me = members.find(m => m.userId === userId);
+      if (me?.role !== 'admin') return res.status(403).json({ error: 'Only admin can disband team' });
+      const { teams } = await import("../shared/schema.js");
+      await storage.db.delete(teams).where(eq(teams.id, teamId));
+      res.json({ message: 'Team disbanded' });
+    } catch (error) {
+      console.error('Error disbanding team:', error);
+      res.status(500).json({ error: 'Failed to disband team' });
+    }
+  });
+
+  // Teams: remove member (admin only)
+  app.post("/api/teams/:teamId/members/:memberId/remove", requireAuth, async (req, res) => {
+    try {
+      const { teamId, memberId } = req.params;
+      const userId = getCurrentUserId(req);
+      const members = await ensureTeamMember(userId, teamId);
+      const me = members.find(m => m.userId === userId);
+      if (me?.role !== 'admin') return res.status(403).json({ error: 'Only admin can remove members' });
+      const { teamMembers } = await import("../shared/schema.js");
+      const target = members.find(m => m.userId === memberId);
+      if (!target) return res.status(404).json({ error: 'Member not found' });
+      if (target.role === 'admin') return res.status(403).json({ error: 'Cannot remove another admin. Transfer their role first.' });
+      const { and } = await import("drizzle-orm");
+      await storage.db.delete(teamMembers).where(and(eq(teamMembers.userId, memberId), eq(teamMembers.teamId, teamId)));
+      res.json({ message: 'Member removed' });
+    } catch (error) {
+      console.error('Error removing member:', error);
+      res.status(500).json({ error: 'Failed to remove member' });
+    }
+  });
+
+  // Bulletin routes
+  app.get("/api/teams/:teamId/bulletin", requireAuth, async (req, res) => {
+    try {
+      const { teamId } = req.params;
+      await ensureTeamMember(getCurrentUserId(req), teamId);
+      const posts = await storage.getTeamBulletinPosts(teamId);
+      res.json(posts);
+    } catch (error) {
+      console.error('Error fetching bulletin:', error);
+      res.status(500).json({ message: 'Failed to fetch bulletin' });
+    }
+  });
+
+  app.post("/api/teams/:teamId/bulletin", requireAuth, async (req, res) => {
+    try {
+      const { teamId } = req.params;
+      const userId = getCurrentUserId(req);
+      const members = await ensureTeamMember(userId, teamId);
+      const me = members.find(m => m.userId === userId);
+      const { insertTeamBulletinPostSchema } = await import("../shared/schema.js");
+      const postData = insertTeamBulletinPostSchema.parse({ ...req.body, teamId, createdById: userId });
+      const post = await storage.createTeamBulletinPost(postData, me?.role || 'member');
+      res.json(post);
+    } catch (error) {
+      console.error('Error creating bulletin post:', error);
+      res.status(500).json({ message: 'Failed to create bulletin post' });
+    }
+  });
+
+  app.put("/api/bulletin/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { teamBulletinPosts } = await import("../shared/schema.js");
+      const [row]: any = await storage.db.select().from(teamBulletinPosts).where(eq(teamBulletinPosts.id, id));
+      if (!row) return res.status(404).json({ message: 'Post not found' });
+      const members = await ensureTeamMember(getCurrentUserId(req), row.teamId);
+      const me = members.find(m => m.userId === getCurrentUserId(req));
+      if (row.isAdminPost && me?.role !== 'admin') return res.status(403).json({ message: 'Cannot edit admin post' });
+      const { insertTeamBulletinPostSchema } = await import("../shared/schema.js");
+      const updates = insertTeamBulletinPostSchema.partial().parse(req.body);
+      const post = await storage.updateTeamBulletinPost(id, updates);
+      res.json(post);
+    } catch (error) {
+      console.error('Error updating bulletin post:', error);
+      res.status(500).json({ message: 'Failed to update bulletin post' });
+    }
+  });
+
+  app.delete("/api/bulletin/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { teamBulletinPosts } = await import("../shared/schema.js");
+      const [row]: any = await storage.db.select().from(teamBulletinPosts).where(eq(teamBulletinPosts.id, id));
+      if (!row) return res.status(404).json({ message: 'Post not found' });
+      const members = await ensureTeamMember(getCurrentUserId(req), row.teamId);
+      const me = members.find(m => m.userId === getCurrentUserId(req));
+      if (row.isAdminPost && me?.role !== 'admin') return res.status(403).json({ message: 'Cannot delete admin post' });
+      await storage.deleteTeamBulletinPost(id);
+      res.json({ message: 'Deleted' });
+    } catch (error) {
+      console.error('Error deleting bulletin post:', error);
+      res.status(500).json({ message: 'Failed to delete bulletin post' });
     }
   });
 
@@ -1074,6 +1547,137 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching autocomplete items:", error);
       res.status(500).json({ message: "Failed to fetch autocomplete items" });
+    }
+  });
+
+  // Community routes (authenticated)
+  app.get('/api/community', requireAuth, async (req: any, res) => {
+    try {
+      const tab = String(req.query.tab || 'all'); // 'all' | 'popular'
+      const type = String(req.query.type || 'all'); // 'all' | 'templates' | 'smart-phrases' | 'autocomplete'
+      const category = req.query.category ? String(req.query.category) : undefined;
+      const q = req.query.q ? String(req.query.q) : undefined;
+      const sort = String(req.query.sort || (tab === 'popular' ? 'downloads' : 'newest')); // 'downloads' | 'newest'
+      const page = Math.max(1, parseInt(String(req.query.page || '1')));
+      const pageSize = Math.min(50, Math.max(1, parseInt(String(req.query.pageSize || '20'))));
+      const popularThreshold = 5;
+
+      // Helper to build LIKE value
+      const likeExpr = (val: string) => `%${val}%`;
+
+      // Fetchers per type (join with users for publisher identity)
+      const fetchTemplates = async () => {
+        // note_templates are public-only
+        let rows = await storage.db
+          .select({
+            id: noteTemplates.id,
+            title: noteTemplates.name,
+            description: noteTemplates.description,
+            shortCode: noteTemplates.shortCode,
+            downloadCount: noteTemplates.downloadCount,
+            createdAt: noteTemplates.createdAt,
+            userId: noteTemplates.userId,
+            userFirstName: users.firstName,
+            userLastName: users.lastName,
+            userEmail: users.email,
+          })
+          .from(noteTemplates)
+          .leftJoin(users, eq(noteTemplates.userId, users.id))
+          .where(eq(noteTemplates.isPublic, true));
+        if (q) {
+          rows = rows.filter(r =>
+            (r.title?.toLowerCase().includes(q.toLowerCase()) ||
+             (r.description || '').toLowerCase().includes(q.toLowerCase()))
+          );
+        }
+        if (tab === 'popular') rows = rows.filter(r => (r.downloadCount || 0) >= popularThreshold);
+        return rows.map(r => ({ ...r, kind: 'template', category: null }));
+      };
+
+      const fetchSmartPhrases = async () => {
+        let rows = await storage.db
+          .select({
+            id: smartPhrases.id,
+            title: smartPhrases.trigger,
+            description: smartPhrases.description,
+            category: smartPhrases.category,
+            shortCode: smartPhrases.shortCode,
+            downloadCount: smartPhrases.downloadCount,
+            createdAt: smartPhrases.createdAt,
+            userId: smartPhrases.userId,
+            userFirstName: users.firstName,
+            userLastName: users.lastName,
+            userEmail: users.email,
+          })
+          .from(smartPhrases)
+          .leftJoin(users, eq(smartPhrases.userId, users.id))
+          .where(eq(smartPhrases.isPublic, true));
+        if (category) rows = rows.filter(r => r.category === category);
+        if (q) {
+          const ql = q.toLowerCase();
+          rows = rows.filter(r =>
+            (r.title?.toLowerCase().includes(ql) ||
+             (r.description || '').toLowerCase().includes(ql))
+          );
+        }
+        if (tab === 'popular') rows = rows.filter(r => (r.downloadCount || 0) >= popularThreshold);
+        return rows.map(r => ({ ...r, kind: 'smart-phrase' as const }));
+      };
+
+      const fetchAutocomplete = async () => {
+        let rows = await storage.db
+          .select({
+            id: autocompleteItems.id,
+            title: autocompleteItems.text,
+            description: autocompleteItems.description,
+            category: autocompleteItems.category,
+            shortCode: autocompleteItems.shortCode,
+            downloadCount: autocompleteItems.downloadCount,
+            createdAt: autocompleteItems.createdAt,
+            userId: autocompleteItems.userId,
+            userFirstName: users.firstName,
+            userLastName: users.lastName,
+            userEmail: users.email,
+          })
+          .from(autocompleteItems)
+          .leftJoin(users, eq(autocompleteItems.userId, users.id))
+          .where(eq(autocompleteItems.isPublic, true));
+        if (category) rows = rows.filter(r => r.category === category);
+        if (q) {
+          const ql = q.toLowerCase();
+          rows = rows.filter(r =>
+            (r.title?.toLowerCase().includes(ql) ||
+             (r.description || '').toLowerCase().includes(ql))
+          );
+        }
+        if (tab === 'popular') rows = rows.filter(r => (r.downloadCount || 0) >= popularThreshold);
+        return rows.map(r => ({ ...r, kind: 'autocomplete' as const }));
+      };
+
+      let items: any[] = [];
+      if (type === 'templates') items = await fetchTemplates();
+      else if (type === 'smart-phrases') items = await fetchSmartPhrases();
+      else if (type === 'autocomplete') items = await fetchAutocomplete();
+      else {
+        const [t, s, a] = await Promise.all([fetchTemplates(), fetchSmartPhrases(), fetchAutocomplete()]);
+        items = [...t, ...s, ...a];
+      }
+
+      // Sorting
+      if (sort === 'downloads') {
+        items.sort((a, b) => (b.downloadCount || 0) - (a.downloadCount || 0));
+      } else {
+        items.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      }
+
+      const total = items.length;
+      const start = (page - 1) * pageSize;
+      const paged = items.slice(start, start + pageSize);
+
+      res.json({ items: paged, total, page, pageSize });
+    } catch (err) {
+      console.error('Error in /api/community:', err);
+      res.status(500).json({ error: 'Failed to fetch community items' });
     }
   });
 

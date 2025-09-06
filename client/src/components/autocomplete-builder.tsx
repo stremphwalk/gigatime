@@ -5,7 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+// Density tabs removed
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
@@ -39,6 +39,7 @@ import { SearchField } from "@/components/library/SearchField";
 import { FilterDropdown } from "@/components/library/FilterDropdown";
 import { LayoutDensityControls } from "@/components/library/LayoutDensityControls";
 import { ActionButtons as SharedActions } from "@/components/library/ActionButtons";
+import { usePreferences } from "@/hooks/use-preferences";
 
 const SECTION_CATEGORIES = [
   { value: 'consultation-reasons', label: 'Consultation/Admission Reasons', icon: FileText },
@@ -57,7 +58,9 @@ export function AutocompleteBuilder() {
   const [isCreating, setIsCreating] = useState(false);
   const [editingItem, setEditingItem] = useState<AutocompleteItem | null>(null);
   const [layout, setLayout] = useState<'grid'|'list'>('grid');
-  const [density, setDensity] = useState<'compact'|'cozy'>('compact');
+  const { prefs, updateView } = usePreferences();
+  useEffect(() => { if (prefs.view?.autocomplete) setLayout(prefs.view.autocomplete); }, [prefs.view?.autocomplete]);
+  useEffect(() => { updateView('autocomplete', layout); }, [layout]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [exportCodes, setExportCodes] = useState<string[] | null>(null);
   
@@ -78,7 +81,8 @@ export function AutocompleteBuilder() {
     frequency: '',
     dosageOptions: [] as string[],
     frequencyOptions: [] as string[],
-    description: ''
+    description: '',
+    isPublic: false,
   });
 
   const { toast } = useToast();
@@ -90,8 +94,8 @@ export function AutocompleteBuilder() {
     const matchesCategory = !selectedCategory || item.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
-  const densityCls = density === 'compact' ? 'text-[12px] leading-5' : 'text-sm';
-  const padCls = density === 'compact' ? 'p-2' : 'p-3';
+  const densityCls = 'text-[12px] leading-5';
+  const padCls = 'p-2';
 
   const handleSave = async () => {
     if (!formData.text.trim() || !selectedCategory) {
@@ -108,6 +112,7 @@ export function AutocompleteBuilder() {
         text: formData.text.trim(),
         category: selectedCategory,
         isPriority: formData.isPriority,
+        isPublic: formData.isPublic,
         dosage: formData.dosage.trim() || undefined,
         frequency: formData.frequency.trim() || undefined,
         description: formData.description.trim() || undefined,
@@ -144,7 +149,8 @@ export function AutocompleteBuilder() {
         frequency: '',
         dosageOptions: [],
         frequencyOptions: [],
-        description: ''
+        description: '',
+        isPublic: false,
       });
       setIsCreating(false);
       setEditingItem(null);
@@ -162,6 +168,7 @@ export function AutocompleteBuilder() {
     setFormData({
       text: item.text,
       isPriority: item.isPriority,
+      isPublic: (item as any).isPublic ?? false,
       dosage: item.dosage || '',
       frequency: item.frequency || '',
       dosageOptions: item.dosageOptions || (item.dosage ? [item.dosage] : []),
@@ -199,7 +206,8 @@ export function AutocompleteBuilder() {
       frequency: '',
       dosageOptions: [],
       frequencyOptions: [],
-      description: ''
+      description: '',
+      isPublic: false,
     });
     setSelectedCategory('');
     setIsCreating(true);
@@ -216,7 +224,8 @@ export function AutocompleteBuilder() {
       frequency: '',
       dosageOptions: [],
       frequencyOptions: [],
-      description: ''
+      description: '',
+      isPublic: false,
     });
   };
 
@@ -265,15 +274,16 @@ export function AutocompleteBuilder() {
 
   return (
     <TooltipProvider>
-    <div className="flex-1 overflow-y-auto">
-      <div className="max-w-6xl mx-auto p-6">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-            Autocomplete Builder
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            Create custom autocomplete options for different note sections. Set priority items to appear at the top of autocomplete lists.
-          </p>
+    <div className="h-full flex flex-col">
+      <div className="border-b border-gray-200 p-4 bg-white">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight">Autocomplete</h1>
+            <p className="text-muted-foreground text-xs">Manage custom suggestions for note sections</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button size="sm" className="gap-2" onClick={handleCreateNew} data-testid="button-create-autocomplete-item"><Plus className="h-4 w-4"/>New Item</Button>
+          </div>
         </div>
 
         {/* Header + Toolbar */}
@@ -286,53 +296,25 @@ export function AutocompleteBuilder() {
             <Plus size={16} className="mr-2"/>New Item
           </Button>
         </div>
-        <Card className="border-muted/60 mb-6">
+        <Card className="border-muted/60">
           <CardContent className={`flex flex-wrap items-center gap-2 ${padCls}`}>
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
-              <Input value={searchQuery} onChange={(e)=>setSearchQuery(e.target.value)} placeholder="Search items…" className="pl-8 w-64"/>
-            </div>
+            <SearchField value={searchQuery} onChange={setSearchQuery} placeholder="Search items…" />
             <Separator orientation="vertical" className="h-6"/>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="gap-1"><ChevronsUpDown className="h-4 w-4"/>Category</Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-56">
-                <DropdownMenuLabel>Filter by category</DropdownMenuLabel>
-                <DropdownMenuSeparator/>
-                <DropdownMenuItem onClick={()=>setSelectedCategory("")}>{selectedCategory==="" && <Check className="mr-2 h-4 w-4"/>}All</DropdownMenuItem>
-                {SECTION_CATEGORIES.map(c => (
-                  <DropdownMenuItem key={c.value} onClick={()=>setSelectedCategory(c.value)}>
-                    {selectedCategory===c.value && <Check className="mr-2 h-4 w-4"/>}{c.label}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <div className="ml-auto flex items-center gap-1">
-              <Button size="icon" variant={layout==='grid'? 'default':'outline'} className="h-8 w-8" onClick={()=>setLayout('grid')}><Grid3X3 className="h-4 w-4"/></Button>
-              <Button size="icon" variant={layout==='list'? 'default':'outline'} className="h-8 w-8" onClick={()=>setLayout('list')}><List className="h-4 w-4"/></Button>
-              <Separator orientation="vertical" className="h-6"/>
-              <Tabs value={density} onValueChange={(v)=>setDensity(v as any)}>
-                <TabsList className="grid grid-cols-2">
-                  <TabsTrigger value="compact" className="text-xs">Compact</TabsTrigger>
-                  <TabsTrigger value="cozy" className="text-xs">Cozy</TabsTrigger>
-                </TabsList>
-              </Tabs>
-            </div>
+            <FilterDropdown label="Category" options={SECTION_CATEGORIES.map(c=>({ value: c.value, label: c.label }))} value={selectedCategory} onChange={setSelectedCategory} menuLabel="Filter by category" />
+            <LayoutDensityControls layout={layout} onLayoutChange={setLayout} />
           </CardContent>
         </Card>
-        <div className="mt-1 flex items-center gap-4 text-xs text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <span>{filteredItems.length} items</span>
-            {selectedCategory && (<><span>•</span><span>Category:</span><Badge variant="outline" className="px-1 py-0 text-[10px]">{getCategoryLabel(selectedCategory)}</Badge></>)}
-          </div>
+        <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+          <span>{filteredItems.length} items</span>
+          {selectedCategory && (<><span>•</span><span>Category:</span><Badge variant="outline" className="px-1 py-0 text-[10px]">{getCategoryLabel(selectedCategory)}</Badge></>)}
           <div className="ml-auto flex items-center gap-2">
             <span>Selected: {selectedIds.size}</span>
             <Button variant="outline" size="sm" onClick={handleImportCodes}>Import by Codes</Button>
             <Button size="sm" onClick={handleExportSelected} disabled={selectedIds.size===0}>Export Codes</Button>
           </div>
         </div>
-
+      </div>
+      <div className="flex-1 overflow-y-auto p-4">
         {/* Create/Edit Form */}
         {isCreating && (
           <Card className="mb-6">
@@ -501,6 +483,16 @@ export function AutocompleteBuilder() {
                   <Star size={14} className="text-yellow-500" />
                   <span>Priority Item (appears at top of autocomplete list)</span>
                 </Label>
+              </div>
+
+              {/* Public Setting */}
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="public"
+                  checked={formData.isPublic}
+                  onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isPublic: checked }))}
+                />
+                <Label htmlFor="public" className="cursor-pointer">Make this autocomplete public</Label>
               </div>
 
               {/* Action Buttons */}

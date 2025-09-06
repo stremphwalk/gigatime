@@ -136,7 +136,7 @@ export function MedicalConditionAutocomplete({
               className={cn(
                 "flex items-center justify-between p-2 rounded cursor-pointer text-sm",
                 index === selectedIndex
-                  ? "bg-blue-50 border border-blue-200 text-blue-900"
+                  ? "bg-[color:var(--brand-50)] border border-[color:var(--brand-200)] text-slate-900"
                   : "hover:bg-gray-50"
               )}
               onMouseEnter={() => setSelectedIndex(index)}
@@ -145,7 +145,7 @@ export function MedicalConditionAutocomplete({
             >
               <span className="font-medium">{condition}</span>
               {index === selectedIndex && (
-                <Check size={14} className="text-blue-600" />
+                <Check size={14} className="text-[color:var(--brand-700)]" />
               )}
             </div>
           ))}

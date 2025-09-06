@@ -73,6 +73,7 @@ export const teamCalendarEvents = pgTable("team_calendar_events", {
 	startDate: timestamp("start_date", { mode: 'string' }).notNull(),
 	endDate: timestamp("end_date", { mode: 'string' }).notNull(),
 	allDay: boolean("all_day").default(false),
+	type: varchar({ length: 30 }).default('other'),
 	teamId: uuid("team_id").notNull(),
 	createdById: uuid("created_by_id").notNull(),
 	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow(),
@@ -94,6 +95,8 @@ export const teamTodos = pgTable("team_todos", {
 	completed: boolean().default(false),
 	priority: varchar({ length: 20 }).default('medium'),
 	dueDate: timestamp("due_date", { mode: 'string' }),
+	status: varchar({ length: 30 }).default('backlog'),
+	completedAt: timestamp("completed_at", { mode: 'string' }),
 	assignedToId: uuid("assigned_to_id"),
 	teamId: uuid("team_id").notNull(),
 	createdById: uuid("created_by_id").notNull(),
@@ -101,12 +104,19 @@ export const teamTodos = pgTable("team_todos", {
 	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow(),
 });
 
+export const teamTodoAssignees = pgTable("team_todo_assignees", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	todoId: uuid("todo_id").notNull(),
+	userId: uuid("user_id").notNull(),
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow(),
+});
+
 export const teams = pgTable("teams", {
 	id: uuid().defaultRandom().primaryKey().notNull(),
 	name: varchar({ length: 100 }).notNull(),
 	description: text(),
-	groupCode: varchar("group_code", { length: 4 }).notNull(),
-	maxMembers: integer("max_members").default(6),
+	groupCode: varchar("group_code", { length: 6 }).notNull(),
+	maxMembers: integer("max_members").default(8),
 	createdById: uuid("created_by_id").notNull(),
 	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow(),
 	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow(),
@@ -114,6 +124,18 @@ export const teams = pgTable("teams", {
 }, (table) => [
 	unique("teams_group_code_unique").on(table.groupCode),
 ]);
+
+export const teamBulletinPosts = pgTable("team_bulletin_posts", {
+	id: uuid().defaultRandom().primaryKey().notNull(),
+	teamId: uuid("team_id").notNull(),
+	createdById: uuid("created_by_id").notNull(),
+	title: varchar({ length: 200 }).notNull(),
+	content: text().notNull(),
+	pinned: boolean().default(false),
+	isAdminPost: boolean("is_admin_post").default(false),
+	createdAt: timestamp("created_at", { mode: 'string' }).defaultNow(),
+	updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow(),
+});
 
 export const users = pgTable("users", {
 	id: varchar().primaryKey().notNull(),

@@ -179,9 +179,9 @@ export function SocialHistoryAutocomplete({
       <Card className="shadow-lg border border-gray-200">
         <CardContent className="p-0">
           <div className="max-h-64 overflow-y-auto">
-            <div className="p-2 bg-blue-50 border-b flex items-center gap-2">
-              <Wine size={14} className="text-blue-600" />
-              <span className="text-xs font-medium text-blue-700">Social History</span>
+            <div className="p-2 bg-[color:var(--brand-50)] border-b flex items-center gap-2">
+              <Wine size={14} className="text-[color:var(--brand-700)]" />
+              <span className="text-xs font-medium text-[color:var(--brand-700)]">Social History</span>
             </div>
             {suggestions.map((option, index) => (
               <Button
@@ -190,13 +190,13 @@ export function SocialHistoryAutocomplete({
                 size="sm"
                 className={cn(
                   "w-full justify-start text-left h-auto py-2 px-3 rounded-none border-b border-gray-50 last:border-b-0",
-                  index === selectedIndex && "bg-blue-50 text-blue-900"
+                  index === selectedIndex && "bg-[color:var(--brand-50)] text-slate-900"
                 )}
                 onClick={() => onSelect(option.format(query))}
                 data-testid={`social-history-suggestion-${index}`}
               >
                 <div className="flex items-center gap-2 w-full">
-                  <option.icon size={16} className="text-blue-600 flex-shrink-0" />
+                  <option.icon size={16} className="text-[color:var(--brand-700)] flex-shrink-0" />
                   <div className="flex flex-col items-start gap-0.5 flex-1">
                     <span className="font-medium text-sm">{option.label}</span>
                     <span className="text-xs text-gray-500">{option.category}</span>

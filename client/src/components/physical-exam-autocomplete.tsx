@@ -20,7 +20,7 @@ const getCategoryIcon = (category: string) => {
     case 'cardiovascular':
       return <Heart size={14} className="text-red-500" />;
     case 'pulmonary':
-      return <Zap size={14} className="text-blue-500" />;
+      return <Zap size={14} className="text-[color:var(--brand-700)]" />;
     case 'neurological':
       return <Zap size={14} className="text-purple-500" />;
     case 'heent':
@@ -122,7 +122,7 @@ export function PhysicalExamAutocomplete({
       {/* Header */}
       <div className="bg-gray-50 px-3 py-2 border-b flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Stethoscope size={16} className="text-blue-600" />
+          <Stethoscope size={16} className="text-[color:var(--brand-700)]" />
           <span className="text-sm font-medium">Physical Exam</span>
         </div>
         <div className="flex items-center gap-2">
@@ -153,7 +153,7 @@ export function PhysicalExamAutocomplete({
                     className={cn(
                       "p-2 rounded cursor-pointer text-sm border transition-colors",
                       selectedIndex === index 
-                        ? "bg-blue-50 border-blue-200 text-blue-900" 
+                        ? "bg-[color:var(--brand-50)] border-[color:var(--brand-200)] text-slate-900" 
                         : "bg-gray-50 border-gray-200 hover:bg-gray-100"
                     )}
                     onClick={() => onSelect(suggestion)}
@@ -203,7 +203,7 @@ export function PhysicalExamAutocomplete({
                     {QUICK_PHYSICAL_EXAM_PHRASES.slice(0, 4).map((phrase, index) => (
                       <div
                         key={`quick-${index}`}
-                        className="p-2 rounded cursor-pointer text-xs bg-blue-50 border border-blue-200 hover:bg-blue-100 transition-colors"
+                        className="p-2 rounded cursor-pointer text-xs bg-[color:var(--brand-50)] border border-[color:var(--brand-200)] hover:bg-[color:var(--brand-100)] transition-colors"
                         onClick={() => onSelect(phrase)}
                         data-testid={`quick-phrase-${index}`}
                       >
@@ -242,7 +242,7 @@ export function PhysicalExamAutocomplete({
                         className={cn(
                           "p-2 rounded cursor-pointer text-sm border transition-colors",
                           selectedIndex === globalIndex 
-                            ? "bg-blue-50 border-blue-200 text-blue-900" 
+                            ? "bg-[color:var(--brand-50)] border-[color:var(--brand-200)] text-slate-900" 
                             : "bg-gray-50 border-gray-200 hover:bg-gray-100"
                         )}
                         onClick={() => onSelect(finding)}

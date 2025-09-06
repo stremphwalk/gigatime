@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { SearchField } from "@/components/library/SearchField";
 import { FilterDropdown } from "@/components/library/FilterDropdown";
 import { LayoutDensityControls } from "@/components/library/LayoutDensityControls";
+import { usePreferences } from "@/hooks/use-preferences";
 import { ActionButtons as SharedActions } from "@/components/library/ActionButtons";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -52,7 +53,9 @@ export function TemplateBuilderManager() {
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [layout, setLayout] = useState<"grid" | "list">("grid");
-  const [density, setDensity] = useState<"compact" | "cozy">("compact");
+  const { prefs, updateView } = usePreferences();
+  useEffect(() => { if (prefs.view?.templates) setLayout(prefs.view.templates); }, [prefs.view?.templates]);
+  useEffect(() => { updateView('templates', layout); }, [layout]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [exportCodes, setExportCodes] = useState<string[] | null>(null);
   const [showImportDialog, setShowImportDialog] = useState(false);
@@ -133,8 +136,8 @@ export function TemplateBuilderManager() {
     return matchesQuery && matchesType;
   });
 
-  const densityCls = density === 'compact' ? 'text-[12px] leading-5' : 'text-sm';
-  const padCls = density === 'compact' ? 'p-2' : 'p-3';
+  const densityCls = 'text-[12px] leading-5';
+  const padCls = 'p-2';
 
   const handleCreateNew = () => {
     setFormData({
@@ -749,7 +752,7 @@ export function TemplateBuilderManager() {
             <SearchField value={searchQuery} onChange={setSearchQuery} placeholder="Search templates…" />
             <Separator orientation="vertical" className="h-6"/>
             <FilterDropdown label="Type" options={templateTypes.map(t=>({ value: t.value, label: t.label }))} value={typeFilter} onChange={setTypeFilter} menuLabel="Filter by type" />
-            <LayoutDensityControls layout={layout} onLayoutChange={setLayout} density={density} onDensityChange={setDensity} />
+            <LayoutDensityControls layout={layout} onLayoutChange={setLayout} />
           </CardContent>
         </Card>
 

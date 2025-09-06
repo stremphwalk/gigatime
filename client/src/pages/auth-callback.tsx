@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { useLocation } from 'wouter';
+import BrandSpinner from "@/components/brand-spinner";
 
 export function AuthCallback() {
   const [, navigate] = useLocation();
@@ -37,7 +38,7 @@ export function AuthCallback() {
   return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500 mx-auto mb-4"></div>
+        <div className="mx-auto mb-4"><BrandSpinner size={64} /></div>
         <p className="text-gray-600">Processing authentication...</p>
       </div>
     </div>

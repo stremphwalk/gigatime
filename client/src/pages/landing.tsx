@@ -15,7 +15,7 @@ export default function Landing() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
+    <div className="min-h-screen bg-gradient-to-br from-[var(--brand-50)] to-[color:var(--brand-100)] dark:from-gray-900 dark:to-gray-800">
       <div className="container mx-auto px-4 py-16">
         {/* Header */}
         <div className="text-center mb-16">
@@ -28,7 +28,7 @@ export default function Landing() {
           <Button 
             onClick={handleGetStarted}
             size="lg" 
-            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg"
+            className="bg-[color:var(--brand-700)] hover:opacity-95 text-white px-8 py-3 text-lg"
             data-testid="button-get-started"
           >
             {isAuthenticated ? 'Go to Dashboard' : 'Sign In to Get Started'}
@@ -39,7 +39,7 @@ export default function Landing() {
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 mb-16">
           <Card className="text-center">
             <CardHeader>
-              <FileText className="mx-auto h-12 w-12 text-blue-600 mb-4" />
+              <FileText className="mx-auto h-12 w-12 text-[color:var(--brand-700)] mb-4" />
               <CardTitle>Smart Templates</CardTitle>
             </CardHeader>
             <CardContent>
@@ -98,7 +98,7 @@ export default function Landing() {
             onClick={handleLogin}
             size="lg" 
             variant="outline"
-            className="border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white px-8 py-3 text-lg"
+            className="border-[color:var(--brand-700)] text-[color:var(--brand-700)] hover:bg-[color:var(--brand-700)] hover:text-white px-8 py-3 text-lg"
             data-testid="button-login-secondary"
           >
             Get Started Now

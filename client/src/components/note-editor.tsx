@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -41,6 +41,7 @@ import {
   Download, 
   Copy, 
   MoreVertical,
+  Clock,
   Stethoscope,
   History,
   CheckSquare,
@@ -58,8 +59,13 @@ import {
   Camera,
   ArrowUpDown,
   Shuffle,
-  FileSearch
+  FileSearch,
+  Sparkles,
+  Loader2
 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { useDictation } from "@/hooks/useDictation";
 import { cn } from "@/lib/utils";
 import { formatSmartPhrase, computeElementStrings } from "@/lib/smart-phrase-format";
 import { noteTemplates } from "../lib/note-templates";
@@ -70,6 +76,10 @@ interface NoteEditorProps {
   note: Note | null;
   isCreating: boolean;
   onNoteSaved: (note: Note) => void;
+  initialTemplateType?: string;
+  onDirtyChange?: (dirty: boolean) => void;
+  onRequestReturn?: () => void;
+  onRequestOpenNote?: (noteId: string) => void;
 }
 
 interface NoteSection {
@@ -80,7 +90,7 @@ interface NoteSection {
   content?: string;
 }
 
-export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
+export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType, onDirtyChange, onRequestReturn, onRequestOpenNote }: NoteEditorProps) {
   const [noteData, setNoteData] = useState({
     title: "",
     patientName: "",
@@ -165,6 +175,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
   const [medicationReorderSectionId, setMedicationReorderSectionId] = useState<string | null>(null);
   const [showLabParsingDialog, setShowLabParsingDialog] = useState(false);
   const [labParsingSectionId, setLabParsingSectionId] = useState<string | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
 
   const [showPertinentNegatives, setShowPertinentNegatives] = useState(false);
   const [pertinentNegativesSection, setPertinentNegativesSection] = useState<string | null>(null);
@@ -193,8 +204,27 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
   const [currentActiveSection, setCurrentActiveSection] = useState<string | null>(null);
   const [navigatorMode, setNavigatorMode] = useState<'hidden' | 'icons' | 'full'>('icons');
 
-  const { createNote, updateNote, isCreating: isSaving } = useNotes();
+  const { createNote, updateNote, isCreating: isSaving, notes: allNotes } = useNotes();
   const { templates } = useNoteTemplates();
+  const [timeLeft, setTimeLeft] = useState<string | null>(null);
+
+  // Countdown for auto-delete (only for saved notes with expiresAt)
+  useEffect(() => {
+    const compute = () => {
+      const exp = (note && (note as any).expiresAt) ? new Date((note as any).expiresAt as any).getTime() : null;
+      if (!exp) { setTimeLeft(null); return; }
+      const diff = exp - Date.now();
+      if (diff <= 0) { setTimeLeft('expired'); return; }
+      const mins = Math.floor(diff / 60000);
+      if (mins < 60) { setTimeLeft(`${mins}m left`); return; }
+      const hrs = Math.floor(mins / 60);
+      const rem = mins % 60;
+      setTimeLeft(`${hrs}h ${rem}m left`);
+    };
+    compute();
+    const id = setInterval(compute, 30000);
+    return () => clearInterval(id);
+  }, [note && (note as any).expiresAt]);
   const { phrases, searchPhrases } = useSmartPhrases();
   const { toast } = useToast();
   
@@ -244,6 +274,8 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
           setSelectedTemplate(template);
         }
       }
+      setIsDirty(false);
+      onDirtyChange?.(false);
     }
   }, [note, isCreating, templates]);
 
@@ -260,8 +292,17 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       });
       setSections([]);
       setSelectedTemplate(null);
+      setIsDirty(false);
+      onDirtyChange?.(false);
     }
   }, [isCreating]);
+
+  // Apply initial template type when provided (welcome -> editor handoff)
+  useEffect(() => {
+    if (isCreating && initialTemplateType && !selectedTemplate) {
+      handleTemplateChange(initialTemplateType);
+    }
+  }, [isCreating, initialTemplateType, selectedTemplate]);
 
   const handleTemplateChange = (templateType: string) => {
     const dbTemplate = templates?.find(t => t.type === templateType);
@@ -276,6 +317,8 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
         templateType,
         title: template.name
       }));
+      setIsDirty(true);
+      onDirtyChange?.(true);
     }
   };
 
@@ -317,6 +360,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
         [sectionId]: content
       }
     }));
+    if (!isDirty) { setIsDirty(true); onDirtyChange?.(true); }
 
     // Check for calc command trigger
     const cursorPosition = textarea.selectionStart;
@@ -340,8 +384,8 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       
       // Reset cursor position
       setTimeout(() => {
-        if (textarea && typeof textarea.setSelectionRange === 'function') {
-          textarea.setSelectionRange(cursorPosition - 5, cursorPosition - 5);
+        if (textarea) {
+          setCursorSafe(textarea, cursorPosition - 5);
         }
       }, 10);
       
@@ -780,7 +824,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
             if (textarea) {
               textarea.focus();
               const newCursorPos = wordStart + template.length;
-              textarea.setSelectionRange(newCursorPos, newCursorPos);
+              setCursorSafe(textarea, newCursorPos);
             }
           }, 0);
         }
@@ -1134,10 +1178,10 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     // Focus back to the textarea
     setTimeout(() => {
       const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
-      if (textarea && typeof textarea.setSelectionRange === 'function') {
+      if (textarea) {
         textarea.focus();
         const newCursorPos = wordStart + condition.length;
-        textarea.setSelectionRange(newCursorPos, newCursorPos);
+        setCursorSafe(textarea, newCursorPos);
       }
     }, 0);
   };
@@ -1167,10 +1211,10 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     // Focus back to the textarea
     setTimeout(() => {
       const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
-      if (textarea && typeof textarea.setSelectionRange === 'function') {
+      if (textarea) {
         textarea.focus();
         const newCursorPos = wordStart + allergy.length;
-        textarea.setSelectionRange(newCursorPos, newCursorPos);
+        setCursorSafe(textarea, newCursorPos);
       }
     }, 0);
   };
@@ -1218,10 +1262,10 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     // Focus back to the textarea
     setTimeout(() => {
       const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
-      if (textarea && typeof textarea.setSelectionRange === 'function') {
+      if (textarea) {
         textarea.focus();
         const newCursorPos = wordStart + formatted.length;
-        textarea.setSelectionRange(newCursorPos, newCursorPos);
+        setCursorSafe(textarea, newCursorPos);
       }
     }, 0);
   };
@@ -1251,10 +1295,10 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     // Focus back to the textarea
     setTimeout(() => {
       const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
-      if (textarea && typeof textarea.setSelectionRange === 'function') {
+      if (textarea) {
         textarea.focus();
         const newCursorPos = wordStart + medication.length;
-        textarea.setSelectionRange(newCursorPos, newCursorPos);
+        setCursorSafe(textarea, newCursorPos);
       }
     }, 0);
   };
@@ -1284,10 +1328,10 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     // Focus back to the textarea
     setTimeout(() => {
       const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
-      if (textarea && typeof textarea.setSelectionRange === 'function') {
+      if (textarea) {
         textarea.focus();
         const newCursorPos = wordStart + finding.length;
-        textarea.setSelectionRange(newCursorPos, newCursorPos);
+        setCursorSafe(textarea, newCursorPos);
       }
     }, 0);
   };
@@ -1317,10 +1361,10 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     // Focus back to the textarea
     setTimeout(() => {
       const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
-      if (textarea && typeof textarea.setSelectionRange === 'function') {
+      if (textarea) {
         textarea.focus();
         const newCursorPos = wordStart + reason.length;
-        textarea.setSelectionRange(newCursorPos, newCursorPos);
+        setCursorSafe(textarea, newCursorPos);
       }
     }, 0);
   };
@@ -1383,6 +1427,269 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
   };
 
   const [labParsingInitialTab, setLabParsingInitialTab] = useState<'paste' | 'customize' | 'global-settings' | 'preview'>('paste');
+
+  // AI dictation and processing (medications only for now)
+  const { isListening: aiIsListening, finalTranscript: aiFinalTranscript, error: aiError, startDictation: startAiDictation, stopDictation: stopAiDictation } = useDictation();
+  const [aiActiveSectionId, setAiActiveSectionId] = useState<string | null>(null);
+  const [aiProcessingSectionId, setAiProcessingSectionId] = useState<string | null>(null);
+  const [aiAwaitingProcess, setAiAwaitingProcess] = useState(false);
+  const lastProcessedRef = useRef<string>("");
+
+  const setCursorSafe = (ta: HTMLTextAreaElement, pos: number) => {
+    if (!ta || typeof ta.setSelectionRange !== 'function') return;
+    const len = (ta.value || '').length;
+    const p = Math.max(0, Math.min(pos, len));
+    ta.setSelectionRange(p, p);
+  };
+
+  const insertTextAtCaretInSection = useCallback((sectionId: string, text: string) => {
+    const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement | null;
+    const currentContent = noteData.content[sectionId] || '';
+    if (!textarea) {
+      // Fallback: append at end
+      const newContent = currentContent + (currentContent ? '\n' : '') + text;
+      setNoteData(prev => ({ ...prev, content: { ...prev.content, [sectionId]: newContent } }));
+      return;
+    }
+    const start = textarea.selectionStart ?? currentContent.length;
+    const end = textarea.selectionEnd ?? start;
+    const newContent = currentContent.slice(0, start) + text + currentContent.slice(end);
+    setNoteData(prev => ({ ...prev, content: { ...prev.content, [sectionId]: newContent } }));
+    // Restore focus and caret after React update
+    setTimeout(() => {
+      const ta = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement | null;
+      if (ta) {
+        ta.focus();
+        const newPos = start + text.length;
+        setCursorSafe(ta, newPos);
+      }
+    }, 0);
+  }, [noteData.content, setNoteData]);
+
+  // === PMH merge utilities ===
+  const parsePmhStructured = (text: string) => {
+    const lines = (text || '').split('\n');
+    const items: Array<{ title: string; details: string[] }> = [];
+    let current: { title: string; details: string[] } | null = null;
+    const numberRe = /^\s*(\d+)\)\s+(.*\S)\s*$/;
+    const detailRe = /^\s{5}-\s+(.*\S)\s*$/; // exactly 5 spaces + "- "
+    for (const raw of lines) {
+      const line = raw.replace(/\s+$/g, '');
+      const mNum = line.match(numberRe);
+      if (mNum) {
+        if (current) items.push(current);
+        current = { title: mNum[2], details: [] };
+        continue;
+      }
+      const mDet = line.match(detailRe);
+      if (mDet && current) {
+        current.details.push(mDet[1]);
+        continue;
+      }
+      // Ignore other lines silently (keeps parser robust)
+    }
+    if (current) items.push(current);
+    return items;
+  };
+
+  const normalizeTitle = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+  const normalizeDetail = (s: string) => s.replace(/\s+/g, ' ').trim();
+
+  const formatPmhStructured = (items: Array<{ title: string; details: string[] }>) => {
+    const out: string[] = [];
+    items.forEach((it, idx) => {
+      out.push(`${idx + 1}) ${it.title}`);
+      for (const d of it.details) {
+        out.push(`     - ${d}`);
+      }
+    });
+    return out.join('\n');
+  };
+
+  // Normalize a medication list into one-per-line: "Drug dose unit freq"
+  const normalizeMedicationList = (text: string) => {
+    if (!text) return '';
+    const unitMap: Array<[RegExp, string]> = [
+      [/\bmilligrams?\b/gi, 'mg'],
+      [/\bmilligram\b/gi, 'mg'],
+      [/\bgrams?\b/gi, 'g'],
+      [/\bmicrograms?\b/gi, 'mcg'],
+    ];
+    const freqMap: Array<[RegExp, string]> = [
+      [/\btwice daily\b/gi, 'BID'],
+      [/\bonce daily\b/gi, 'daily'],
+      [/\bthree times a week\b/gi, '3x/week'],
+      [/\bthree times daily\b/gi, 'TID'],
+      [/\bfour times daily\b/gi, 'QID'],
+    ];
+    const split = text
+      .replace(/\s+/g, ' ')
+      .split(/(?:\n|,|;|\band\b)+/i)
+      .map(s => s.trim())
+      .filter(Boolean);
+    const items: string[] = [];
+    const seen = new Set<string>();
+    for (let raw of split) {
+      let s = raw;
+      for (const [re, rep] of unitMap) s = s.replace(re, rep);
+      for (const [re, rep] of freqMap) s = s.replace(re, rep);
+      // Normalize spacing like "mgdaily" -> "mg daily"
+      s = s.replace(/(mg|mcg|g)(?=\w)/gi, '$1 ').replace(/\s{2,}/g, ' ').trim();
+      // Capitalize first token (drug name)
+      s = s.replace(/^([a-z])/, m => m.toUpperCase());
+      if (!s) continue;
+      if (!seen.has(s.toLowerCase())) {
+        seen.add(s.toLowerCase());
+        items.push(s);
+      }
+    }
+    return items.join('\n');
+  };
+
+  const mergePmh = (existingText: string, incomingText: string) => {
+    const existing = parsePmhStructured(existingText);
+    const incoming = parsePmhStructured(incomingText);
+    if (incoming.length === 0) return null; // nothing to merge
+    if (existing.length === 0) return formatPmhStructured(incoming);
+
+    const indexByNormTitle = new Map<string, number>();
+    existing.forEach((it, i) => indexByNormTitle.set(normalizeTitle(it.title), i));
+
+    for (const inc of incoming) {
+      const key = normalizeTitle(inc.title);
+      const idx = indexByNormTitle.get(key);
+      if (idx == null) {
+        // New diagnosis -> append to end
+        existing.push({ title: inc.title, details: [...inc.details] });
+        indexByNormTitle.set(key, existing.length - 1);
+      } else {
+        // Merge details: append any new ones not present (preserve order)
+        const cur = existing[idx];
+        const have = new Set(cur.details.map(normalizeDetail));
+        for (const d of inc.details) {
+          const nd = normalizeDetail(d);
+          if (!have.has(nd)) {
+            cur.details.push(d);
+            have.add(nd);
+          }
+        }
+      }
+    }
+    // Keep existing order; just renumber when formatting
+    return formatPmhStructured(existing);
+  };
+
+  const handleAiToggleForSection = (sectionId: string) => {
+    // Ensure textarea is focused for correct caret position
+    const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement | null;
+    if (textarea) textarea.focus();
+
+    if (aiActiveSectionId !== sectionId) {
+      // Start listening for this section
+      setAiActiveSectionId(sectionId);
+      setAiAwaitingProcess(false);
+      startAiDictation();
+      const sec = sections.find(s => s.id === sectionId);
+      const isLabs = !!sec && (sec.type === 'labs' || sec?.name?.toLowerCase().includes('lab') || sec?.name?.toLowerCase().includes('laboratory'));
+      const isPmh = !!sec && (sec.type === 'pastMedicalHistory' || sec?.name?.toLowerCase().includes('past medical history') || sec?.name?.toLowerCase().includes('pmh'));
+      toast({ title: "AI listening", description: isLabs ? "Dictate lab results. Click AI again to stop." : isPmh ? "Dictate Past Medical History. Click AI again to stop." : "Dictate medications. Click AI again to stop." });
+    } else {
+      // Stop and begin processing
+      stopAiDictation();
+      setAiAwaitingProcess(true);
+      setAiProcessingSectionId(sectionId);
+    }
+  };
+
+  // When dictation stops and we have a final transcript, send to AI and insert
+  useEffect(() => {
+    const doProcess = async () => {
+      const sectionId = aiProcessingSectionId;
+      const dictation = (aiFinalTranscript || '').trim();
+      if (!sectionId || !aiAwaitingProcess) return;
+      if (!dictation) {
+        toast({ title: "No dictation captured", description: "Try again and speak clearly.", variant: "destructive" });
+        setAiProcessingSectionId(null);
+        setAiActiveSectionId(null);
+        setAiAwaitingProcess(false);
+        return;
+      }
+      // Prevent reprocessing identical transcript
+      const key = sectionId + '::' + dictation;
+      if (lastProcessedRef.current === key) return;
+      lastProcessedRef.current = key;
+      try {
+        // Decide endpoint by section type/name
+        const sec = sections.find(s => s.id === sectionId);
+        const isLabs = !!sec && (sec.type === 'labs' || sec.name.toLowerCase().includes('lab') || sec.name.toLowerCase().includes('laboratory'));
+        const isMeds = !!sec && (sec.type === 'medications' || sec.name.toLowerCase().includes('medication') || sec.name.toLowerCase().includes('meds'));
+        const isPmh = !!sec && (sec.type === 'pastMedicalHistory' || sec.name.toLowerCase().includes('past medical history') || sec.name.toLowerCase().includes('pmh'));
+        const endpoint = isLabs ? '/api/ai/labs' : isPmh ? '/api/ai/pmh' : '/api/ai/medications';
+        const resp = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dictation })
+        });
+        if (!resp.ok) {
+          throw new Error((await resp.json().catch(() => ({ message: 'AI service error' }))).message || 'AI service error');
+        }
+        const data = await resp.json();
+        const cleaned: string = (data?.text || '').toString();
+        if (!cleaned) throw new Error('Empty AI response');
+        if (isPmh) {
+          const currentContent = noteData.content[sectionId] || '';
+          const merged = mergePmh(currentContent, cleaned);
+          if (merged) {
+            setNoteData(prev => ({ ...prev, content: { ...prev.content, [sectionId]: merged } }));
+            // Focus to end of section after merge
+            setTimeout(() => {
+              const ta = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement | null;
+              if (ta) {
+                ta.focus();
+                setCursorSafe(ta, (ta.value || '').length);
+              }
+            }, 0);
+            toast({ title: 'PMH updated', description: 'Merged into Past Medical History.' });
+          } else {
+            // If parsing failed, fall back to caret insert
+            insertTextAtCaretInSection(sectionId, cleaned);
+            toast({ title: 'PMH inserted', description: 'Added to Past Medical History.' });
+          }
+        } else {
+          if (isMeds) {
+            const normalized = normalizeMedicationList(cleaned);
+            insertTextAtCaretInSection(sectionId, normalized || cleaned);
+            toast({ title: 'Medications inserted', description: 'Medication list normalized to one per line.' });
+          } else {
+            insertTextAtCaretInSection(sectionId, cleaned);
+            toast({ title: 'Labs inserted', description: 'AI parsed and formatted your lab results.' });
+          }
+        }
+      } catch (err: any) {
+        // Fallback: insert raw dictation at caret if AI fails or returns empty
+        if (dictation) {
+          insertTextAtCaretInSection(sectionId!, dictation);
+          toast({ title: 'Inserted raw dictation', description: 'AI unavailable; used your original text.' });
+        } else {
+          toast({ title: "AI error", description: err?.message || 'Failed to process dictation', variant: 'destructive' });
+        }
+      } finally {
+        setAiProcessingSectionId(null);
+        setAiActiveSectionId(null);
+        setAiAwaitingProcess(false);
+      }
+    };
+    if (!aiIsListening && aiAwaitingProcess) {
+      void doProcess();
+    }
+  }, [aiIsListening, aiAwaitingProcess, aiProcessingSectionId, aiFinalTranscript, insertTextAtCaretInSection, toast, sections]);
+
+  // Surface dictation errors
+  useEffect(() => {
+    if (aiError) {
+      toast({ title: 'Dictation error', description: aiError, variant: 'destructive' });
+    }
+  }, [aiError, toast]);
 
   const handleLabParsing = (sectionId: string, initialTab: 'paste' | 'customize' | 'global-settings' | 'preview' = 'paste') => {
     setLabParsingSectionId(sectionId);
@@ -1527,9 +1834,9 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     try {
       const notePayload = {
         title: noteData.title,
-        patientName: noteData.patientName,
-        patientMrn: noteData.patientMrn,
-        patientDob: noteData.patientDob,
+        patientName: "",
+        patientMrn: "",
+        patientDob: "",
         templateType: noteData.templateType,
         templateId: selectedTemplate?.id,
         content: noteData.content,
@@ -1544,6 +1851,8 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       }
 
       onNoteSaved(savedNote);
+      setIsDirty(false);
+      onDirtyChange?.(false);
     } catch (error) {
       console.error("Error saving note:", error);
     }
@@ -1553,9 +1862,9 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     try {
       const notePayload = {
         title: noteData.title,
-        patientName: noteData.patientName,
-        patientMrn: noteData.patientMrn,
-        patientDob: noteData.patientDob,
+        patientName: "",
+        patientMrn: "",
+        patientDob: "",
         templateType: noteData.templateType,
         templateId: selectedTemplate?.id,
         content: noteData.content,
@@ -1570,40 +1879,32 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       }
 
       onNoteSaved(savedNote);
+      setIsDirty(false);
+      onDirtyChange?.(false);
     } catch (error) {
       console.error("Error finalizing note:", error);
     }
   };
 
-  const handleExport = () => {
-    // Create the same comprehensive plain text format as copy function
-    let exportText = `${noteData.title}\n`;
-    exportText += `${'='.repeat(noteData.title.length)}\n\n`;
-    
-    // Patient information section
-    if (noteData.patientName || noteData.patientMrn || noteData.patientDob) {
-      exportText += `PATIENT INFORMATION:\n`;
-      exportText += `-`.repeat(20) + `\n`;
-      if (noteData.patientName.trim()) exportText += `Patient: ${noteData.patientName}\n`;
-      if (noteData.patientMrn.trim()) exportText += `MRN: ${noteData.patientMrn}\n`;
-      if (noteData.patientDob.trim()) exportText += `DOB: ${noteData.patientDob}\n`;
-      exportText += `\n`;
-    }
-
-    // Note sections with content
-    sections.forEach((section, index) => {
+  const buildPlainText = () => {
+    let text = `${noteData.title}\n`;
+    text += `${'='.repeat(noteData.title.length)}\n\n`;
+    // Sections
+    sections.forEach((section) => {
       const content = noteData.content[section.id] || '';
       if (content.trim()) {
-        exportText += `${section.name.toUpperCase()}:\n`;
-        exportText += `-`.repeat(section.name.length + 1) + `\n`;
-        exportText += `${content.trim()}\n\n`;
+        text += `${section.name.toUpperCase()}:\n`;
+        text += `-`.repeat(section.name.length + 1) + `\n`;
+        text += `${content.trim()}\n\n`;
       }
     });
+    text = text.trim();
+    // No app signature or date in exported text
+    return text;
+  };
 
-    // Remove trailing newlines and add footer
-    exportText = exportText.trim();
-    exportText += `\n\n---\nGenerated from Medical Documentation System\nDate: ${new Date().toLocaleString()}`;
-
+  const exportAsTxt = () => {
+    const exportText = buildPlainText();
     try {
       const blob = new Blob([exportText], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
@@ -1614,21 +1915,59 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      
-      toast({
-        title: "✓ Export Complete",
-        description: `Note exported as plain text file: ${noteData.title.replace(/\s+/g, '_').replace(/[^\w-]/g, '') || 'medical_note'}.txt`,
-        duration: 3000,
-      });
+      toast({ title: "✓ Exported", description: "Saved as .txt" });
     } catch (error) {
-      console.error("Error exporting file:", error);
-      toast({
-        title: "Export Failed",
-        description: "Unable to export file. Please try again.",
-        variant: "destructive",
-        duration: 4000,
-      });
+      console.error("Error exporting TXT:", error);
+      toast({ title: "Export failed", variant: "destructive" });
     }
+  };
+
+  const exportAsDoc = () => {
+    // Word-compatible HTML (.doc)
+    const content = buildPlainText()
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/\n/g, '<br/>');
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${noteData.title}</title></head><body style="font-family:Calibri,Arial,sans-serif;white-space:normal;">${content}</body></html>`;
+    try {
+      const blob = new Blob([html], { type: 'application/msword' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${noteData.title.replace(/\s+/g, '_').replace(/[^\w-]/g, '') || 'medical_note'}.doc`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast({ title: "✓ Exported", description: "Saved as Word (.doc)" });
+    } catch (error) {
+      console.error("Error exporting DOC:", error);
+      toast({ title: "Export failed", variant: "destructive" });
+    }
+  };
+
+  const exportAsPdf = () => {
+    // Print-friendly PDF via browser print dialog
+    const win = window.open('', '_blank');
+    if (!win) return;
+    const safeTitle = noteData.title.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const sectionsHtml = sections.map(s => {
+      const c = (noteData.content[s.id] || '').trim();
+      if (!c) return '';
+      return `<h2 style="font-size:16px;margin:16px 0 8px;">${s.name}</h2><div style="white-space:pre-wrap;">${c.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>`;
+    }).join('');
+    win.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${safeTitle}</title>
+      <style>body{font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial;line-height:1.5;padding:24px;color:#111} h1{font-size:20px;margin:0 0 8px} hr{margin:16px 0;border:none;border-top:1px solid #ddd}</style>
+    </head><body>
+      <h1>${safeTitle}</h1>
+      <hr/>
+      ${sectionsHtml}
+    </body></html>`);
+    win.document.close();
+    win.focus();
+    // Delay print to allow render
+    setTimeout(() => { win.print(); }, 100);
   };
 
   const handleCopy = async () => {
@@ -1656,9 +1995,8 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
       }
     });
 
-    // Remove trailing newlines and add footer
+    // Remove trailing newlines; do not append app signature or date
     copyText = copyText.trim();
-    copyText += `\n\n---\nGenerated from Medical Documentation System\nDate: ${new Date().toLocaleString()}`;
 
     try {
       await navigator.clipboard.writeText(copyText);
@@ -1715,7 +2053,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
         textarea.focus();
         // Position cursor at the end of existing content
         const content = textarea.value || '';
-        textarea.setSelectionRange(content.length, content.length);
+        setCursorSafe(textarea, content.length);
       }
     }, 300); // Increased timeout to ensure smooth scroll completes first
   };
@@ -1724,6 +2062,16 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
     const name = sectionName?.toLowerCase() || '';
     const type = sectionType;
     
+    // ICU systems specific
+    if (name.includes('neuro')) return '🧠';
+    if (name.includes('cardio') || name.includes('cv') || name.includes('cardiovascular')) return '🫀';
+    if (name.includes('resp') || name.includes('pulm') || name.includes('respiratory') || name.includes('pulmonary')) return '🫁';
+    if (name.includes('gastro') || name === 'gi' || name.includes('abdomen') || name.includes('abdominal')) return '🍽️';
+    if (name.includes('nephro') || name.includes('renal') || name.includes('metabolic')) return '💧';
+    if (name.includes('infect')) return '🦠';
+    if (name.includes('hema') || name.includes('hematology')) return '🩸';
+
+    // General sections
     if (type === 'chiefComplaint' || name.includes('chief complaint') || name.includes('reason') || sectionId === 'reason' || sectionId === 'chief') return '📋';
     if (type === 'historyPresentIllness' || name.includes('hpi') || name.includes('history of present') || sectionId === 'hpi' || sectionId === 'evolution') return '📖';
     if (type === 'pastMedicalHistory' || name.includes('past medical') || name.includes('pmh')) return '🏥';
@@ -1760,32 +2108,36 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
-      {/* Top Bar */}
-      <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center space-x-6">
-          <div>
-            <Input
-              value={noteData.title}
-              onChange={(e) => setNoteData(prev => ({ ...prev, title: e.target.value }))}
-              className="text-lg font-medium border-none p-0 h-auto focus-visible:ring-0 bg-transparent text-gray-900 dark:text-gray-100"
-              placeholder="Untitled Note"
-              data-testid="input-note-title"
-            />
-            <div className="text-xs text-gray-400 dark:text-gray-500 flex items-center space-x-3 mt-1">
-              <span>{new Date().toLocaleDateString()}</span>
-              <span className="text-gray-300 dark:text-gray-600">•</span>
-              <span>{selectedTemplate?.name || "No Template"}</span>
-              <span className="text-gray-300 dark:text-gray-600">•</span>
-              <Badge 
-                variant={note?.status === "finalized" ? "default" : "secondary"}
-                className="text-xs px-2 py-0.5 font-normal"
-              >
-                {note?.status === "finalized" ? "Finalized" : "Draft"}
-              </Badge>
-            </div>
+      {/* Top Bar - redesigned */}
+      <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-4 min-w-0">
+          <Input
+            value={noteData.title}
+            onChange={(e) => setNoteData(prev => ({ ...prev, title: e.target.value }))}
+            className="text-base sm:text-lg font-medium border-none p-0 h-auto focus-visible:ring-0 bg-transparent text-gray-900 dark:text-gray-100 min-w-0"
+            placeholder="Untitled Note"
+            data-testid="input-note-title"
+          />
+          <div className="hidden md:flex items-center gap-2">
+            <Select value={noteData.templateType} onValueChange={handleTemplateChange}>
+              <SelectTrigger className="h-8 w-[170px]" data-testid="header-select-template">
+                <SelectValue placeholder="Template" />
+              </SelectTrigger>
+              <SelectContent>
+                {(templates || []).map((t) => (
+                  <SelectItem key={t.id} value={t.type}>{t.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+          {/* Removed Open Recent dropdown from header */}
         </div>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center gap-2 shrink-0">
+          {timeLeft && (
+            <div className="hidden sm:flex items-center text-[11px] px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300" title="Auto-deletes 48 hours after save">
+              <Clock size={12} className="mr-1" /> {timeLeft}
+            </div>
+          )}
           <Button 
             variant="ghost" 
             size="sm"
@@ -1798,17 +2150,42 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
             {isSaving ? "Saving..." : "Save"}
           </Button>
           <Button 
-            className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 h-8"
+            variant="outline"
             size="sm"
-            onClick={handleFinalize}
-            disabled={isSaving}
-            data-testid="button-finalize-note"
+            onClick={handleCopy}
+            className="text-xs px-3"
+            data-testid="button-copy-note"
           >
-            <Check size={14} className="mr-1.5" />
-            Finalize
+            <Copy size={14} className="mr-1.5" />
+            Copy
           </Button>
-          <Button variant="ghost" size="sm" className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 px-2" data-testid="button-note-options">
-            <MoreVertical size={14} />
+          {/* Export menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button 
+                variant="outline"
+                size="sm"
+                className="text-xs px-3"
+                data-testid="button-export-note"
+              >
+                <Download size={14} className="mr-1.5" />
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={exportAsTxt}>Plain Text (.txt)</DropdownMenuItem>
+              <DropdownMenuItem onClick={exportAsDoc}>Word (.doc)</DropdownMenuItem>
+              <DropdownMenuItem onClick={exportAsPdf}>PDF (print)</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => onRequestReturn && onRequestReturn()}
+            className="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-xs px-3"
+            data-testid="button-return-welcome"
+          >
+            Return
           </Button>
         </div>
       </div>
@@ -1829,67 +2206,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
           {/* Note Content */}
           <div className="flex-1 max-w-4xl space-y-6">
           
-          {/* Patient Information Header */}
-          <Card>
-            <CardContent className="p-4">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
-                <div>
-                  <Label className="block text-xs text-gray-500 mb-1">Patient Name</Label>
-                  <Input
-                    value={noteData.patientName}
-                    onChange={(e) => setNoteData(prev => ({ ...prev, patientName: e.target.value }))}
-                    placeholder="Enter patient name"
-                    className="h-8"
-                    data-testid="input-patient-name"
-                  />
-                </div>
-                <div>
-                  <Label className="block text-xs text-gray-500 mb-1">MRN</Label>
-                  <Input
-                    value={noteData.patientMrn}
-                    onChange={(e) => setNoteData(prev => ({ ...prev, patientMrn: e.target.value }))}
-                    placeholder="Medical Record Number"
-                    className="h-8"
-                    data-testid="input-patient-mrn"
-                  />
-                </div>
-                <div>
-                  <Label className="block text-xs text-gray-500 mb-1">DOB</Label>
-                  <Input
-                    type="date"
-                    value={noteData.patientDob}
-                    onChange={(e) => setNoteData(prev => ({ ...prev, patientDob: e.target.value }))}
-                    className="h-8"
-                    data-testid="input-patient-dob"
-                  />
-                </div>
-                <div>
-                  <Label className="block text-xs text-gray-500 mb-1">Template</Label>
-                  <Select value={noteData.templateType} onValueChange={handleTemplateChange}>
-                    <SelectTrigger className="h-8" data-testid="select-note-template">
-                      <SelectValue placeholder="Select template" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {/* Local templates - only blank note */}
-                      {noteTemplates
-                        .filter(template => ['blank','icu-admission','icu-progress'].includes(template.type as string))
-                        .map((template) => (
-                        <SelectItem key={`local-${template.id}`} value={template.type}>
-                          {template.name}
-                        </SelectItem>
-                      ))}
-                      {/* Database templates */}
-                      {templates?.map((template) => (
-                        <SelectItem key={template.id} value={template.type}>
-                          {template.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          {/* Patient Information Header removed */}
 
           {/* Note Sections */}
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
@@ -1897,12 +2214,68 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
             <div key={section.id} className={`section-card ${index > 0 ? 'border-t border-gray-100' : ''}`} data-section-id={section.id}>
               {/* Hide header for blank note template */}
               {selectedTemplate?.type !== 'blank' && (
-                <div className="px-4 py-3 bg-gray-50/50">
+                <div className="px-4 py-3 bg-gray-50/70 dark:bg-gray-800/60 supports-[backdrop-filter]:backdrop-blur-sm dark:supports-[backdrop-filter]:bg-gray-800/40 transition-colors">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-medium text-gray-700 flex items-center space-x-2">
-                      <span className="text-gray-500">{getSectionIcon(section.id)}</span>
+                    <div className="flex items-center flex-wrap gap-2">
+                    <h4 className="text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center space-x-2 transition-colors">
+                      <span className="text-gray-500 dark:text-gray-400">{getSectionIcon(section.id)}</span>
                       <span>{section.name}</span>
                       {section.required && <span className="text-red-500 text-xs">*</span>}
+                      {/* Left-aligned AI button right after the section name (medications, labs, PMH) */}
+                      {(
+                        section.type === 'medications' ||
+                        section.name.toLowerCase().includes('medications') ||
+                        section.name.toLowerCase().includes('current medications') ||
+                        section.name.toLowerCase().includes('meds') ||
+                        section.type === 'labs' ||
+                        section.name.toLowerCase().includes('lab') ||
+                        section.name.toLowerCase().includes('laboratory') ||
+                        section.type === 'pastMedicalHistory' ||
+                        section.name.toLowerCase().includes('past medical history') ||
+                        section.name.toLowerCase().includes('pmh')
+                      ) && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={aiActiveSectionId === section.id ? 'default' : 'outline'}
+                              onClick={() => handleAiToggleForSection(section.id)}
+                              className={`ml-2 flex items-center gap-1 text-xs px-2 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--brand-600)] focus-visible:ring-offset-2 ${aiActiveSectionId === section.id ? 'bg-[color:var(--brand-700)] text-white' : ''}`}
+                              aria-pressed={aiActiveSectionId === section.id}
+                              aria-busy={aiProcessingSectionId === section.id}
+                              aria-label={aiActiveSectionId === section.id ? 'Stop AI dictation' : 'Start AI dictation'}
+                              data-testid={`ai-button-${section.id}`}
+                              disabled={aiProcessingSectionId === section.id}
+                            >
+                              {aiProcessingSectionId === section.id ? (
+                                <Loader2 size={12} className="animate-spin" aria-hidden="true" />
+                              ) : (
+                                <Sparkles size={12} className={aiActiveSectionId === section.id ? 'animate-pulse' : ''} aria-hidden="true" />
+                              )}
+                              AI
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {aiActiveSectionId === section.id ? 'Stop dictation' : 'Start dictation'}
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                      {(aiActiveSectionId === section.id || aiProcessingSectionId === section.id) && (
+                        <span aria-live="polite" className="sr-only">
+                          {aiProcessingSectionId === section.id
+                            ? (section.type === 'pastMedicalHistory' || section.name.toLowerCase().includes('past medical history') || section.name.toLowerCase().includes('pmh')
+                                ? 'Processing PMH'
+                                : (section.type === 'labs' || section.name.toLowerCase().includes('lab') || section.name.toLowerCase().includes('laboratory')
+                                  ? 'Processing labs'
+                                  : 'Processing medications'))
+                            : (section.type === 'pastMedicalHistory' || section.name.toLowerCase().includes('past medical history') || section.name.toLowerCase().includes('pmh')
+                                ? 'Listening for Past Medical History'
+                                : (section.type === 'labs' || section.name.toLowerCase().includes('lab') || section.name.toLowerCase().includes('laboratory')
+                                  ? 'Listening for lab results'
+                                  : 'Listening for medications'))}
+                        </span>
+                      )}
                     </h4>
                   <div className="flex items-center space-x-2">
                     {/* Imaging Autocomplete Button - Show for imaging or radiology sections */}
@@ -1938,16 +2311,25 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                       section.name.toLowerCase().includes('current medications') ||
                       section.name.toLowerCase().includes('meds')) && (
                       <div className="flex items-center gap-1">
+                        {/* AI button moved next to section name (left side). Keep live status here for SR. */}
+                        <span aria-live="polite" className="sr-only">
+                          {aiProcessingSectionId === section.id
+                            ? 'Processing medications'
+                            : aiActiveSectionId === section.id
+                              ? 'Listening for medications'
+                              : 'AI idle'}
+                        </span>
                         <Button
                           type="button"
                           size="sm"
                           variant="outline"
                           onClick={() => handleMedicationReorder(section.id)}
-                          className="flex items-center gap-1 text-xs px-2"
+                          className="flex items-center gap-1 text-xs px-2 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--brand-600)] focus-visible:ring-offset-2"
                           data-testid={`manual-reorder-button-${section.id}`}
                           title="Click medications in order to rearrange"
+                          aria-label="Open manual medication reordering"
                         >
-                          <ArrowUpDown size={12} />
+                          <ArrowUpDown size={12} aria-hidden="true" />
                           Reorder
                         </Button>
                         <Button
@@ -1979,11 +2361,12 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                               });
                             }
                           }}
-                          className="flex items-center gap-1 text-xs px-2"
+                          className="flex items-center gap-1 text-xs px-2 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--brand-600)] focus-visible:ring-offset-2"
                           data-testid={`smart-reorder-button-${section.id}`}
                           title="Automatically order by therapeutic category"
+                          aria-label="Apply smart medication reorder automatically"
                         >
-                          <Shuffle size={12} />
+                          <Shuffle size={12} aria-hidden="true" />
                           Smart
                         </Button>
                       </div>
@@ -2134,40 +2517,46 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
                         </div>
                       );
                     })()}
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="text-xs text-gray-500 hover:text-gray-700"
-                      onClick={() => moveSectionUp(section.id)}
-                      disabled={sections.findIndex(s => s.id === section.id) === 0}
-                      data-testid={`button-move-section-up-${section.id}`}
-                    >
-                      <ChevronUp size={12} />
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="text-xs text-gray-500 hover:text-gray-700"
-                      onClick={() => moveSectionDown(section.id)}
-                      disabled={sections.findIndex(s => s.id === section.id) === sections.length - 1}
-                      data-testid={`button-move-section-down-${section.id}`}
-                    >
-                      <ChevronDown size={12} />
-                    </Button>
-                    {!section.required && (
+                    </div>
+                    <div className="flex items-center space-x-1 ml-auto">
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        className="text-xs text-red-500 hover:text-red-700"
-                        onClick={() => removeSection(section.id)}
-                        data-testid={`button-remove-section-${section.id}`}
+                        className="text-xs text-gray-500 hover:text-gray-700"
+                        onClick={() => moveSectionUp(section.id)}
+                        disabled={sections.findIndex(s => s.id === section.id) === 0}
+                        data-testid={`button-move-section-up-${section.id}`}
+                        aria-label="Move section up"
                       >
-                        <X size={12} />
+                        <ChevronUp size={12} />
                       </Button>
-                    )}
-                    <Button variant="ghost" size="sm" className="text-xs text-gray-500 hover:text-gray-700">
-                      <Expand size={12} />
-                    </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-xs text-gray-500 hover:text-gray-700"
+                        onClick={() => moveSectionDown(section.id)}
+                        disabled={sections.findIndex(s => s.id === section.id) === sections.length - 1}
+                        data-testid={`button-move-section-down-${section.id}`}
+                        aria-label="Move section down"
+                      >
+                        <ChevronDown size={12} />
+                      </Button>
+                      {!section.required && (
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="text-xs text-red-500 hover:text-red-700"
+                          onClick={() => removeSection(section.id)}
+                          data-testid={`button-remove-section-${section.id}`}
+                          aria-label="Remove section"
+                        >
+                          <X size={12} />
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="sm" className="text-xs text-gray-500 hover:text-gray-700" aria-label="Expand section">
+                        <Expand size={12} />
+                      </Button>
+                    </div>
                   </div>
                 </div>
                 
@@ -2394,35 +2783,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved }: NoteEditorProps) {
           ))}
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-            <div className="flex items-center space-x-3">
-              <Button variant="outline" size="sm" onClick={handleExport} data-testid="button-export-text">
-                <Download size={16} className="mr-2" />
-                Export as Text
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleCopy} data-testid="button-copy-clipboard">
-                <Copy size={16} className="mr-2" />
-                Copy to Clipboard
-              </Button>
-            </div>
-            <div className="flex items-center space-x-3">
-              <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-800">
-                Cancel
-              </Button>
-              <Button 
-                className="bg-medical-teal hover:bg-medical-teal/90 text-white"
-                size="sm"
-                onClick={handleSave}
-                disabled={isSaving}
-                data-testid="button-save-continue"
-              >
-                <Save size={16} className="mr-2" />
-                {isSaving ? "Saving..." : "Save & Continue"}
-              </Button>
-            </div>
-          </div>
-          {/* ICU Right Action Bar floating (fixed) */}
+          {/* Bottom action bar removed; actions consolidated in header */}
         </div>
         {isIcuTemplateType(noteData.templateType) && (
           <div className="hidden xl:block fixed right-6 top-24 z-40">

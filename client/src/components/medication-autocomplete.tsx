@@ -102,9 +102,9 @@ function DosageFrequencyPopup({ medication, position, onSelect, onClose }: Dosag
         <CardContent className="p-3">
           <div className="mb-3">
             <div className="flex items-center gap-2 mb-2">
-              <Pill size={16} className="text-blue-600" />
+              <Pill size={16} className="text-[color:var(--brand-700)]" />
               <span className="font-medium text-sm">{medication.name}</span>
-              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+              <Badge variant="outline" className="text-xs bg-[color:var(--brand-50)] text-[color:var(--brand-700)] border-[color:var(--brand-200)]">
                 {medication.subcategory || medication.category}
               </Badge>
             </div>
@@ -112,7 +112,7 @@ function DosageFrequencyPopup({ medication, position, onSelect, onClose }: Dosag
               <div className="text-xs text-gray-400 italic mb-1">{medication.genericName}</div>
             )}
             {medication.brandNames && medication.brandNames.length > 0 && (
-              <div className="text-xs text-blue-600 mb-1">
+              <div className="text-xs text-[color:var(--brand-700)] mb-1">
                 Brand names: {medication.brandNames.join(', ')}
               </div>
             )}
@@ -441,12 +441,12 @@ export function MedicationAutocomplete({
                         <span className="text-xs text-gray-400 italic">{medication.genericName}</span>
                       )}
                       {medication.brandNames && medication.brandNames.length > 0 && (
-                        <span className="text-xs text-blue-600">
+                        <span className="text-xs text-[color:var(--brand-700)]">
                           Brand: {medication.brandNames.slice(0, 2).join(', ')}{medication.brandNames.length > 2 ? '...' : ''}
                         </span>
                       )}
                       <div className="flex items-center gap-1 flex-wrap">
-                        <Badge variant="outline" className="text-xs px-1 py-0 bg-blue-50 text-blue-700 border-blue-200">
+                        <Badge variant="outline" className="text-xs px-1 py-0 bg-[color:var(--brand-50)] text-[color:var(--brand-700)] border-[color:var(--brand-200)]">
                           {medication.subcategory || medication.category}
                         </Badge>
                         {medication.indication && (

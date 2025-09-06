@@ -21,37 +21,40 @@ interface ImportSmartPhraseDialogProps {
 }
 
 export function ImportSmartPhraseDialog({ open, onOpenChange }: ImportSmartPhraseDialogProps) {
-  const [shareableId, setShareableId] = useState("");
+  const [codesInput, setCodesInput] = useState("");
   const [isImporting, setIsImporting] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const handleImport = async () => {
-    if (!shareableId.trim()) {
+    const raw = codesInput.trim();
+    if (!raw) {
       toast({
         title: "Error",
-        description: "Please enter a shareable ID",
+        description: "Please enter one or more short codes",
         variant: "destructive",
       });
       return;
     }
-
+    const codes = raw.split(/[\s,]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+    if (codes.length === 0) {
+      toast({ title: "Error", description: "No valid codes provided", variant: "destructive" });
+      return;
+    }
     setIsImporting(true);
     try {
-      await apiRequest(`/api/smart-phrases/import/${shareableId.trim()}`, {
-        method: "POST",
-      });
+      await apiRequest('POST', `/api/share/smart-phrases/import`, { codes }, { timeoutMs: 90000 });
       
       toast({
         title: "Success",
-        description: "Smart phrase imported successfully",
+        description: codes.length > 1 ? "Smart phrases imported" : "Smart phrase imported successfully",
       });
       
       // Refresh smart phrases list
       queryClient.invalidateQueries({ queryKey: ["/api/smart-phrases"] });
       
       // Reset form and close dialog
-      setShareableId("");
+      setCodesInput("");
       onOpenChange(false);
     } catch (error: any) {
       toast({
@@ -66,7 +69,7 @@ export function ImportSmartPhraseDialog({ open, onOpenChange }: ImportSmartPhras
 
   const handleOpenChange = (newOpen: boolean) => {
     if (!isImporting) {
-      setShareableId("");
+      setCodesInput("");
       onOpenChange(newOpen);
     }
   };
@@ -80,23 +83,21 @@ export function ImportSmartPhraseDialog({ open, onOpenChange }: ImportSmartPhras
             Import Smart Phrase
           </DialogTitle>
           <DialogDescription>
-            Enter the shareable ID of a smart phrase to import it to your library.
+            Enter one or more 4‑character short codes to import smart phrases.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label htmlFor="shareable-id">Shareable ID</Label>
+            <Label htmlFor="codes">Short Codes</Label>
             <Input
-              id="shareable-id"
-              placeholder="Enter smart phrase shareable ID..."
-              value={shareableId}
-              onChange={(e) => setShareableId(e.target.value)}
+              id="codes"
+              placeholder="e.g. AB12, CD34 EF56"
+              value={codesInput}
+              onChange={(e) => setCodesInput(e.target.value)}
               disabled={isImporting}
-              data-testid="input-shareable-id"
+              data-testid="input-short-codes"
             />
-            <p className="text-sm text-gray-500">
-              This is a 12-character code that starts with letters like "A1B2C3D4E5F6"
-            </p>
+            <p className="text-sm text-gray-500">Separate multiple codes with spaces or commas.</p>
           </div>
         </div>
         <DialogFooter>
@@ -110,7 +111,7 @@ export function ImportSmartPhraseDialog({ open, onOpenChange }: ImportSmartPhras
           </Button>
           <Button
             onClick={handleImport}
-            disabled={!shareableId.trim() || isImporting}
+            disabled={!codesInput.trim() || isImporting}
             data-testid="button-confirm-import"
           >
             {isImporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

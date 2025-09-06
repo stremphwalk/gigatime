@@ -334,7 +334,7 @@ export function ImagingAutocomplete({ onSelect, trigger, placeholder = "Search i
                 <h4 className="text-sm font-semibold mb-2">
                   Select Pertinent Negatives:
                   {selectedNegatives.length > 0 && (
-                    <span className="ml-2 text-xs text-blue-600">
+                    <span className="ml-2 text-xs text-[color:var(--brand-700)]">
                       ({selectedNegatives.length} selected)
                     </span>
                   )}
@@ -346,7 +346,7 @@ export function ImagingAutocomplete({ onSelect, trigger, placeholder = "Search i
                       className={cn(
                         "flex items-center justify-between p-2 rounded border cursor-pointer transition-colors",
                         selectedNegatives.includes(negative)
-                          ? "bg-blue-50 border-blue-200"
+                          ? "bg-[color:var(--brand-50)] border-[color:var(--brand-200)]"
                           : "hover:bg-gray-50"
                       )}
                       onClick={() => toggleNegative(negative)}
@@ -354,7 +354,7 @@ export function ImagingAutocomplete({ onSelect, trigger, placeholder = "Search i
                     >
                       <span className="text-sm flex-1">{negative}</span>
                       {selectedNegatives.includes(negative) && (
-                        <Check className="h-4 w-4 text-blue-600" />
+                        <Check className="h-4 w-4 text-[color:var(--brand-700)]" />
                       )}
                     </div>
                   ))}

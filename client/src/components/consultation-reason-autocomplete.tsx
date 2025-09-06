@@ -129,13 +129,13 @@ export function ConsultationReasonAutocomplete({
       <Card className="shadow-lg border border-gray-200">
         <CardContent className="p-0">
           <div className="max-h-64 overflow-y-auto">
-            <div className="p-2 bg-blue-50 border-b flex items-center gap-2">
-              <FileText size={14} className="text-blue-600" />
-              <span className="text-xs font-medium text-blue-700">
+            <div className="p-2 bg-[color:var(--brand-50)] border-b flex items-center gap-2">
+              <FileText size={14} className="text-[color:var(--brand-700)]" />
+              <span className="text-xs font-medium text-[color:var(--brand-700)]">
                 {type === 'admission' ? 'Admission' : 'Consultation'} Reasons
               </span>
               {suggestions.some(s => s.isCustom) && (
-                <span className="text-xs text-blue-600 ml-auto">+ Custom</span>
+                <span className="text-xs text-[color:var(--brand-700)] ml-auto">+ Custom</span>
               )}
             </div>
             {suggestions.map((suggestion, index) => (
@@ -145,7 +145,7 @@ export function ConsultationReasonAutocomplete({
                 size="sm"
                 className={cn(
                   "w-full justify-start text-left h-auto py-2 px-3 rounded-none border-b border-gray-50 last:border-b-0",
-                  index === selectedIndex && "bg-blue-50 text-blue-900",
+                  index === selectedIndex && "bg-[color:var(--brand-50)] text-slate-900",
                   suggestion.isPriority && "bg-yellow-50 border-yellow-200"
                 )}
                 onClick={(e) => handleReasonSelect(suggestion.text, e)}
@@ -155,7 +155,7 @@ export function ConsultationReasonAutocomplete({
                   {suggestion.isPriority ? (
                     <Star size={16} className="text-yellow-600 flex-shrink-0 fill-yellow-600" />
                   ) : (
-                    <FileText size={16} className="text-blue-600 flex-shrink-0" />
+                    <FileText size={16} className="text-[color:var(--brand-700)] flex-shrink-0" />
                   )}
                   <span className={cn(
                     "font-medium text-sm flex-1",

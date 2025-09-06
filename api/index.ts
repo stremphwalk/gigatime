@@ -7,6 +7,7 @@ import { verifyClerkToken, syncClerkUser } from "../server/clerkAuth.js";
 import session from "express-session";
 import * as schemas from "../shared/schema.js";
 import { z } from "zod";
+import { eq, and } from "drizzle-orm";
 
 // Create Express app
 const app = express();
@@ -21,12 +22,22 @@ if (!process.env.DATABASE_URL && process.env.POSTGRES_URL) {
 
 // Initialize routes only once
 let routesInitialized = false;
+// Simple per-user rate limiter for team joins (persisted across invocations)
+const joinRate: Map<string, { count: number; resetAt: number }> = new Map();
 
 async function initializeRoutes() {
   if (routesInitialized) return;
   
   try {
     console.log("[InitRoutes] Starting route initialization");
+    // Ensure required DB tables/columns exist in deployment
+    try {
+      console.log("[InitRoutes] Ensuring core DB schema...");
+      await storage.ensureCoreSchema();
+      console.log("[InitRoutes] Core DB schema ensured");
+    } catch (schemaErr) {
+      console.error("[InitRoutes] Failed ensuring schema (will continue):", schemaErr);
+    }
   } catch (error) {
     console.error("[InitRoutes] Error during initialization:", error);
     throw error;
@@ -158,6 +169,7 @@ async function initializeRoutes() {
   // Note templates endpoint
   app.get("/api/note-templates", requireAuth, async (req, res) => {
     try {
+      try { await storage.ensureCoreSchema(); } catch {}
       const userId = getCurrentUserId(req);
       
       const existingTemplates = await storage.getNoteTemplates();
@@ -248,6 +260,8 @@ async function initializeRoutes() {
     }, 25000);
     
     try {
+      // Last-mile ensure in case of cold start function without init
+      try { await storage.ensureCoreSchema(); } catch {}
       console.log("[POST /api/note-templates] Getting user ID...");
       const userId = getCurrentUserId(req);
       console.log("[POST /api/note-templates] User ID extracted:", userId);
@@ -311,9 +325,12 @@ async function initializeRoutes() {
       }
       
       console.log("[POST /api/note-templates] Sending error response", { statusCode: 500 });
+      const anyErr: any = error;
       return res.status(500).json({ 
         message: "Failed to create note template", 
-        error: error instanceof Error ? error.message : "Unknown error" 
+        error: anyErr?.message || String(error),
+        code: anyErr?.code,
+        detail: anyErr?.detail,
       });
     }
   });
@@ -323,9 +340,33 @@ async function initializeRoutes() {
     res.json({ apiKey: process.env.DEEPGRAM_API_KEY });
   });
 
+  // Initialize user (parity with server routes)
+  app.post("/api/init-user", requireAuth, async (req, res) => {
+    try {
+      try { await storage.ensureCoreSchema(); } catch {}
+      const userId = getCurrentUserId(req);
+      let user = await storage.getUser(userId);
+      if (!user) {
+        user = await storage.createUser({
+          id: userId,
+          email: "doctor@hospital.com",
+          firstName: "Dr. Sarah",
+          lastName: "Mitchell",
+          specialty: "Emergency Medicine",
+        });
+      }
+      res.json({ message: "User initialized", user });
+    } catch (error) {
+      const anyErr: any = error;
+      console.error("[Init-User] Error initializing user:", anyErr);
+      res.status(500).json({ message: "Failed to initialize user", error: anyErr?.message || String(error) });
+    }
+  });
+
   // Smart phrase routes
   app.get("/api/smart-phrases", requireAuth, async (req, res) => {
     try {
+      try { await storage.ensureCoreSchema(); } catch {}
       const userId = getCurrentUserId(req);
       
       // Ensure user exists
@@ -373,8 +414,94 @@ async function initializeRoutes() {
     }
   });
 
+  // Share/export short codes
+  app.post('/api/share/:type/export', requireAuth, async (req: any, res) => {
+    try { await storage.ensureCoreSchema(); } catch {}
+    const { type } = req.params;
+    const { ids } = req.body as { ids: string[] };
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids required' });
+    try {
+      if (type === 'smart-phrases') {
+        const rows = await storage.db.select().from(schemas.smartPhrases).where((schemas.smartPhrases.id as any).in(ids as any));
+        const codes: string[] = [];
+        for (const r of rows) {
+          let code = (r as any).shortCode as string | null;
+          if (!code) {
+            const gen = await (storage as any).generateUniqueShortCodeFor('smartPhrases');
+            await storage.updateSmartPhrase((r as any).id, { shortCode: gen } as any);
+            code = gen;
+          }
+          codes.push(code as string);
+        }
+        return res.json({ type, codes });
+      } else if (type === 'note-templates') {
+        const rows = await storage.db.select().from(schemas.noteTemplates).where((schemas.noteTemplates.id as any).in(ids as any));
+        const codes: string[] = [];
+        for (const r of rows) {
+          let code = (r as any).shortCode as string | null;
+          if (!code) {
+            const gen = await (storage as any).generateUniqueShortCodeFor('noteTemplates');
+            await storage.updateNoteTemplate((r as any).id, { shortCode: gen } as any);
+            code = gen;
+          }
+          codes.push(code as string);
+        }
+        return res.json({ type, codes });
+      } else if (type === 'autocomplete-items') {
+        const rows = await storage.db.select().from(schemas.autocompleteItems).where((schemas.autocompleteItems.id as any).in(ids as any));
+        const codes: string[] = [];
+        for (const r of rows) {
+          let code = (r as any).shortCode as string | null;
+          if (!code) {
+            const gen = await (storage as any).generateUniqueShortCodeFor('autocompleteItems');
+            await storage.updateAutocompleteItem((r as any).id, { shortCode: gen } as any);
+            code = gen;
+          }
+          codes.push(code as string);
+        }
+        return res.json({ type, codes });
+      }
+      return res.status(400).json({ error: 'Unsupported type' });
+    } catch (err) {
+      console.error('[Share Export] Error:', err);
+      return res.status(500).json({ error: 'Export failed' });
+    }
+  });
+
+  // Share/import by short codes
+  app.post('/api/share/:type/import', requireAuth, async (req: any, res) => {
+    try { await storage.ensureCoreSchema(); } catch {}
+    const userId = getCurrentUserId(req);
+    const { type } = req.params;
+    const { codes } = req.body as { codes: string[] };
+    if (!Array.isArray(codes) || codes.length === 0) return res.status(400).json({ error: 'codes required' });
+    try {
+      const results: any[] = [];
+      for (const codeRaw of codes) {
+        const code = String(codeRaw || '').toUpperCase().trim();
+        if (!code) continue;
+        if (type === 'smart-phrases') {
+          const r = await (storage as any).importSmartPhraseByShortCode(code, userId);
+          results.push({ code, success: r.success, message: r.message });
+        } else if (type === 'note-templates') {
+          const r = await (storage as any).importNoteTemplateByShortCode(code, userId);
+          results.push({ code, success: r.success, message: r.message });
+        } else if (type === 'autocomplete-items') {
+          const r = await (storage as any).importAutocompleteByShortCode(code, userId);
+          results.push({ code, success: r.success, message: r.message });
+        }
+      }
+      return res.json({ type, results });
+    } catch (err) {
+      console.error('[Share Import] Error:', err);
+      return res.status(500).json({ error: 'Import failed' });
+    }
+  });
+
   app.post("/api/smart-phrases", requireAuth, async (req, res) => {
     try {
+      // Ensure schema before write
+      try { await storage.ensureCoreSchema(); } catch {}
       const userId = getCurrentUserId(req);
       
       // Ensure user exists
@@ -417,7 +544,18 @@ async function initializeRoutes() {
         delete body.options;
       }
       const phraseData = schemas.insertSmartPhraseSchema.parse({ ...body, userId });
-      const phrase = await storage.createSmartPhrase(phraseData);
+      let phrase;
+      try {
+        phrase = await storage.createSmartPhrase(phraseData);
+      } catch (dbErr: any) {
+        // On undefined table/column, attempt to ensure schema and retry once
+        if (dbErr?.code === '42P01' || dbErr?.code === '42703') {
+          await storage.ensureCoreSchema();
+          phrase = await storage.createSmartPhrase(phraseData);
+        } else {
+          throw dbErr;
+        }
+      }
       
       const elements = Array.isArray((phrase as any)?.elements) ? (phrase as any).elements : [];
       let type: any = 'text';
@@ -433,7 +571,12 @@ async function initializeRoutes() {
       res.json({ ...phrase, type, options });
     } catch (error) {
       console.error("Error creating smart phrase:", error);
-      res.status(500).json({ message: "Failed to create smart phrase" });
+      const anyErr: any = error;
+      res.status(500).json({ 
+        message: "Failed to create smart phrase",
+        code: anyErr?.code,
+        detail: anyErr?.detail || anyErr?.message || String(error),
+      });
     }
   });
 
@@ -466,13 +609,15 @@ async function initializeRoutes() {
       res.json({ message: "Autocomplete table initialized successfully" });
     } catch (error) {
       console.error("[InitAutocomplete] Error:", error);
-      res.status(500).json({ message: "Failed to initialize table", error: error.message });
+      const anyErr: any = error;
+      res.status(500).json({ message: "Failed to initialize table", error: anyErr?.message || String(error) });
     }
   });
 
   // Autocomplete items endpoints
   app.get("/api/autocomplete-items", requireAuth, async (req, res) => {
     try {
+      try { await storage.ensureCoreSchema(); } catch {}
       const userId = getCurrentUserId(req);
       const category = req.query.category as string;
       
@@ -554,6 +699,8 @@ async function initializeRoutes() {
       
       const itemData = schemas.insertAutocompleteItemSchema.parse({ ...req.body, userId });
       
+      // Ensure schema before write
+      try { await storage.ensureCoreSchema(); } catch {}
       let item;
       try {
         item = await storage.createAutocompleteItem(itemData);
@@ -562,24 +709,7 @@ async function initializeRoutes() {
         
         // Try to create the table if it doesn't exist
         try {
-          await storage.db.execute(`
-            CREATE TABLE IF NOT EXISTS autocomplete_items (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                text VARCHAR(500) NOT NULL,
-                category VARCHAR(100) NOT NULL,
-                is_priority BOOLEAN DEFAULT false,
-                dosage VARCHAR(100),
-                frequency VARCHAR(100),
-                description TEXT,
-                user_id VARCHAR NOT NULL,
-                created_at TIMESTAMP DEFAULT NOW(),
-                updated_at TIMESTAMP DEFAULT NOW()
-            );
-            
-            CREATE INDEX IF NOT EXISTS idx_autocomplete_items_user_id ON autocomplete_items(user_id);
-            CREATE INDEX IF NOT EXISTS idx_autocomplete_items_category ON autocomplete_items(category);
-            CREATE INDEX IF NOT EXISTS idx_autocomplete_items_priority ON autocomplete_items(is_priority);
-          `);
+          await storage.ensureCoreSchema();
           
           console.log("[Autocomplete] Table created successfully, retrying create");
           
@@ -606,7 +736,12 @@ async function initializeRoutes() {
         });
       }
       
-      res.status(500).json({ message: "Failed to create autocomplete item" });
+      const anyErr: any = error;
+      res.status(500).json({ 
+        message: "Failed to create autocomplete item",
+        code: anyErr?.code,
+        detail: anyErr?.detail || anyErr?.message || String(error)
+      });
     }
   });
 
@@ -686,6 +821,420 @@ async function initializeRoutes() {
         message: "Failed to initialize",
         error: error instanceof Error ? error.message : "Unknown error"
       });
+    }
+  });
+
+  // -------------------------
+  // Teams management routes
+  // -------------------------
+  async function ensureTeamMember(userId: string, teamId: string) {
+    const members = await storage.getTeamMembers(teamId);
+    const isMember = members.some(m => m.userId === userId);
+    if (!isMember) {
+      const err: any = new Error('Forbidden');
+      err.status = 403;
+      throw err;
+    }
+    return members;
+  }
+
+  app.get("/api/teams", requireAuth, async (req, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      try { await storage.deleteExpiredTeams(); } catch {}
+      const userTeams = await storage.getUserTeams(userId);
+      res.json(userTeams);
+    } catch (error) {
+      console.error("[Teams] Error fetching teams:", error);
+      res.status(500).json({ error: "Failed to fetch teams" });
+    }
+  });
+
+  app.post("/api/teams/create", requireAuth, async (req, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      try { await storage.deleteExpiredTeams(); } catch {}
+      const { name, description } = req.body as { name: string; description?: string };
+
+      if (!name || !name.trim()) {
+        return res.status(400).json({ error: "Team name is required" });
+      }
+
+      // Ensure user exists for FK constraints
+      let user = await storage.getUser(userId);
+      if (!user) {
+        const claims: any = (req as any).user?.claims || (req as any).user || {};
+        user = await storage.createUser({
+          id: userId,
+          email: claims.email || 'user@example.com',
+          firstName: claims.first_name || claims.given_name || claims.name?.split(' ')[0] || 'User',
+          lastName: claims.last_name || claims.family_name || claims.name?.split(' ').slice(1).join(' ') || '',
+          specialty: 'General Practice',
+        } as any);
+      }
+
+      const teamData = {
+        name: name.trim(),
+        description: description?.trim() || null,
+        createdById: userId,
+        groupCode: await storage.generateUniqueGroupCode(),
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      } as schemas.InsertTeam;
+
+      const newTeam = await storage.createTeam(teamData);
+      res.json(newTeam);
+    } catch (error: any) {
+      console.error("[Teams] Error creating team:", error);
+      res.status(500).json({ 
+        error: "Failed to create team",
+        detail: error?.message || String(error)
+      });
+    }
+  });
+
+  app.post("/api/teams/join", requireAuth, async (req, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      try { await storage.deleteExpiredTeams(); } catch {}
+      const { groupCode } = req.body as { groupCode?: string };
+
+      if (!groupCode || !groupCode.trim()) {
+        return res.status(400).json({ error: "Group code is required" });
+      }
+
+      // Ensure user exists for FK constraints
+      let user = await storage.getUser(userId);
+      if (!user) {
+        const claims: any = (req as any).user?.claims || (req as any).user || {};
+        user = await storage.createUser({
+          id: userId,
+          email: claims.email || 'user@example.com',
+          firstName: claims.first_name || claims.given_name || claims.name?.split(' ')[0] || 'User',
+          lastName: claims.last_name || claims.family_name || claims.name?.split(' ').slice(1).join(' ') || '',
+          specialty: 'General Practice',
+        } as any);
+      }
+
+      const now = Date.now();
+      const rl = joinRate.get(userId);
+      if (!rl || rl.resetAt < now) {
+        joinRate.set(userId, { count: 0, resetAt: now + 60 * 60 * 1000 });
+      }
+      const current = joinRate.get(userId)!;
+      if (current.count >= 20) {
+        return res.status(429).json({ error: "Too many join attempts. Try again later." });
+      }
+      current.count++;
+
+      const result = await storage.joinTeamByGroupCode(groupCode.trim(), userId);
+      if (result.success) {
+        res.json(result);
+      } else {
+        res.status(400).json({ error: result.message });
+      }
+    } catch (error) {
+      console.error("[Teams] Error joining team:", error);
+      res.status(500).json({ error: "Failed to join team" });
+    }
+  });
+
+  app.post("/api/teams/:teamId/leave", requireAuth, async (req, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const { teamId } = req.params as { teamId: string };
+      await ensureTeamMember(userId, teamId);
+      const result = await storage.leaveTeam(teamId, userId);
+      if (result.success) {
+        res.json(result);
+      } else {
+        res.status(400).json({ error: result.message });
+      }
+    } catch (error) {
+      console.error("[Teams] Error leaving team:", error);
+      res.status(500).json({ error: "Failed to leave team" });
+    }
+  });
+
+  app.get("/api/teams/:teamId/members", requireAuth, async (req, res) => {
+    try {
+      const { teamId } = req.params as { teamId: string };
+      const userId = getCurrentUserId(req);
+      await ensureTeamMember(userId, teamId);
+      const members = await storage.getTeamMembers(teamId);
+      res.json(members);
+    } catch (error) {
+      console.error("[Teams] Error fetching team members:", error);
+      res.status(500).json({ error: "Failed to fetch team members" });
+    }
+  });
+
+  // Team todos
+  app.get("/api/teams/:teamId/todos", requireAuth, async (req, res) => {
+    try {
+      const { teamId } = req.params as { teamId: string };
+      const userId = getCurrentUserId(req);
+      await ensureTeamMember(userId, teamId);
+      const todos = await storage.getTeamTodos(teamId);
+      res.json(todos);
+    } catch (error) {
+      console.error("[Teams] Error fetching team todos:", error);
+      res.status(500).json({ message: "Failed to fetch team todos" });
+    }
+  });
+
+  app.post("/api/teams/:teamId/todos", requireAuth, async (req, res) => {
+    try {
+      const { teamId } = req.params as { teamId: string };
+      const userId = getCurrentUserId(req);
+      await ensureTeamMember(userId, teamId);
+      const todoData = schemas.insertTeamTodoSchema.parse({
+        ...req.body,
+        teamId,
+        createdById: userId,
+      });
+      const todo = await storage.createTeamTodo(todoData);
+      if (Array.isArray((req.body as any).assigneeIds)) {
+        await storage.db.delete(schemas.teamTodoAssignees).where(eq(schemas.teamTodoAssignees.todoId, todo.id));
+        for (const uid of (req.body as any).assigneeIds) {
+          await storage.db.insert(schemas.teamTodoAssignees).values({ todoId: todo.id, userId: uid } as any);
+        }
+      }
+      res.json(todo);
+    } catch (error) {
+      console.error("[Teams] Error creating team todo:", error);
+      res.status(500).json({ message: "Failed to create team todo" });
+    }
+  });
+
+  app.put("/api/todos/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params as { id: string };
+      const updates = schemas.insertTeamTodoSchema.partial().parse(req.body);
+      const [row]: any = await storage.db.select().from(schemas.teamTodos).where(eq(schemas.teamTodos.id, id));
+      if (!row) return res.status(404).json({ message: 'Todo not found' });
+      await ensureTeamMember(getCurrentUserId(req), row.teamId);
+      const todo = await storage.updateTeamTodo(id, updates);
+      if (Array.isArray((req.body as any).assigneeIds)) {
+        await storage.db.delete(schemas.teamTodoAssignees).where(eq(schemas.teamTodoAssignees.todoId, id));
+        for (const uid of (req.body as any).assigneeIds) {
+          await storage.db.insert(schemas.teamTodoAssignees).values({ todoId: id, userId: uid } as any);
+        }
+      }
+      res.json(todo);
+    } catch (error) {
+      console.error("[Teams] Error updating team todo:", error);
+      res.status(500).json({ message: "Failed to update team todo" });
+    }
+  });
+
+  app.delete("/api/todos/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params as { id: string };
+      const [row]: any = await storage.db.select().from(schemas.teamTodos).where(eq(schemas.teamTodos.id, id));
+      if (!row) return res.status(404).json({ message: 'Todo not found' });
+      const userId = getCurrentUserId(req);
+      const members = await ensureTeamMember(userId, row.teamId);
+      const creatorMembership = members.find(m => m.userId === row.createdById);
+      const me = members.find(m => m.userId === userId);
+      if (creatorMembership?.role === 'admin' && me?.role !== 'admin') {
+        return res.status(403).json({ message: 'Only admin can delete this task' });
+      }
+      await storage.deleteTeamTodo(id);
+      res.json({ message: 'Deleted' });
+    } catch (error) {
+      console.error("[Teams] Error deleting team todo:", error);
+      res.status(500).json({ message: "Failed to delete team todo" });
+    }
+  });
+
+  // Team calendar
+  app.get("/api/teams/:teamId/calendar", requireAuth, async (req, res) => {
+    try {
+      const { teamId } = req.params as { teamId: string };
+      await ensureTeamMember(getCurrentUserId(req), teamId);
+      const events = await storage.getTeamCalendarEvents(teamId);
+      res.json(events);
+    } catch (error) {
+      console.error("[Teams] Error fetching team calendar:", error);
+      res.status(500).json({ message: "Failed to fetch team calendar" });
+    }
+  });
+
+  app.post("/api/teams/:teamId/calendar", requireAuth, async (req, res) => {
+    try {
+      const { teamId } = req.params as { teamId: string };
+      const userId = getCurrentUserId(req);
+      await ensureTeamMember(userId, teamId);
+      const eventData = schemas.insertTeamCalendarEventSchema.parse({ ...req.body, teamId, createdById: userId });
+      const ev = await storage.createTeamCalendarEvent(eventData);
+      res.json(ev);
+    } catch (error) {
+      console.error("[Teams] Error creating team event:", error);
+      res.status(500).json({ message: "Failed to create team event" });
+    }
+  });
+
+  app.put("/api/calendar/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params as { id: string };
+      const [row]: any = await storage.db.select().from(schemas.teamCalendarEvents).where(eq(schemas.teamCalendarEvents.id, id));
+      if (!row) return res.status(404).json({ message: 'Event not found' });
+      await ensureTeamMember(getCurrentUserId(req), row.teamId);
+      const updates = schemas.insertTeamCalendarEventSchema.partial().parse(req.body);
+      const ev = await storage.updateTeamCalendarEvent(id, updates);
+      res.json(ev);
+    } catch (error) {
+      console.error("[Teams] Error updating team event:", error);
+      res.status(500).json({ message: "Failed to update team event" });
+    }
+  });
+
+  app.delete("/api/calendar/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params as { id: string };
+      const [row]: any = await storage.db.select().from(schemas.teamCalendarEvents).where(eq(schemas.teamCalendarEvents.id, id));
+      if (!row) return res.status(404).json({ message: 'Event not found' });
+      await ensureTeamMember(getCurrentUserId(req), row.teamId);
+      await storage.deleteTeamCalendarEvent(id);
+      res.json({ message: 'Deleted' });
+    } catch (error) {
+      console.error("[Teams] Error deleting team event:", error);
+      res.status(500).json({ message: "Failed to delete team event" });
+    }
+  });
+
+  // Prolong, rename, disband, remove member
+  app.post("/api/teams/:teamId/prolong", requireAuth, async (req, res) => {
+    try {
+      const { teamId } = req.params as { teamId: string };
+      const members = await ensureTeamMember(getCurrentUserId(req), teamId);
+      const me = members.find(m => m.userId === getCurrentUserId(req));
+      if (me?.role !== 'admin') return res.status(403).json({ error: 'Only admin can prolong team' });
+      const [updated] = await storage.db
+        .update(schemas.teams)
+        .set({ expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) } as any)
+        .where(eq(schemas.teams.id, teamId))
+        .returning();
+      res.json(updated);
+    } catch (error) {
+      console.error('[Teams] Error prolonging team:', error);
+      res.status(500).json({ error: 'Failed to prolong team' });
+    }
+  });
+
+  app.post("/api/teams/:teamId/rename", requireAuth, async (req, res) => {
+    try {
+      const { teamId } = req.params as { teamId: string };
+      const { name, description } = req.body as { name?: string; description?: string | null };
+      const members = await ensureTeamMember(getCurrentUserId(req), teamId);
+      const me = members.find(m => m.userId === getCurrentUserId(req));
+      if (me?.role !== 'admin') return res.status(403).json({ error: 'Only admin can rename team' });
+      const updates: Partial<schemas.InsertTeam> = {};
+      if (typeof name === 'string') (updates as any).name = name;
+      if (typeof description !== 'undefined') (updates as any).description = description;
+      const [updated] = await storage.db
+        .update(schemas.teams)
+        .set(updates as any)
+        .where(eq(schemas.teams.id, teamId))
+        .returning();
+      res.json(updated);
+    } catch (error) {
+      console.error('Error renaming team:', error);
+      res.status(500).json({ error: 'Failed to rename team' });
+    }
+  });
+
+  app.post("/api/teams/:teamId/disband", requireAuth, async (req, res) => {
+    try {
+      const { teamId } = req.params as { teamId: string };
+      const userId = getCurrentUserId(req);
+      const members = await ensureTeamMember(userId, teamId);
+      const me = members.find(m => m.userId === userId);
+      if (me?.role !== 'admin') return res.status(403).json({ error: 'Only admin can disband team' });
+      await storage.db.delete(schemas.teams).where(eq(schemas.teams.id, teamId));
+      res.json({ message: 'Team disbanded' });
+    } catch (error) {
+      console.error('Error disbanding team:', error);
+      res.status(500).json({ error: 'Failed to disband team' });
+    }
+  });
+
+  app.post("/api/teams/:teamId/members/:memberId/remove", requireAuth, async (req, res) => {
+    try {
+      const { teamId, memberId } = req.params as { teamId: string; memberId: string };
+      const userId = getCurrentUserId(req);
+      const members = await ensureTeamMember(userId, teamId);
+      const me = members.find(m => m.userId === userId);
+      if (me?.role !== 'admin') return res.status(403).json({ error: 'Only admin can remove members' });
+      const target = members.find(m => m.userId === memberId);
+      if (!target) return res.status(404).json({ error: 'Member not found' });
+      if (target.role === 'admin') return res.status(403).json({ error: 'Cannot remove another admin. Transfer their role first.' });
+      await storage.db.delete(schemas.teamMembers).where(and(eq(schemas.teamMembers.userId, memberId), eq(schemas.teamMembers.teamId, teamId)));
+      res.json({ message: 'Member removed' });
+    } catch (error) {
+      console.error('Error removing member:', error);
+      res.status(500).json({ error: 'Failed to remove member' });
+    }
+  });
+
+  // Bulletin
+  app.get("/api/teams/:teamId/bulletin", requireAuth, async (req, res) => {
+    try {
+      const { teamId } = req.params as { teamId: string };
+      await ensureTeamMember(getCurrentUserId(req), teamId);
+      const posts = await storage.getTeamBulletinPosts(teamId);
+      res.json(posts);
+    } catch (error) {
+      console.error('Error fetching bulletin:', error);
+      res.status(500).json({ message: 'Failed to fetch bulletin' });
+    }
+  });
+
+  app.post("/api/teams/:teamId/bulletin", requireAuth, async (req, res) => {
+    try {
+      const { teamId } = req.params as { teamId: string };
+      const userId = getCurrentUserId(req);
+      const members = await ensureTeamMember(userId, teamId);
+      const me = members.find(m => m.userId === userId);
+      const postData = schemas.insertTeamBulletinPostSchema.parse({ ...req.body, teamId, createdById: userId });
+      const post = await storage.createTeamBulletinPost(postData, me?.role || 'member');
+      res.json(post);
+    } catch (error) {
+      console.error('Error creating bulletin post:', error);
+      res.status(500).json({ message: 'Failed to create bulletin post' });
+    }
+  });
+
+  app.put("/api/bulletin/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params as { id: string };
+      const [row]: any = await storage.db.select().from(schemas.teamBulletinPosts).where(eq(schemas.teamBulletinPosts.id, id));
+      if (!row) return res.status(404).json({ message: 'Post not found' });
+      const members = await ensureTeamMember(getCurrentUserId(req), row.teamId);
+      const me = members.find(m => m.userId === getCurrentUserId(req));
+      if (row.isAdminPost && me?.role !== 'admin') return res.status(403).json({ message: 'Cannot edit admin post' });
+      const updates = schemas.insertTeamBulletinPostSchema.partial().parse(req.body);
+      const post = await storage.updateTeamBulletinPost(id, updates);
+      res.json(post);
+    } catch (error) {
+      console.error('Error updating bulletin post:', error);
+      res.status(500).json({ message: 'Failed to update bulletin post' });
+    }
+  });
+
+  app.delete("/api/bulletin/:id", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params as { id: string };
+      const [row]: any = await storage.db.select().from(schemas.teamBulletinPosts).where(eq(schemas.teamBulletinPosts.id, id));
+      if (!row) return res.status(404).json({ message: 'Post not found' });
+      const members = await ensureTeamMember(getCurrentUserId(req), row.teamId);
+      const me = members.find(m => m.userId === getCurrentUserId(req));
+      if (row.isAdminPost && me?.role !== 'admin') return res.status(403).json({ message: 'Cannot delete admin post' });
+      await storage.deleteTeamBulletinPost(id);
+      res.json({ message: 'Deleted' });
+    } catch (error) {
+      console.error('Error deleting bulletin post:', error);
+      res.status(500).json({ message: 'Failed to delete bulletin post' });
     }
   });
 

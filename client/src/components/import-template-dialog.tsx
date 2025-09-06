@@ -21,37 +21,40 @@ interface ImportTemplateDialogProps {
 }
 
 export function ImportTemplateDialog({ open, onOpenChange }: ImportTemplateDialogProps) {
-  const [shareableId, setShareableId] = useState("");
+  const [codesInput, setCodesInput] = useState("");
   const [isImporting, setIsImporting] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const handleImport = async () => {
-    if (!shareableId.trim()) {
+    const raw = codesInput.trim();
+    if (!raw) {
       toast({
         title: "Error",
-        description: "Please enter a shareable ID",
+        description: "Please enter one or more short codes",
         variant: "destructive",
       });
       return;
     }
-
+    const codes = raw.split(/[\s,]+/).map(s => s.trim().toUpperCase()).filter(Boolean);
+    if (codes.length === 0) {
+      toast({ title: "Error", description: "No valid codes provided", variant: "destructive" });
+      return;
+    }
     setIsImporting(true);
     try {
-      await apiRequest(`/api/note-templates/import/${shareableId.trim()}`, {
-        method: "POST",
-      });
+      await apiRequest('POST', `/api/share/note-templates/import`, { codes }, { timeoutMs: 90000 });
       
       toast({
         title: "Success",
-        description: "Template imported successfully",
+        description: codes.length > 1 ? "Templates imported" : "Template imported successfully",
       });
       
       // Refresh templates list
       queryClient.invalidateQueries({ queryKey: ["/api/note-templates"] });
       
       // Reset form and close dialog
-      setShareableId("");
+      setCodesInput("");
       onOpenChange(false);
     } catch (error: any) {
       toast({
@@ -66,7 +69,7 @@ export function ImportTemplateDialog({ open, onOpenChange }: ImportTemplateDialo
 
   const handleOpenChange = (newOpen: boolean) => {
     if (!isImporting) {
-      setShareableId("");
+      setCodesInput("");
       onOpenChange(newOpen);
     }
   };
@@ -77,26 +80,24 @@ export function ImportTemplateDialog({ open, onOpenChange }: ImportTemplateDialo
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Download className="h-5 w-5" />
-            Import Template
+            Import Template(s)
           </DialogTitle>
           <DialogDescription>
-            Enter the shareable ID of a template to import it to your library.
+            Enter one or more 4‑character short codes to import templates.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid gap-2">
-            <Label htmlFor="shareable-id">Shareable ID</Label>
+            <Label htmlFor="codes">Short Codes</Label>
             <Input
-              id="shareable-id"
-              placeholder="Enter template shareable ID..."
-              value={shareableId}
-              onChange={(e) => setShareableId(e.target.value)}
+              id="codes"
+              placeholder="e.g. AB12, CD34 EF56"
+              value={codesInput}
+              onChange={(e) => setCodesInput(e.target.value)}
               disabled={isImporting}
-              data-testid="input-shareable-id"
+              data-testid="input-short-codes"
             />
-            <p className="text-sm text-gray-500">
-              This is a 12-character code that starts with letters like "A1B2C3D4E5F6"
-            </p>
+            <p className="text-sm text-gray-500">Separate multiple codes with spaces or commas.</p>
           </div>
         </div>
         <DialogFooter>
@@ -110,11 +111,11 @@ export function ImportTemplateDialog({ open, onOpenChange }: ImportTemplateDialo
           </Button>
           <Button
             onClick={handleImport}
-            disabled={!shareableId.trim() || isImporting}
+            disabled={!codesInput.trim() || isImporting}
             data-testid="button-confirm-import"
           >
             {isImporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Import Template
+            Import Templates
           </Button>
         </DialogFooter>
       </DialogContent>

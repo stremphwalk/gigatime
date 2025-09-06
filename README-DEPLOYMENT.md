@@ -25,6 +25,7 @@ cd gigatime
 - **Supabase**: Create project and get DATABASE_URL
 - **Auth0**: Configure callback URLs for your domain
 - **Deepgram**: Get API key for voice recognition
+ - **OpenAI**: Add `OPENAI_API_KEY` to `.env` for server-side AI parsing. Keys are never exposed to the client; requests go through `/api/ai/*` endpoints.
 
 ### 3. Environment Variables
 Copy `.env.production.example` and fill in your values:
@@ -50,9 +51,19 @@ npm run db:push
 ✅ **Authentication**: Auth0 integration with secure JWT tokens  
 ✅ **Database**: Supabase PostgreSQL with connection pooling  
 ✅ **Voice Recognition**: Deepgram Nova-3-medical model  
+✅ **AI Parsing (Meds/Labs/PMH)**: Dictation → cleaned structured text (no client flags)  
 ✅ **Medical Templates**: Admission, Progress, and Consult notes  
 ✅ **Security**: HTTPS, secure headers, environment isolation  
 ✅ **Scalability**: Serverless deployment with auto-scaling  
+
+## AI Features (Usage)
+
+- Endpoints: `/api/ai/medications`, `/api/ai/labs`, `/api/ai/pmh` (server-side; requires `OPENAI_API_KEY`).
+- Client UI: an AI button appears next to section headers (left side) for Meds, Labs, and PMH.
+- Workflow: click AI to start dictation, click again to process.
+  - Meds/Labs: inserts structured text at the caret.
+  - PMH: merges into a numbered list with indented details; preserves order and only appends details.
+- Fallback: if AI fails/empty, raw dictated text is inserted at the caret.
 
 ## File Structure
 ```

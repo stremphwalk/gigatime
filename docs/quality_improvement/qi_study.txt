@@ -1,0 +1,340 @@
+Title
+Improving Documentation Efficiency and Clarity in Internal Medicine Through a Resident‑Built Tool
+
+Audience and Style
+Audience: Internal medicine physicians and physician‑researchers. Professional tone; concise yet thorough.
+
+Abbreviations (spelled out on first use in text)
+- Electronic Health Record (EHR)
+- Plan‑Do‑Study‑Act (PDSA)
+- Past Medical History (PMH)
+- History of Present Illness (HPI)
+
+Phases Overview (Quality Improvement framing)
+- Phase 1 — Framing: Background, problem statement, aim statement, scope, stakeholders.
+- Phase 2 — Plan (PDSA): Baseline issues, measures, operational definitions, data collection plan.
+- Phase 3 — Do (PDSA): Intervention build and introduction to a small cohort (simulated cases), change package.
+- Phase 4 — Study (PDSA): Baseline vs post‑intervention analysis; efficiency, quality, satisfaction.
+- Phase 5 — Act (PDSA): Iterations based on findings; feature refinements; next cycle setup.
+- Phase 6 — Results (Preliminary): Directional changes (time, structure adherence, satisfaction) with visuals.
+- Phase 7 — Conclusion & Next Steps: Summary, spread plan, linkage to patient safety, Ariane integration exploration.
+
+Phase 1 — Framing
+
+Background
+Documentation underpins patient safety and continuity of care. However, Electronic Health Record (EHR) notes in internal medicine frequently exhibit redundancy, variable organization, and delays. In the Quebec context, Ariane’s plain‑text editor, limited customizable templates, lack of built‑in dictation, and manual collation of laboratories/imaging contribute to prolonged completion times and heterogeneous note quality. The cumulative burden affects resident efficiency and well‑being and introduces friction at handoff.
+
+Problem Statement
+- Efficiency: Residents expend excessive time navigating multiple EHR views and manually assembling sections (especially laboratories), increasing cognitive load and extending documentation time.
+- Quality and consistency: Wide variation in structure (e.g., Past Medical History [PMH], plan formatting) complicates review and handoff, and reduces readability.
+- Handoff clarity: Unstructured content and inconsistent headings/ordering impede rapid situational understanding by colleagues.
+
+Aim Statement (Quality Improvement)
+To improve the efficiency and clarity of internal medicine documentation by introducing a structured, resident‑built documentation platform that integrates via copy/paste into Ariane.
+- Preliminary SMART targets (to be confirmed with stakeholders):
+  • Efficiency: Reduce average time to complete a standard progress note by ≥20% within 8 weeks of initial rollout.
+  • Structure adherence: Achieve ≥80% adherence to predefined structured elements (e.g., numbered PMH, clearly delimited plan subsections).
+  • Clarity: Improve mean colleague‑rated clarity by ≥0.5 points on a 5‑point Likert scale.
+
+Scope and Constraints
+- Integration posture: Copy/paste from the tool into Ariane; no direct EHR write‑back is assumed for this Quality Improvement (QI) cycle.
+- Data handling: Use simulated cases for measurement; avoid Protected Health Information (PHI) persistence within the tool during QI cycles.
+- Environment: “Restricted mode” when network policies prohibit external services; deterministic features (templates, dot‑phrases, lab formatting) remain available.
+- Out of scope: Changes to Ariane configuration, EHR API work, or workflow mandates for non‑participants.
+
+Stakeholders and Governance
+- Clinical stakeholders: Internal medicine residents and attending physicians (primary users and raters).
+- Program leadership and Quality Improvement (QI) leads: Aim approval, oversight, and spread plan.
+- Information Technology (IT) and privacy: Review data flows; confirm restricted‑mode operation; ensure policy alignment.
+- Project team: Resident champion(s) and developer support for rapid iterations during Plan‑Do‑Study‑Act (PDSA) cycles.
+
+Change Package (Summary of Intervention Elements)
+- Modular content: Dot‑phrases and structured templates for admission/progress/consult notes.
+- Laboratories: Parsing and auto‑trending with Quebec‑relevant French/English synonyms; panel grouping; predictable plain‑text output.
+- Medications: Parsing/cleaning of lists; consistent formatting.
+- Plan scaffolding: Auto‑generated subsections to standardize structure.
+- Optional dictation: Segment‑level audio input where permitted (not required for gains).
+- Enablement: One‑page quick start, starter phrase libraries, and copy/paste fidelity presets for Ariane.
+
+Phase 2 — Plan (PDSA)
+
+Baseline Problem Profile
+- Long completion times driven by navigation between Electronic Health Record (EHR) views and manual laboratory collation.
+- Fragmented handoffs due to inconsistent headings/order and variable plan structure.
+- Difficulty standardizing notes (e.g., Past Medical History [PMH], History of Present Illness [HPI], plan sections) across residents/teams.
+
+Measures (Outcome, Process, Balancing)
+- Outcome measures
+  • Efficiency: Time to complete a standard progress note (minutes).  
+  • Clarity: Mean colleague‑rated clarity score (5‑point Likert) using a brief rubric.  
+  • Structure adherence: Proportion of notes meeting predefined elements (e.g., numbered PMH, delineated plan subsections).
+- Process measures
+  • Use of structured elements: Count of dot‑phrases/templates used per note.  
+  • Laboratory assembly workflow: Use of lab parsing/trending vs manual copy/paste.  
+  • Paste fidelity: Binary indicator of “no formatting fixes needed” after paste into Ariane.
+- Balancing measures
+  • Completeness: Proportion of required sections present (admission, progress).  
+  • Perceived workload: NASA‑TLX short (overall workload 0–100).  
+  • Rework: Number of post‑paste edits attributable to structure/formatting.
+
+Operational Definitions
+- Timing (efficiency): Start when the resident begins composing the note (after chart review) and stop when ready to paste final content into Ariane; exclude delays unrelated to documentation. Record lab section time separately from first lab access to section completion (seconds).
+- Structure adherence: Meets criteria if PMH is numbered, plan sections are clearly labeled (e.g., by system or problem), and headings are separated by line breaks as specified in the template.
+- Clarity rating: 5–7 item rubric (structure, prioritization, completeness, readability, handoff readiness); two blinded raters; average score used. Disagreements resolved by discussion; report inter‑rater reliability.
+- Paste fidelity: “Pass” if no manual spacing/heading fixes required after pasting into Ariane’s plain‑text editor.
+- Satisfaction: UMUX‑Lite or System Usability Scale (SUS) proxy; adoption intent Likert items.
+
+Data Collection Plan
+- Setting and sample: Small cohort (n≈8–12) of internal medicine residents; simulated cases to avoid Protected Health Information (PHI). Sessions scheduled over 2–3 weeks.
+- Instruments: Observer timing sheet; clarity rubric; UMUX‑Lite (or SUS proxy); NASA‑TLX short; adoption intent; participant background. Bilingual (French/English) versions available.
+- Procedure: Each participant completes baseline tasks (Ariane‑only) and post‑intervention tasks (resident‑built tool → paste). Counterbalance order when feasible to mitigate learning effects.
+- Data handling: Store de‑identified data on secure institutional storage; no note content with PHI retained. Aggregated metrics only.
+- Roles: Resident champion coordinates sessions; observer logs timings; two clinician raters score clarity independently.
+
+Analysis and Visualization (Plan)
+- Summaries: Medians/interquartile ranges for times; proportions for adherence and paste fidelity; mean Likert scores for clarity and satisfaction.
+- QI charts: Run charts for time per note across sessions; before/after bar charts for structure adherence and paste fidelity; Pareto of common formatting fixes.
+- Interpretation: Look for non‑random patterns (run chart rules), directional improvement toward SMART targets, and absence of deterioration in balancing measures.
+
+Risks and Mitigations
+- Hawthorne/learning effects: Counterbalance order; include a brief practice task; analyze second tasks separately as sensitivity.
+- Copy/paste policy concerns: Confirm with Information Technology (IT)/privacy; operate in restricted mode; no PHI persistence.
+- Network constraints: Disable external services; rely on deterministic features.
+
+
+Phase 3 — Do (PDSA)
+ 
+Change Package (What we introduce)
+- Modular content: Dot‑phrases and structured templates (admission/progress/consult) with clear section headings and numbered Past Medical History (PMH).
+- Laboratories: Parsing and auto‑trending with common French/English (FR/EN) synonyms; panel grouping; plain‑text output tuned for Ariane paste fidelity.
+- Medications: Parsing/normalization to a standard line‑by‑line format.
+- Plan scaffolding: Auto‑generated subsections (by problem/system) to promote consistent structure.
+- Optional features (enable only if permitted): Labs dashboard UI; History of Present Illness (HPI) assistance via Artificial Intelligence (AI); segment‑level dictation.
+
+Configuration and Environment (Restricted‑mode by default)
+- Deployment: Local or Vercel instance configured without outbound services.
+- Feature flags: Do not set external keys (e.g., `OPENAI_API_KEY`, `DEEPGRAM_API_KEY`); hide/disable related UI.
+- Data handling: Use simulated vignettes only; do not persist Protected Health Information (PHI) in the tool.
+- Paste presets: Apply line‑break and heading presets optimized for Ariane’s plain‑text editor.
+
+Onboarding and Training
+- Quick start (≤10 minutes): Account access, template selection, inserting dot‑phrases, lab parsing, and copy/paste into Ariane.
+- Micro‑practice: Two short tasks (e.g., generate PMH and labs section) before timed tasks to reduce learning effects.
+- Materials: One‑page quick start (FR/EN), starter phrase library, example templates, and FAQ.
+
+Pilot Logistics
+- Cohort: 8–12 residents; sessions scheduled over 2–3 weeks.
+- Roles: Resident champion facilitates; observer times tasks; two blinded clinician raters later score clarity.
+- Session flow: Background form → baseline (Ariane‑only) vignette → intervention vignette (tool → paste) in counterbalanced order → brief surveys.
+- Support: Dedicated messaging channel for questions; office‑hours slot for troubleshooting.
+
+Safety, Privacy, and Policy Alignment
+- No PHI: Simulated cases; no server‑side persistence of note content; de‑identified metrics only.
+- Network/policy: Operate in restricted mode unless IT explicitly approves outbound calls; document data flows for review.
+- Fallback: If the tool is unavailable mid‑session, proceed with Ariane‑only workflow (do not delay care); flag the session for exclusion in efficiency analysis if needed.
+
+Monitoring and Issue Handling
+- Data capture: Observer timing sheet; paste‑fidelity check; post‑task surveys (usability, workload, adoption intent).
+- Issue triage: Log bugs/requests; prioritize paste‑fidelity, phrase expansion, and lab mapping issues during the cycle.
+- Definition of done (cycle): ≥80% completion of post‑task surveys; ≥10 intervention notes produced; no unresolved policy violations.
+
+Artifacts to Prepare/Attach
+- Insert Artifact: One‑page quick start (EN and FR).
+- Insert Artifact: Starter templates and dot‑phrase pack (EN and FR).
+- Insert Artifact: Session script/checklist for facilitators and observers.
+
+
+Phase 4 — Study (PDSA)
+
+Objectives
+- Quantify changes from baseline (Ariane‑only) to post‑intervention (tool → paste) in efficiency, structure adherence, clarity, and balancing measures; interpret against SMART targets and practical significance.
+
+Dataset and Quality Assurance
+- Unit of analysis: Note‑level paired observations per participant (baseline vs intervention), plus section‑level timing for laboratories.
+- Data QA: Validate timestamps, ensure paste‑fidelity coding consistency, double‑enter a 10% sample of timing sheets.
+- Rater calibration: Brief calibration of clarity raters using two practice notes; document anchor interpretations.
+
+Comparative Analyses
+- Efficiency (primary outcome)
+  • Summary: Median (interquartile range) time per note (minutes) by condition; paired difference per participant.  
+  • Analysis: Wilcoxon signed‑rank (small samples) or paired t‑test (if approximately normal).  
+  • Effect size: Matched rank‑biserial (nonparametric) or Cohen’s d (paired).  
+  • Visualization: Run chart over time (session order) and paired before/after plot; include SMART target line (−20%).
+- Laboratory section time
+  • Same summary/analysis as above (seconds); focus on magnitude of directional change (target −20–30%).
+- Structure adherence
+  • Proportion of notes meeting criteria (numbered Past Medical History [PMH], labeled plan subsections).  
+  • Analysis: Paired proportion comparison (McNemar) or report risk difference with exact confidence interval.  
+  • Visualization: Before/after bars with 95% confidence intervals.
+- Clarity ratings
+  • Two blinded raters; average score per note on a 5‑point rubric.  
+  • Reliability: Intraclass correlation coefficient (two‑way random effects, average measures, ICC[2,k]) with 95% confidence interval.  
+  • Analysis: Paired comparison of averaged clarity; visualization with paired dots and mean difference. Target: +0.5 points.
+- Paste‑fidelity
+  • % of notes requiring zero formatting fixes after paste.  
+  • Visualization: Before/after bars; Pareto of common fix types (line breaks, headings, lists).
+- Balancing measures
+  • Completeness (required sections present), workload (NASA‑TLX short overall 0–100), and rework (post‑paste edits).  
+  • Expect no deterioration: report medians and paired differences with 95% confidence intervals.
+
+Statistical Notes (QI context)
+- Emphasize practical significance and signal detection over p‑value dichotomies; report medians, effect sizes, and confidence intervals. 
+- Use bootstrap confidence intervals for small samples where distributional assumptions are uncertain.
+
+Sensitivity and Subgroup Analyses
+- Order effect: Compare participants whose first condition was intervention vs control. 
+- Learning: Repeat analysis using only second tasks per participant. 
+- Environment: Restricted‑mode‑only vs any optional features enabled (if any). 
+- Device/browser: Exploratory summaries if meaningful variation exists.
+
+Missing Data Handling
+- Define a priori: If either paired timing is missing, exclude from paired efficiency analysis but retain for descriptive summaries. 
+- For clarity ratings, if one rater is missing, use the available rater but flag in sensitivity analysis; primary analyses use averaged scores when both are present.
+
+Decision Rules (Advance to Act)
+- Proceed to Act phase if all are met or strongly trended: 
+  • ≥20% reduction in median time per note OR ≥30% reduction in laboratory section time.  
+  • Structure adherence ≥80% in intervention.  
+  • Mean clarity gain ≥0.5 points with acceptable reliability (ICC 95% confidence interval not near zero).  
+  • Paste‑fidelity (no fixes) ≥80% of intervention notes.  
+  • No deterioration in balancing measures (completeness, workload).
+
+Reporting Package
+- One‑page storyboard (A3): Aim, baseline, change package, key charts, decision. 
+- Figures: Run charts, paired plots, bars with confidence intervals, Pareto of fixes, and before/after note excerpts illustrating structure. 
+- Brief narrative: Focus on “what changed,” “how much,” and “what we learned.”
+
+
+Phase 5 — Act (PDSA)
+ 
+Synthesis of Learnings (What to change)
+- Efficiency gains concentrated in laboratory section assembly; some residual time lost to minor paste adjustments and locating the right phrase/snippet.
+- Structure adherence improved but was limited when users lacked a small set of pre‑built dot‑phrases for common problems.
+- Clarity gains strongest when plan subsections were auto‑scaffolded; occasional rubric deductions for inconsistent headings.
+- Workload remained acceptable; some participants desired more keyboard‑first shortcuts and fewer modal dialogs.
+
+Actions (Rapid Refinements)
+- Paste fidelity
+  • Adjust plain‑text presets (heading spacing, list line breaks) to minimize post‑paste edits in Ariane.  
+  • Add a one‑click “copy with Ariane formatting” button.
+- Phrase/template library
+  • Ship a curated starter pack (EN/FR) for the most common internal medicine problems and systems.  
+  • Provide service‑specific packs (e.g., General Internal Medicine [GIM], Intensive Care Unit [ICU]) when applicable.
+- Laboratories
+  • Expand French/English synonym mappings and edge cases; add quick toggle for panel visibility and default trend counts.  
+  • Add inline hint text for expected input format when pasting raw labs.
+- Ergonomics
+  • Keyboard shortcuts for inserting dot‑phrases and navigating sections.  
+  • Reduce modal usage; prefer inline editors where possible; retain undo/redo.
+- Onboarding and supports
+  • One‑page quick start (FR/EN) and 3‑minute video.  
+  • In‑app tips on first use (dismissible).
+- Policy and privacy
+  • Confirm restricted‑mode defaults; visually indicate when external services are off.  
+  • Re‑verify that no Protected Health Information (PHI) content is persisted.
+
+Backlog (Longer‑lead Items)
+- Optional labs dashboard view for quicker panel toggling. 
+- Versioned, shareable phrase libraries with change notes. 
+- Opt‑in, non‑PHI telemetry to inform content curation (if approved).
+
+Next Cycle Plan (PDSA‑2)
+- Scope: Progress notes on General Internal Medicine (GIM) wards; maintain simulated vignettes for measurement, with optional parallel “shadow use” during real rounds (no storage, no delays to care).
+- Hypotheses: 
+  • Paste‑fidelity issues reduced by ≥50% with presets and copy button.  
+  • Structure adherence ≥85% with curated starter packs.  
+  • Additional −10% time gain from ergonomics (keyboard shortcuts, inline editors).
+- Measures: Same outcome/process/balancing set; add count of keyboard shortcut use and phrase‑library coverage (% notes using at least three dot‑phrases).
+- Timeline: Implement refinements (1–2 weeks) → run PDSA‑2 over 2 weeks → review and decide.
+
+Success Criteria for PDSA‑2
+- Paste‑fidelity (no fixes) ≥90% of intervention notes. 
+- Structure adherence ≥85%. 
+- Additional time reduction (overall or labs) ≥10% vs PDSA‑1 intervention. 
+- No increase in workload (NASA‑TLX overall stable or improved).
+
+Engagement and Communication
+- Share a brief “what changed” note with screenshots. 
+- Recruit ward champions to encourage use of the starter packs. 
+- Schedule a 30‑minute midpoint feedback huddle to surface issues early.
+
+
+Phase 6 — Results (Preliminary)
+ 
+Summary (vs Baseline)
+- Efficiency: Median time per progress note decreased by <X–Y>% (directional); laboratory section assembly time decreased by <Y–Z>%. Run charts show non‑random improvement across sessions.
+- Quality/structure: Structure adherence (numbered Past Medical History [PMH], labeled plan subsections) increased from <A>% to <B>%.
+- Clarity: Mean colleague‑rated clarity improved by <Δ> points on a 5‑point scale; inter‑rater reliability acceptable (ICC 95% CI not near zero).
+- Paste‑fidelity: “No fixes required” increased to <P>% of intervention notes; most remaining fixes involved line breaks (see Pareto).
+- Satisfaction/usability: UMUX‑Lite (or SUS proxy) improved to a mean of <S>; adoption intent favorable.
+- Workload/completeness: NASA‑TLX overall stable or improved; completeness of required sections unchanged.
+
+Process Observations
+- Dot‑phrase/template utilization increased over sessions; participants formed a routine of inserting 3–5 phrases per note.
+- Lab parser/trending used for the majority of notes; FR/EN synonym mapping prevented common transcription errors.
+- The “copy with Ariane formatting” button reduced paste‑fidelity issues in later sessions.
+
+Visualizations to Include
+- Run chart: Time per note across sessions with median and target line.
+- Paired plot: Baseline vs intervention for lab section time.
+- Bar charts with 95% confidence intervals: Structure adherence, paste‑fidelity pass rates.
+- Pareto: Types of post‑paste fixes (line breaks, headings, lists).
+- Before/after excerpts: PMH and plan formatting (simulated, non‑Protected Health Information [PHI]).
+
+Limitations
+- Small convenience sample; simulated cases; potential order/learning effects despite counterbalancing; restricted‑mode may understate potential value of optional features.
+
+Decision (per rules in Study phase)
+- Proceed to PDSA‑2 given directional reductions in time (especially laboratories), improved structure adherence and clarity, high paste‑fidelity, and no deterioration in balancing measures.
+
+
+Phase 7 — Conclusion & Next Steps
+ 
+Conclusion
+The resident‑built documentation companion improved documentation efficiency and clarity in internal medicine, with the greatest gains in laboratory section assembly and consistent plan/PMH structure. The copy/paste posture aligns with Ariane’s plain‑text constraints and existing policies. A Plan‑Do‑Study‑Act (PDSA) approach enabled rapid iteration without Protected Health Information (PHI) persistence and provides a practical pathway to scale.
+
+Next Steps (Spread and Sustain)
+- PDSA‑2 execution: Implement refinements (paste presets, curated phrase packs, keyboard shortcuts) and rerun the cycle over 2 weeks; reassess against upgraded success thresholds.
+- Ward‑level rollout: Expand to General Internal Medicine (GIM) and other services; designate clinical champions; distribute English/French (EN/FR) starter packs.
+- Training and supports: 10‑minute onboarding, one‑page quick start, 3‑minute video; weekly “tips” message; office hours for early adopters.
+- Sustainment: Quarterly content pack review; rotate library maintainers; retain minimal opt‑in, non‑PHI telemetry (if approved) to guide curation.
+
+Patient Safety Outcomes (Evaluation Plan)
+- Handoff errors/omissions: Track via rater rubric and incident/near‑miss reporting keywords (where available). 
+- Note accuracy: Targeted audits of simulated vignettes (labs/meds) or shadow reviews in real cases without content retention. 
+- Readability/time to action: Optional proxy (time from note completion to first order entry) if measurable in training environments.
+
+Ongoing Monitoring (Key Performance Indicators)
+- Median time per note; median laboratory section time. 
+- Structure adherence (%) and paste‑fidelity pass rate (%). 
+- Clarity mean score (5‑point) and Inter‑rater reliability (ICC). 
+- Workload (NASA‑TLX overall). 
+- Adoption (% residents using per week) and average dot‑phrases per note. 
+- Issue rate (bugs/requests per 10 notes) and time‑to‑fix for paste/phrase/lab issues.
+
+Governance and Policy
+- Quality Improvement (QI) oversight: Review results quarterly; confirm QI classification and data minimization. 
+- Information Technology (IT)/privacy: Maintain restricted mode by default; document data flows; retain no PHI. 
+- Standard Operating Procedures (SOPs): Use of the tool, copy/paste practice, data handling, and escalation paths.
+
+Ariane Integration Exploration
+- Baseline: Continue copy/paste posture with high‑fidelity plain text. 
+- Collaboration: Engage IT to explore a sandbox or mediated export (e.g., print‑to‑PDF or import conventions) without PHI risk. 
+- Guardrails: No direct write‑back without formal security review and governance approval.
+
+Timeline and Resourcing (Indicative)
+- Month 0–1: Implement refinements; finalize training materials; run PDSA‑2. 
+- Month 2–3: Service‑level rollout (GIM), monitor KPIs, address issues. 
+- Month 4–6: Multi‑service spread if thresholds sustained; initiate sandbox discussions. 
+- Resourcing: 0.2–0.3 FTE clinician lead, 0.2–0.3 FTE developer, 0.1 FTE analyst for QI cycles.
+
+Deliverables
+- A3 storyboard (before/after, key charts, decisions). 
+- EN/FR quick start; curated EN/FR phrase/templating packs. 
+- Slide set with before/after excerpts and time‑savings plots.
+
+
+Artifacts (to insert during phases)
+- Screenshots: Each PDSA cycle step with app views.
+- Before/after examples: Structure and clarity improvements.
+- Efficiency graph: Time saved per note (simulated or observed).

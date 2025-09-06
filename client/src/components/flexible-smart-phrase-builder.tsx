@@ -5,6 +5,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, X, Calendar, MousePointer, ChevronRight, Zap, ArrowUp, ArrowDown } from "lucide-react";
 
@@ -53,7 +54,8 @@ export function FlexibleSmartPhraseBuilder({
     content: initialData?.content || "",
     description: initialData?.description || "",
     category: initialData?.category || "general",
-    elements: initialData?.elements || [] as InteractiveElement[]
+    elements: initialData?.elements || [] as InteractiveElement[],
+    isPublic: false,
   });
 
   // Simple counters to generate readable keys
@@ -142,7 +144,9 @@ export function FlexibleSmartPhraseBuilder({
       // Move cursor after the inserted placeholder and focus
       setTimeout(() => {
         contentTextarea.focus();
-        contentTextarea.setSelectionRange(start + placeholder.length, start + placeholder.length);
+        const len = (contentTextarea.value || '').length;
+        const pos = Math.max(0, Math.min(start + placeholder.length, len));
+        contentTextarea.setSelectionRange(pos, pos);
       }, 10);
     } else {
       // Fallback: append to end if we can't find cursor position
@@ -534,7 +538,7 @@ export function FlexibleSmartPhraseBuilder({
                   </SelectContent>
                 </Select>
               </div>
-            </div>
+          </div>
             <div>
               <Label htmlFor="description">Description</Label>
               <Input
@@ -543,6 +547,10 @@ export function FlexibleSmartPhraseBuilder({
                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                 placeholder="Brief description of this phrase"
               />
+            </div>
+            <div className="flex items-center gap-3">
+              <Switch id="public" checked={formData.isPublic} onCheckedChange={(v)=>setFormData(prev => ({ ...prev, isPublic: v }))} />
+              <Label htmlFor="public">Make this smart phrase public</Label>
             </div>
           </CardContent>
         </Card>
@@ -581,9 +589,9 @@ export function FlexibleSmartPhraseBuilder({
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {/* Date Picker Card */}
-              <div className="p-4 border rounded-lg hover:bg-blue-50 cursor-pointer" onClick={() => addElement("date")}>
+              <div className="p-4 border rounded-lg hover:bg-[color:var(--brand-50)] cursor-pointer" onClick={() => addElement("date")}>
                 <div className="flex items-center gap-3 mb-2">
-                  <Calendar size={20} className="text-blue-600" />
+                  <Calendar size={20} className="text-[color:var(--brand-700)]" />
                   <h3 className="font-medium">Date Picker</h3>
                 </div>
                 <p className="text-sm text-gray-600 mb-3">
@@ -592,7 +600,7 @@ export function FlexibleSmartPhraseBuilder({
                 <Button
                   type="button"
                   size="sm"
-                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  className="w-full bg-[color:var(--brand-700)] hover:opacity-95"
                   data-testid="button-add-date"
                 >
                   Add Date Picker
@@ -653,7 +661,7 @@ export function FlexibleSmartPhraseBuilder({
                           <Badge 
                             variant="outline" 
                             className={
-                              element.type === 'multipicker' ? "bg-blue-50 text-blue-700" :
+                              element.type === 'multipicker' ? "bg-[color:var(--brand-50)] text-[color:var(--brand-700)]" :
                               element.type === 'nested_multipicker' ? "bg-purple-50 text-purple-700" :
                               "bg-green-50 text-green-700"
                             }
@@ -708,7 +716,7 @@ export function FlexibleSmartPhraseBuilder({
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                      <div className="rounded-md bg-blue-50/60 border border-blue-200 p-2 text-[12px] text-blue-800">
+                      <div className="rounded-md bg-[color:var(--brand-50)]/60 border border-[color:var(--brand-200)] p-2 text-[12px] text-[color:var(--brand-700)]">
                         <strong>How it works:</strong> Click <em>Insert</em> above to place {`{{${element.key || element.id}}}`} into your content. Add options below. When typing your note, selections will replace that placeholder.
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

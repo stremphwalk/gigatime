@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { 
   FileText, 
@@ -15,7 +15,6 @@ import {
   ClipboardList,
   User
 } from "lucide-react";
-import { Link } from "wouter";
 import { useNoteTemplates } from "../hooks/use-notes";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
 import { useSimpleAuth as useAuth } from "../hooks/useSimpleAuth";
@@ -29,8 +28,8 @@ interface SidebarProps {
   selectedNote: Note | null;
   isLoading: boolean;
   notes: Note[];
-  currentView: 'notes' | 'teams' | 'smart-phrases' | 'template-builder' | 'autocomplete-builder';
-  onViewChange: (view: 'notes' | 'teams' | 'smart-phrases' | 'template-builder' | 'autocomplete-builder') => void;
+  currentView: 'notes' | 'teams' | 'smart-phrases' | 'template-builder' | 'autocomplete-builder' | 'community' | 'settings' | 'notes-library';
+  onViewChange: (view: 'notes' | 'teams' | 'smart-phrases' | 'template-builder' | 'autocomplete-builder' | 'community' | 'settings' | 'notes-library') => void;
 }
 
 export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, notes, currentView, onViewChange }: SidebarProps) {
@@ -38,6 +37,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
     notes: true,
     smartPhrases: false
   });
+  // Notes Library moved to its own page
   
   const { templates } = useNoteTemplates();
   const { phrases } = useSmartPhrases();
@@ -74,10 +74,10 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
       {/* Header */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
         <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 bg-medical-teal dark:bg-blue-600 rounded-lg flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br from-[var(--brand-from)] to-[var(--brand-to)]">
             <ClipboardList className="text-white" size={16} />
           </div>
-          <h1 className="text-xl font-semibold text-medical-teal dark:text-blue-400">Arinote</h1>
+          <h1 className="text-xl font-semibold text-[color:var(--brand-700)] dark:text-[color:var(--brand-600)]">Arinote</h1>
         </div>
       </div>
       {/* Navigation */}
@@ -87,13 +87,21 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
           <Button
             variant="ghost"
             className={cn(
-              "w-full p-3 text-left flex items-center justify-start space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t-lg"
+              "w-full p-3 text-left flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700 rounded-t-lg"
             )}
             onClick={() => toggleSection('notes')}
             data-testid="toggle-notes-section"
           >
-            <FileText className="text-medical-teal dark:text-blue-400" size={16} />
-            <span className="font-medium text-gray-900 dark:text-gray-100">Notes</span>
+            <div className="flex items-center space-x-3">
+              <FileText className="text-medical-teal dark:text-blue-400" size={16} />
+              <span className="font-medium text-gray-900 dark:text-gray-100">Notes</span>
+            </div>
+            <ChevronDown 
+              className={cn(
+                "h-4 w-4 text-gray-400 transition-transform",
+                expandedSections.notes && "rotate-180"
+              )}
+            />
           </Button>
           
           {expandedSections.notes && (
@@ -108,25 +116,13 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
                 <Plus size={12} className="mr-2" />
                 New Blank Note
               </Button>
-              
-              <Select onValueChange={(value) => onCreateNote(value)}>
-                <SelectTrigger className="h-8 text-xs" data-testid="select-template">
-                  <SelectValue placeholder="Select Template" />
-                </SelectTrigger>
-                <SelectContent>
-                  {templates?.map((template) => (
-                    <SelectItem key={template.id} value={template.type}>
-                      {template.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              
+              {/* Removed template dropdown from sidebar */}
               <Button
                 variant="ghost"
                 size="sm"
                 className="w-full justify-start text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300"
                 data-testid="button-notes-library"
+                onClick={() => onViewChange('notes-library')}
               >
                 <Folder size={12} className="mr-2" />
                 Notes Library
@@ -135,12 +131,13 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
                 </Badge>
               </Button>
               
+              
               <Button
                 variant="ghost"
                 size="sm"
                 className={cn(
                   "w-full justify-start text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300",
-                  currentView === 'template-builder' && "bg-blue-50 dark:bg-blue-900/50 border border-professional-blue dark:border-blue-600"
+                  currentView === 'template-builder' && "bg-[color:var(--brand-50)] dark:bg-blue-900/50 border border-[color:var(--brand-200)] dark:border-[color:var(--brand-600)]"
                 )}
                 onClick={() => onViewChange('template-builder')}
                 data-testid="button-template-builder"
@@ -184,7 +181,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
                 size="sm"
                 className={cn(
                   "w-full justify-start text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300",
-                  currentView === 'smart-phrases' && "bg-blue-50 dark:bg-blue-900/50 border border-professional-blue dark:border-blue-600"
+                  currentView === 'smart-phrases' && "bg-[color:var(--brand-50)] dark:bg-blue-900/50 border border-[color:var(--brand-200)] dark:border-[color:var(--brand-600)]"
                 )}
                 onClick={() => onViewChange('smart-phrases')}
                 data-testid="button-smart-phrases-library"
@@ -201,7 +198,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
                 size="sm"
                 className={cn(
                   "w-full justify-start text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300",
-                  currentView === 'autocomplete-builder' && "bg-blue-50 dark:bg-blue-900/50 border border-professional-blue dark:border-blue-600"
+                  currentView === 'autocomplete-builder' && "bg-[color:var(--brand-50)] dark:bg-blue-900/50 border border-[color:var(--brand-200)] dark:border-[color:var(--brand-600)]"
                 )}
                 onClick={() => onViewChange('autocomplete-builder')}
                 data-testid="button-autocomplete-builder"
@@ -213,19 +210,37 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
           )}
         </div>
 
-        {/* Teams Section */}
+        {/* Teams Section (hidden in production) */}
+        {!import.meta.env.PROD && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
+            <Button
+              variant="ghost"
+              className={cn(
+                "w-full p-3 text-left flex items-center justify-start space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg",
+                currentView === 'teams' && "bg-[color:var(--brand-50)] dark:bg-blue-900/50 border border-[color:var(--brand-200)] dark:border-[color:var(--brand-600)]"
+              )}
+              onClick={() => onViewChange('teams')}
+              data-testid="teams-menu-button"
+            >
+              <Users className="text-medical-teal dark:text-blue-400" size={16} />
+              <span className="font-medium text-gray-900 dark:text-gray-100">Teams</span>
+            </Button>
+          </div>
+        )}
+
+        {/* Community Section */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
           <Button
             variant="ghost"
             className={cn(
               "w-full p-3 text-left flex items-center justify-start space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg",
-              currentView === 'teams' && "bg-blue-50 dark:bg-blue-900/50 border border-professional-blue dark:border-blue-600"
+              currentView === 'community' && "bg-[color:var(--brand-50)] dark:bg-blue-900/50 border border-[color:var(--brand-200)] dark:border-[color:var(--brand-600)]"
             )}
-            onClick={() => onViewChange('teams')}
-            data-testid="teams-menu-button"
+            onClick={() => onViewChange('community')}
+            data-testid="community-menu-button"
           >
             <Users className="text-medical-teal dark:text-blue-400" size={16} />
-            <span className="font-medium text-gray-900 dark:text-gray-100">Teams</span>
+            <span className="font-medium text-gray-900 dark:text-gray-100">Community</span>
           </Button>
         </div>
 
@@ -245,7 +260,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
                   key={note.id}
                   className={cn(
                     "p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded cursor-pointer transition-colors",
-                    selectedNote?.id === note.id && "bg-blue-50 dark:bg-blue-900/50 border border-professional-blue dark:border-blue-600"
+                    selectedNote?.id === note.id && "bg-[color:var(--brand-50)] dark:bg-blue-900/50 border border-[color:var(--brand-200)] dark:border-[color:var(--brand-600)]"
                   )}
                   onClick={() => onNoteSelect(note)}
                   data-testid={`note-item-${note.id}`}
@@ -278,19 +293,26 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
               {user?.specialty || 'Healthcare Professional'}
             </div>
           </div>
-          <div className="flex items-center space-x-1">
+          <div className="flex items-center space-x-3">
+            {/* AI toggle removed as per updated requirements */}
             <ThemeToggle />
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-              onClick={logout}
-              disabled={false}
-              title="Logout"
-              data-testid="logout-button"
-            >
-              <Settings size={16} />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="text-gray-400 dark:text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                  title="User menu"
+                  data-testid="user-cog-button"
+                >
+                  <Settings size={16} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onViewChange('settings')} data-testid="open-settings">Settings</DropdownMenuItem>
+                <DropdownMenuItem onClick={logout} data-testid="logout-or-switch">Log out / Switch user</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>

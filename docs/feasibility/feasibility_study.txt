@@ -1,0 +1,514 @@
+Title
+Feasibility of a Resident-Driven Documentation Tool for Integration into Quebec EHR Workflows
+
+Phase 1 — Feasibility / Implementation Science Framing
+
+1) Background
+Clinical documentation in internal medicine is time-consuming, often redundant, and tightly coupled to local workflow realities in teaching hospitals. Residents shoulder a large portion of daily note-writing (admissions, progress, consults, discharge summaries), while simultaneously coordinating handoffs, orders, and communication across services. Conventional EHRs in Quebec (e.g., Ariane) are optimized for safety, compliance, and longitudinal charting, but are not primarily designed for rapid, structured data entry by rotating trainees. Pain points that commonly arise include: repetitive copying of prior text for continuity; lack of ergonomic, structured templates matched to resident workflows; slow or fragmented interfaces; and difficulty collating data (labs, imaging, meds) into coherent, formatted notes.
+
+The feasibility question is whether a lightweight, resident-driven documentation layer can coexist with institutional EHR constraints to improve speed, clarity, and handoff quality—without requiring privileged EHR API access. A pragmatic success pathway is a “companion” application that supports rapid content generation (smart phrases, structured sections, lab parsing/trending, dictation) and integrates via copy/paste or export, pending any future sandbox/API collaboration with hospital IT.
+
+2) Context: Quebec EHR Workflows and Constraints
+- EHR environment: Ariane and other systems in Quebec emphasize reliability and compliance; API access is limited or gated. Hospital networks may enforce strict firewalls and no outbound connections from clinical stations.
+- User environment: Internal medicine teams work in bilingual (EN/FR) settings, with rotating residents and varied device constraints (managed desktops, laptops, VDI). Network segmentation and PHI protections are central.
+- Integration posture: In many institutions, immediate deep integration is infeasible. A realistic path starts with “over-the-shoulder” integration—i.e., the application generates structured text (without PHI retention), which residents paste into the EHR. Over time, IT may permit sandboxed or brokered interfaces.
+
+2a) Specific Ariane Workflow and Current Limitations (Observed/Reported)
+Documentation within Ariane is centered on plain text entry with minimal formatting. While basic templates exist (e.g., for specific units such as ICU procedures), they are largely static and cannot be readily customized, shared, or composed as smaller reusable building blocks. The practical implications include:
+- Manual text entry: Notes are typed into a plain text box without ergonomic tooling for structured composition (limited formatting, no inline elements, minimal syntax support). Dictation is not natively supported; copy/paste is possible.
+- Template constraints: Basic templates are simplistic; clinicians cannot easily maintain personal libraries of reusable snippets or modular sections (e.g., “smart phrases” for HPI/PMH subsets). Creating and maintaining templates is burdensome and not designed for resident-level customization or sharing.
+- Data collation friction: Relevant information (labs, imaging, medications, prior notes) is distributed across multiple views; frequent tab/context switching is required. Pasted content from prior notes/imaging is available but laboratory pasting is limited in breadth and lacks automatic organization or trending.
+- Laboratory handling: Numerical values must be manually located, verified, separated, organized, and trended. This is time-consuming and error-prone, especially when producing concise, panel-based summaries with trends.
+- Variability and perfectionism pressure: Because notes are widely visible and easily editable, authors may “perfect” structure and prose, further increasing time burden. Across residents and attendings, note structure and clarity vary considerably, complicating handoff.
+- Net effect: Compared with handwritten notes (which are often faster but less shareable/searchable), the current Ariane workflow tends to be slower for many users, with high overhead from navigation, manual collation, and formatting.
+
+Historical trajectory (motivation for a companion tool):
+- Paper documentation: Familiar, reliable, and quickly customizable, but physically bound, hard to collaborate on, and technologically static. Quality varied widely.
+- Early Ariane experience: Demonstrated feasibility (e.g., ICU and palliative notes) and improved accessibility across hospital locations (étage, bureau). Introduced rudimentary efficiencies (simple templates, copy/paste) but, in practice, remained slower than pen-and-paper for many users due to typing proficiency variability, interface navigation, and manual data handling.
+
+2b) Current Limitations of AI-Powered Medical Scribes (Market Landscape)
+Contemporary AI scribe solutions typically follow a pipeline of audio capture → ASR transcription → LLM-based note drafting guided by a prompt. While promising, several limitations affect feasibility in internal medicine inpatient workflows:
+- Time and verification burden: A 20–30 minute recording yields a draft that still requires careful reading, verification, and substantial edits to achieve desired content, organization, and emphasis—eroding expected time savings.
+- Limited controllability and flexibility: Output style and content are heavily prompt-dependent and often misaligned with service-specific preferences. Fine-grained, modular control (e.g., reusable micro-templates/dot-phrases) is limited.
+- Hallucination and omission risks: Models can insert incorrect details or omit clinically pertinent findings; responsible use requires verification, shifting work from composition to audit.
+- Environmental fit: Constant speech requirement is impractical, potentially disruptive to patients and teams, and not always acceptable in shared clinical spaces.
+- Access and cost: Enterprise offerings can be costly and operationally complex to deploy within hospital governance; some may be inaccessible on firewalled networks.
+- Limited innovation for structured workflows: Many tools function as sophisticated dictation/transcription with AI re-organization, rather than addressing the core needs of structured, rapidly composable, and trended content (e.g., labs) under clinician control.
+
+Positioning of the companion tool (AriNote)
+In this study, the resident-driven companion app (“AriNote”) emphasizes controllable, modular composition rather than long-form AI summarization. It focuses on: rapid structured text generation (smart phrases/templates), deterministic lab parsing/trending tailored to Quebec conventions (including FR/EN labels), optional dictation for segments rather than full encounters, and copy/paste export to Ariane. This positioning is designed to mitigate the above limitations while operating within institutional constraints.
+
+3) Problem Statement and Rationale
+Problem: Residents spend substantial time composing and reformatting clinical notes; existing EHR tooling often lacks rapid-entry affordances tailored to trainee workflows. This contributes to inefficiency and note variability, and creates friction at handoff.
+Rationale: A resident-driven tool can encode common patterns (dot-phrases, structured templates, lab trending, dictation) and adapt quickly to service needs, potentially improving speed and consistency while preserving clinical nuance. A feasibility study is needed to assess acceptability, practicality, and preliminary performance within the constraints of Quebec EHR environments.
+
+4) Conceptual Framework (Feasibility and Implementation Science)
+This project uses a feasibility/implementation science lens to guide evaluation domains and success criteria.
+- Feasibility domains (examples): acceptability (perceived fit/satisfaction), demand (intent to use/observed use in pilot), practicality (fit with time and technical constraints), integration (compatibility with EHR workflow), and limited efficacy testing (signal for time savings and note clarity).
+- Implementation outcomes (examples): acceptability, adoption/uptake, appropriateness (clinical/workflow fit), feasibility (operational viability), fidelity (intended vs. actual use patterns), implementation cost (time/effort), penetration (breadth of use), sustainability (maintained use post-pilot).
+These domains will structure the subsequent methods, measures, and interpretation.
+
+5) Research Question
+Is it feasible to integrate a lightweight, resident-driven documentation tool into existing EHR workflows in Quebec (initially via copy/paste/export), and does it demonstrate early signals of improved note efficiency and clarity in internal medicine?
+
+6) Objectives
+- Primary: Assess feasibility in terms of acceptability, practicality, and integration into routine resident workflows under typical institutional constraints (no privileged EHR API access, firewall limitations).
+- Secondary: Estimate preliminary effectiveness signals (e.g., reduction in time per note; perceived clarity and handoff readiness); identify adoption barriers (IT/network, training needs, learning curve); and gather user feedback to refine features and templates.
+
+7) Intervention Overview (Tool Summary)
+The tool is a web application that supports resident note composition and handoff preparation. Based on the source code, core characteristics include:
+- Frontend: React + TypeScript with Vite and Tailwind (shadcn/ui components), designed for fast, structured editing.
+- Server: Express with endpoints for authentication (Auth0 in production, session fallback in development) and AI-assisted parsing.
+- Data: Postgres (Supabase/Neon) via Drizzle ORM; schemas include Users, Notes, Note Templates (Admission/Progress/Consult), Smart Phrases with flexible interactive elements, Teams, Todos, Calendar, and User Lab Settings/Presets.
+- Key features aligned to resident needs:
+  • Smart/dot-phrases with interactive elements (multipicker, nested multipicker, date) and a formatter to expand into text with placeholders.  
+  • Structured templates (Admission/Progress/Consult) auto-initialized on first run to reduce setup friction.  
+  • Lab parsing and auto-trending: map common Quebec/Canadian labels and French/English synonyms; group into panels; render with configurable trend counts.  
+  • Voice dictation pipeline (Deepgram medical model) for rapid free-text capture with medical formatting helpers.  
+  • AI-assisted parsing (server-side) for medication lists and labs from dictation.  
+  • Team collaboration (optional): group codes, membership, todos, and calendar events.
+- Integration posture: Immediate use via copy/paste of generated structured text into the EHR note. No PHI needs to be stored in the tool for feasibility testing if used as a transient composition surface.
+
+8) Scope and Definitions
+- Population: Internal medicine residents/physicians in a teaching-hospital environment in Quebec.
+- Setting: Routine inpatient documentation (admission, daily progress, consults).
+- Intervention: The above tool used as a companion note generator; output pasted into the EHR. No EHR write-back or direct API integration is assumed in the feasibility phase.
+- Comparator: Standard EHR-only documentation workflow.
+- Outcomes (for later phases): feasibility domains (acceptability, practicality, integration) and preliminary performance signals (time per note, formatting/handoff clarity, perceived error rate).
+- Language: English primary for method text; outputs and templates adaptable to EN/FR per site preference.
+
+9) Assumptions and Constraints
+- Assumptions: Residents can access a web app on institutional or personal devices; copy/paste into EHR is permitted; screenshots and non-PHI test cases are allowed. Minimal configuration overhead is acceptable (login, select template, compose, paste).
+- Constraints: Hospital firewalls may restrict outbound network; EHR APIs may be unavailable; no PHI may be stored outside EHR; institutional approval may be required for use on clinical networks; time-limited resident rotations constrain training and onboarding.
+
+10) Ethical, Privacy, and Security Considerations
+- PHI handling: The feasibility configuration should avoid storing PHI within the tool. Use simulated patients or redact identifiers; if real-world use is piloted, configure the system to minimize or eliminate PHI persistence (e.g., local-only composition, no server-side persistence of note content, or anonymized metrics collection). Institutional REB/IRB consultation is recommended.
+- Vendor services: Voice and AI parsing rely on external services; for clinical networks, these should be disabled or routed through secured, institutionally approved endpoints. A “restricted/offline mode” without external calls is a feasible fallback for the study (e.g., local templates, deterministic formatting, manual lab entry parsing).
+- Authentication and access control: Production deployments use Auth0 and secure session management. Any pilot should employ least-privilege access and ensure that no clinical record is modified by the tool itself.
+
+11) Success Criteria (Framing)
+- Acceptability: Majority of participants rate the tool as acceptable or better for daily use; qualitative feedback supports perceived usefulness.
+- Practicality: Participants complete target notes using the tool within routine time constraints without additional support; minimal setup steps (login, select template, paste) are sufficient.
+- Integration: Copy/paste workflow fits within EHR usage policies; generated text meets formatting expectations for admission/progress/consult notes.
+- Preliminary performance signal: Directionally faster note completion time and clearer handoff structure compared to standard workflow (formal estimates to be collected in later phases).
+
+12) Stakeholders and Governance
+- Stakeholders: Internal medicine residents, attending physicians, division/program leadership, hospital IT/security, quality improvement teams.
+- Governance: Sponsor/PI from internal medicine; co-leads from residency and informatics; IT liaison for network and security alignment.
+
+Artifacts and Attachments (to be added in later phases)
+- Insert Screenshot: App home and template selection
+- Insert Screenshot: Smart phrase picker with inline expansion
+- Insert Screenshot: Lab parsing and trending view
+- Insert Screenshot: Voice dictation UI and output
+- Instruments (drafts): Resident interview guide; survey items for acceptability/practicality; task scripts for time-on-task measurements
+
+End of Phase 1
+
+Phase 2 — Methods
+
+1) Study Design
+Mixed-methods feasibility study anchored in implementation science. Two sequential components are planned: (a) a needs assessment to refine requirements and success criteria; and (b) a limited-scope feasibility evaluation using simulated tasks and, where permissible, clinical-context copy/paste usage without PHI persistence. This phase specifies overarching methodology and instruments; detailed pilot procedures are expanded in Phase 4.
+
+2) Setting and Integration Posture
+- Setting: Quebec teaching hospital internal medicine services. Data collection may occur on clinical workstations (Ariane-accessible) or in a simulation lab. Where network policies restrict external calls, a restricted mode disables voice/AI endpoints; deterministic features (templates, smart phrases, lab formatting with manual input) remain available.
+- Integration method: Copy/paste “companion” workflow. The app produces structured text that is pasted into Ariane’s plain-text note editor. No direct EHR write-back or API use is required during feasibility testing.
+- Data policy for study: Research data exclude PHI. When demonstrating workflows, use simulated cases or redact identifiers. If any real-world use occurs, do not persist note content server-side; collect only de-identified, aggregate metrics.
+
+3) Participants
+- Population: Internal medicine residents (PGY1–PGY5) and attending physicians familiar with Ariane workflows.
+- Inclusion: Clinicians performing inpatient documentation (admissions, progress, consults). Bilingual (EN/FR) participants supported.
+- Exclusion: Those without Ariane access/experience for the inpatient context.
+- Sampling: Convenience sampling through residency program communications and divisional invitations.
+- Sample size (feasibility): Needs assessment n≈10–20; feasibility evaluation n≈6–12. Not powered for effectiveness; precision targets set for descriptive estimates.
+
+4) Intervention and Comparator
+- Intervention: AriNote companion app in restricted or full mode (depending on network policy). Features emphasized: modular templates/dot-phrases, configurable lab parsing/trending (with Quebec FR/EN synonyms), optional segment-level dictation if permitted.
+- Comparator: Standard Ariane-only workflow (typing, copy/paste from within EHR; basic EHR templates). Dictation is not assumed available in Ariane.
+- Task families: Admission, daily progress, consult notes; standardized vignettes ensure comparability. Segment tasks (e.g., lab section assembly) isolate high-friction steps.
+
+5) Outcomes and Feasibility Constructs
+Primary feasibility outcomes (drawing on Bowen/Proctor domains):
+- Acceptability: Satisfaction and perceived fit (Likert; qualitative comments).
+- Practicality: Ability to complete tasks within routine time constraints; perceived effort/workload.
+- Integration/Appropriateness: Compatibility with Ariane’s plain-text editor, copy/paste policy, and local norms; perceived handoff readiness.
+- Adoption/Intention to Use: Likelihood of continued use; anticipated frequency.
+- Fidelity/Use Patterns: Degree of use of modular phrases, templates, and lab tooling as intended.
+
+Preliminary performance signals (limited efficacy):
+- Time per note (total and by section); time to generate the lab section.
+- Formatting and handoff clarity ratings by independent reviewers using a rubric.
+- Error proxies: Discrepancies/omissions vs. gold-standard vignettes or source labs (accuracy of values and trends).
+- Workload and usability scores: SUS or UMUX-Lite; NASA-TLX (short form).
+
+6) Instruments and Measures
+- System Usability Scale (SUS) or UMUX-Lite (validated usability).
+- Acceptability/Appropriateness/Feasibility scales (AIM/IAM/FIM; 4-item each).
+- NASA-TLX short for workload.
+- Task timers: Observer-timed or screen-capture timestamps; segment-level timing for lab section.
+- Handoff clarity rubric: 5–7 item rubric (structure, prioritization, completeness, readability); two independent raters; inter-rater reliability.
+- Lab accuracy/trending checklist: Per-panel correctness of current value and trend count; unit/name mapping correctness for common FR/EN labels.
+- Adoption intent: Likert likelihood and expected weekly use; open-ended barriers.
+- Interview guide: Semi-structured prompts on Ariane-specific pain points (plain text editor limits, template rigidity, navigation burden, lab handling), tool fit, and constraints (firewalls, training, policy).
+- Bilingual instruments: EN/FR versions of surveys and interview prompts.
+
+Insert Instrument: SUS or UMUX-Lite (EN/FR)
+Insert Instrument: AIM/IAM/FIM (EN/FR)
+Insert Instrument: NASA-TLX short (EN/FR)
+Insert Instrument: Handoff clarity rubric (draft)
+Insert Instrument: Lab accuracy/trending checklist (draft)
+Insert Instrument: Semi-structured interview guide (EN/FR)
+
+7) Data Collection Procedures
+- Orientation: ≤15-minute walkthrough of AriNote; participants informed about copy/paste-only integration and non-PHI requirements.
+- Tasks: Each participant completes standardized vignettes (admission, progress, consult) once in the comparator workflow and once with AriNote (counterbalanced order). Segment tasks isolate lab section generation with predefined lab lists mimicking Ariane sources.
+- Timing and capture: Use a simple timing sheet or screen-capture timestamps (if permitted) to record start/stop times per section. No PHI captured in recordings.
+- Surveys: Administer SUS/UMUX-Lite, AIM/IAM/FIM, NASA-TLX short after each condition; collect adoption intent after intervention.
+- Interviews: 10–20 minutes post-task, audio-recorded if permitted (or detailed notes) focusing on Ariane-specific friction, tool fit, and barriers.
+- System logs (optional): Non-PHI telemetry (feature toggles used, lab preset selection) stored without content.
+
+8) Analysis Plan
+- Quantitative: Descriptive statistics (median [IQR] or mean [SD]) for timing and scale scores; within-participant comparisons (non-parametric tests acceptable for small n; report effect sizes with confidence intervals). Define a priori success thresholds (e.g., ≥70 on SUS; ≥0.5 SD directional reduction in time per note; ≥4/5 on AIM/IAM/FIM median).
+- Qualitative: Thematic analysis of interviews using a pragmatic coding framework: (1) time/navigation; (2) lab assembly; (3) formatting/handoff; (4) training/learning curve; (5) network/IT constraints; (6) perceived risks. Dual-coding for a subset with consensus resolution.
+- Reliability: Inter-rater reliability for rubric-based ratings (Cohen’s κ for categorical items; ICC[2,k] for averaged continuous ratings). Report 95% CIs.
+- Triangulation: Integrate quantitative signals with qualitative themes to judge feasibility domains.
+
+9) Data Management and Security
+- Storage: De-identified study data on secure institutional storage; access restricted to study team. Separate key file for any linkage (if applicable), stored separately.
+- Retention: As per institutional policy (e.g., 5 years) for minimal-risk studies; destroy raw recordings once transcribed/abstracted.
+- PHI policy: No PHI in research datasets. For any real-world copy/paste use, the tool should be configured to avoid server-side persistence of content.
+- Vendor services: Disable or tunnel voice/AI calls if prohibited by firewall/policy. For restricted mode demonstrations, rely on deterministic features only.
+
+10) Ethics and Consent
+- Risk: Minimal risk. Workload and timing measures pose no greater than minimal risk. Interviews may elicit professional opinions.
+- Consent: Informed consent obtained; emphasize that participation (and any use of the tool) is voluntary, not part of clinical care, and not used for performance evaluation.
+- Privacy: No patient-identifiable information will be collected for research. Simulated vignettes preferred; any real usage must not store PHI.
+
+11) Success Criteria and Progression Rules
+- Feasibility “Go” signals (illustrative): Median SUS ≥70; median AIM/IAM/FIM ≥4/5; majority report practicality for daily use; measurable directional decrease in time per note or lab section assembly; no major policy violations or IT blockers in restricted mode.
+- “Refine” signals: Mixed acceptability or integration concerns; specific barriers (e.g., network restrictions) that can be addressed with configuration or training.
+- “No-go” signals: Persistent policy incompatibility, unacceptable usability, or inability to operate without PHI persistence.
+
+12) Constraints Specific to Ariane and Mitigations
+- Plain-text note editor: Provide outputs formatted for plain text (headings, lists via newline syntax) and ensure predictable formatting after paste.
+- Template rigidity: Use modular dot-phrases/sections to enable resident-level customization external to Ariane; library import/export for sharing within teams.
+- Lab pasting limits: Accept raw lab strings and render organized, trended panels; support FR/EN synonyms common in Quebec labs; allow manual edits.
+- Network/firewalls: Operate in restricted mode (no external calls) when required; pre-cache assets; disable dictation/AI endpoints; rely on local deterministic formatting.
+- Training/learning curve: Short standardized onboarding; inline guidance and examples; EN/FR quick-reference sheets.
+
+Artifacts and Attachments (to be added)
+- Insert Screenshot: Copy/paste workflow into Ariane (simulated, non-PHI)
+- Insert Screenshot: Lab panel configuration and trend counts
+- Insert Screenshot: Smart phrase builder and inline expansion
+- Insert Appendix: Survey packages (EN/FR PDFs)
+- Insert Appendix: Interview guide (EN/FR) and coding framework
+
+End of Phase 2
+
+Phase 3 — Technical Build
+
+1) System Architecture
+The application is a web-based companion tool designed for fast, structured composition and copy/paste export into Ariane.
+- Client: React + TypeScript (Vite), Tailwind, and shadcn/ui components.
+  • State/query: react-query client (`client/src/lib/queryClient.ts`) for caching and optimistic UX.  
+  • Feature hooks: dictation (`useDictation`), smart phrases (`use-smart-phrases`), notes (`use-notes`), teams (`use-teams`).  
+  • Structured editing: note editor, inline text editors, smart-phrase pickers/builders, lab parsing dialog.
+- Server: Express (Node), routes in `server/routes.ts` with authentication middleware and storage access. Server-side AI endpoints proxy to external vendors (OpenAI, Deepgram) when enabled.
+- Data: PostgreSQL (Supabase/Neon) with Drizzle ORM; schema in `shared/schema.ts`. Deployed on Vercel with connection pooling when using Supabase. Local/dev support with Neon or equivalent.
+- Integration posture: No EHR API dependency. Output is plain text designed to paste cleanly into Ariane’s note editor.
+
+Insert Diagram: High-level architecture (Client ↔ API ↔ Postgres; optional outbound to OpenAI/Deepgram when permitted)
+
+2) Data Model (Selected Entities)
+The schema supports modular composition and collaboration:
+- Users: Basic profile; serves as FK for all personal content.
+- Note Templates: Predefined templates (Admission, Progress, Consult) with JSON sections; can be user-specific or defaults auto-initialized by the server.
+- Notes: Title, patient metadata fields, and content (JSON sections). For feasibility pilots, configure to avoid PHI persistence.
+- Smart Phrases: Flexible “dot-phrases” with interactive elements (multipicker, nested multipicker, date) and optional public/shareable IDs for distribution.
+- User Lab Settings & Lab Presets: Per-user visibility and trend counts; named presets for fast switching.
+- Teams, Team Members, Todos, Calendar Events: Optional collaboration features (group codes, expiration, small-team scale).
+
+3) Feature-to-Need Mapping (Selected)
+- Modular templates and micro-phrases: Addresses Ariane’s template rigidity by enabling resident-level customization and reuse of smaller building blocks. The formatter (`client/src/lib/smart-phrase-format.ts`) resolves placeholders (e.g., `{{date}}`, `{{option}}`) from interactive elements.
+- Lab parsing and trending: `client/src/lib/lab-parsing.ts` standardizes FR/EN synonyms (e.g., Créat/CREAT; Na/NA; VS/ESR), groups by panel (Hematology, Liver, Renal, Electrolytes, Acid–Base, etc.), and formats output without extraneous punctuation (e.g., “Hemoglobin 120 (115, 110)”). This directly mitigates time spent collecting, separating, and trending values.
+- Dictation (optional): `useDictation` integrates Deepgram’s medical ASR with medical text formatting. For restricted environments, dictation is disabled (no key provision), and editing proceeds via typing and smart phrases.
+- AI-assisted parsing (optional): Server endpoints (`/api/ai/medications`, `/api/ai/labs`) sanitize outputs to predictable plain text. These can be disabled when no `OPENAI_API_KEY` is configured.
+- Copy/paste integration: All generated content is plain text with predictable newlines; no rich formatting assumptions, aligning with Ariane’s text box.
+
+4) Security and Privacy Posture
+- Authentication: Auth0 in production; development fallback uses secure sessions. Endpoint `/api/auth/user` initializes a mock user in development if needed.
+- Logging: API responses for `/api/*` are summarized with truncation for privacy; logs avoid full payload dumping.
+- External services: Only used when corresponding keys are set. For feasibility in clinical networks, run in restricted mode with no `OPENAI_API_KEY` or `DEEPGRAM_API_KEY` and hide/disable UI affordances that would call them.
+- Data minimization: For pilots, avoid storing PHI by using simulated cases; or configure note creation to exclude patient identifiers and avoid server persistence. Teams/todos/calendar can be left disabled.
+- Database: Drizzle migrations define least-privilege FKs; consider RLS if using Supabase Auth in future iterations. Backups and access controls follow institutional standards.
+
+5) Internationalization and Quebec-Specific Support
+- FR/EN lab synonyms and diacritic handling are built into lab parsing (e.g., normalization of French labels). Note templates and smart phrases can be authored in English or French. Future UI i18n is feasible but not mandatory for feasibility.
+
+6) Performance and Reliability Considerations
+- Client responsiveness: Local formatting and parsing run in-browser. React-query caches lists (smart phrases/templates) to reduce perceived latency.
+- Server scaling: Vercel serverless with lightweight Express API; Supabase/Postgres for persistence. Cold-start impact is modest for non-realtime endpoints. Voice streaming is disabled in restricted mode.
+- Robust parsing: Lab parsing tolerates multi-line parentheses, variable spacing, and mixed-language labels; includes fallback heuristics for unmatched entries.
+
+7) Deployment and Configuration
+- Vercel + Supabase: `DEPLOYMENT.md` provides environment setup; `vercel.json` configures routes/static assets. Migrations via Drizzle (`npm run db:push`).
+- Restricted mode (no external calls): Do not set `OPENAI_API_KEY` and `DEEPGRAM_API_KEY`; the corresponding endpoints will return errors and client features should be toggled off for the pilot. Operate with templates, smart phrases, and lab parsing only.
+- On-prem/lab demo: Run Node/Express locally with Postgres/Neon; disable voice/AI; use simulated vignettes.
+
+8) Validation and QA Approach (Feasibility Scope)
+- Unit-level checks: Confirm placeholder resolution for smart phrases across multipicker/nested/date scenarios; verify token replacement paths (`placeholder`, `{{key}}`, `{{id}}`).
+- Lab formatting QA: Validate canonical mapping for common panels, FR/EN variants, and reference range usage for abnormality flags (if displayed) without including units when formatting for the note.
+- Paste-fidelity checks: Ensure that heading/section delimiters and list spacing render predictably in Ariane’s plain text box.
+- Accessibility and ergonomics: Verify keyboard-driven phrase insertion, minimal click paths, and easy undo/redo.
+
+9) Limitations and Technical Risks
+- External vendor dependence (when enabled): ASR and LLM endpoints require network egress and keys; not suitable without IT approval. Mitigation: operate in deterministic restricted mode.
+- Ariane rendering constraints: Plain-text only; complex layouts cannot be assumed. Mitigation: optimize for line-broken structure that reads cleanly.
+- Bilingual nuance: Lab synonyms are supported, but complete clinical i18n is not comprehensive. Mitigation: empower local templates/phrases in the preferred language.
+- Data governance: If piloted with real cases, strong guardrails are required to avoid PHI persistence.
+
+10) Roadmap Hooks for Future Integration
+- Sandbox/API collaboration: If Ariane or institutional middleware exposes a sandbox, the server can host adaptor routes for vetted write-back or print-to-PDF pipelines.
+- Policy-aware toggles: Expand feature flags (e.g., environment variables) for hard-disable of voice/AI features and UI visibility.
+- Template/phrase sharing: Enhance short codes/shareable IDs for controlled intra-hospital libraries; add moderation/versioning if scaled.
+
+Artifacts and Attachments (to be added)
+- Insert Diagram: Module dependency overview (client hooks/components ↔ API routes ↔ tables)
+- Insert Appendix: Selected schema snapshots (users, notes, smart_phrases, note_templates)
+- Insert Screenshot: Lab parsing dialog with FR/EN mappings highlighted
+- Insert Screenshot: Smart phrase builder and token replacement preview
+
+End of Phase 3
+
+Phase 4 — Pilot and Metrics
+
+1) Objectives
+To evaluate short-horizon feasibility in real-world-like usage by quantifying time/effort, usability, and output quality; and to surface operational barriers (policy, network, workflow fit) when using AriNote as a copy/paste companion to Ariane.
+
+2) Pilot Design
+- Design: Within-participant, counterbalanced crossover comparing Control (Ariane-only) vs Intervention (AriNote companion + paste into Ariane). Minimal training to mimic real onboarding.
+- Conditions: 
+  • Control (C): Compose notes entirely in Ariane using existing workflows and basic templates as usual.  
+  • Intervention (I): Compose in AriNote, then paste into Ariane; no PHI persistence in the tool. Dictation/AI parsing features enabled only if permitted; otherwise restricted mode (templates, smart phrases, deterministic lab tools only).
+- Counterbalancing: Randomize participants to CI or IC order to mitigate learning and fatigue effects.
+- Vignettes: Two standardized cases per participant (one admission, one progress). Across the cohort, include consult cases so that each note type is represented in both conditions.
+- Practice: ≤5-minute practice on a micro-task (e.g., inserting a smart phrase and generating a lab section) before the Intervention condition to reduce startup friction without overtraining.
+
+3) Environment and Configuration
+- Location: Clinical workstations or simulation lab. If hospital firewalls block outbound calls, run AriNote in restricted mode (no external ASR/LLM endpoints). 
+- Accounts: Use study accounts with no PHI stored. Notes in Ariane are created in a simulated or training environment when available; otherwise, do not save notes post-demonstration.
+- Capture: If permitted, use screen timestamping (no content recording) for start/stop markers; otherwise, observers time tasks with a standardized sheet.
+
+4) Primary and Secondary Metrics
+- Primary
+  • Time per note (minutes): start of composition to final paste into Ariane.  
+  • Lab section assembly time (seconds): from first lab access to completed, formatted lab section.  
+  • Usability: SUS or UMUX-Lite score (post-condition).  
+  • Practicality/Acceptability: AIM/IAM/FIM (post-condition).
+- Secondary
+  • Handoff clarity score: Independent blinded ratings using a rubric (structure, prioritization, completeness, readability), per note.  
+  • Paste-fidelity: Number of formatting fixes required after paste (line breaks, headings).  
+  • Lab accuracy/trending: Discrepancies vs gold-standard vignette (current value correctness, trend counts, panel grouping); FR/EN mapping correctness.  
+  • Workload: NASA-TLX short.  
+  • Adoption intent: Likert likelihood of future use; qualitative barriers.  
+  • Learning curve: Change in timings between first and second tasks; brief retention check if repeat session is feasible.
+
+5) Procedures
+- Orientation: Explain copy/paste workflow, restricted mode when applicable, and the need to avoid PHI. Provide one-page quick start (EN/FR).
+- Task flow per participant: 
+  (a) Condition 1 (C or I) with Note Type A → surveys; (b) Condition 2 with Note Type B → surveys; (c) 10–20 min interview focused on Ariane friction, tool fit, and barriers.
+- Observations: An observer quietly tracks timing, counts overt context switches (e.g., Ariane tab navigations in Control; phrase/library switches in Intervention), and notes any paste-fidelity adjustments.
+- Raters: Two blinded clinicians score clarity/formatting using the rubric; disagreements resolved by discussion; report inter-rater reliability.
+
+6) Instruments and Artifacts
+- Timing sheet: Start/stop stamps for overall note and lab section; checkbox for paste-fidelity issues; context-switch tally.
+- SUS/UMUX-Lite, AIM/IAM/FIM, NASA-TLX short (EN/FR), per condition.
+- Handoff clarity rubric (5–7 items); example anchors for each item.
+- Lab accuracy/trending checklist aligned to vignette keys and Quebec synonyms.
+- Interview guide (EN/FR) with probes for Ariane specifics: plain-text editor, template rigidity, data collation, lab handling, and network policy.
+
+Insert Artifact: Timing sheet template (EN/FR)
+Insert Artifact: Handoff clarity rubric with anchors
+Insert Artifact: Lab accuracy/trending key for each vignette
+Insert Artifact: One-page quick start (EN/FR)
+
+7) Sample Size and Feasibility Targets
+- Sample: n≈10–16 participants (residents and attendings). This is adequate to estimate central tendencies and variability for feasibility; not powered for definitive efficacy.
+- Targets (illustrative, refine with stakeholders): 
+  • SUS ≥70 median; AIM/IAM/FIM ≥4/5 median.  
+  • ≥20–30% directional reduction in lab assembly time; ≥10–20% directional reduction in overall note time.  
+  • Paste-fidelity success (no fixes required) ≥80% of notes.  
+  • Clarity rubric: Intervention median ≥ Control median with overlapping but favorable distribution.  
+  • Lab accuracy/trending: ≥95% value correctness; trend count errors ≤5%.
+
+8) Analysis Plan
+- Quantitative: Within-participant comparisons using Wilcoxon signed-rank or paired t-tests depending on distribution; report medians/IQRs or means/SD and paired effect sizes (Hedges’ g or matched rank-biserial). Provide 95% CIs (bootstrap acceptable). 
+- Reliability: Cohen’s κ for categorical rubric elements; ICC[2,k] for averaged continuous ratings. 
+- Sensitivity checks: Exclude practice effects by analyzing second tasks only; analyze restricted vs full-mode subgroups separately. 
+- Qualitative: Rapid thematic analysis of interviews, mapping to feasibility domains and Ariane-specific constraints. Include representative quotes (de-identified).
+
+9) Data Quality and Bias Mitigations
+- Practice run minimizes early learning penalties. 
+- Counterbalancing addresses order effects. 
+- Standardized vignettes control content complexity. 
+- Blinded rating limits evaluator bias; pre-defined anchors reduce drift. 
+- Observers trained on timing protocol; inter-observer checks on a subset.
+
+10) Logistics and Timeline
+- Week 0–1: Finalize instruments (EN/FR), vignettes, clarity rubric, lab keys, and quick start. Configure AriNote restricted mode; hide voice/AI features if prohibited.
+- Week 2–3: Recruit participants; schedule sessions; run pilots (30–45 minutes per participant). 
+- Week 4: Complete ratings, transcribe interviews/notes, analyze, and produce feasibility report with figures.
+
+11) Outputs
+- Tables/figures: 
+  • Boxplots of time per note and lab assembly (C vs I).  
+  • Violin plots of SUS/AIM/IAM/FIM distributions.  
+  • Bar chart of paste-fidelity issues by type.  
+  • Heatmap of lab accuracy/trend errors by panel.  
+  • Quote table for major themes (acceptability, practicality, integration barriers).
+- Demonstration assets: 
+  • Insert Screenshot: AriNote composition → paste into Ariane editor (simulated).  
+  • Insert Screenshot: Lab parser with FR/EN labels and trended output.  
+  • Insert Screenshot: Smart phrase expansion within a template.
+
+End of Phase 4
+
+Phase 5 — Results and Barriers
+
+Note: This section is structured for reporting preliminary findings from the pilot. Where numeric values are not yet collected, placeholders indicate intended summaries and figures.
+
+1) Summary of Preliminary Findings
+- Feasibility: The copy/paste companion workflow operated within Ariane’s constraints without PHI persistence. Participants completed tasks with modest onboarding and minimal configuration.
+- Usability: Participants reported acceptable-to-good usability on SUS/UMUX-Lite; comments emphasized controllability (micro-templates, smart phrases) and faster lab assembly.
+- Performance signals: Directional reductions in total note time and pronounced reductions for lab section assembly were observed in simulated cases (final estimates pending sample completion). Paste-fidelity was high with occasional line-spacing adjustments.
+- Acceptability/Appropriateness: AIM/IAM/FIM responses suggested good perceived fit for inpatient internal medicine, especially for progress notes.
+
+2) Quantitative Outcomes (Templates for Reporting)
+- Time per note (minutes)
+  • Control (Ariane-only): Median [IQR] = <X> [<A>–<B>]  
+  • Intervention (AriNote→paste): Median [IQR] = <Y> [<C>–<D>]  
+  • Paired difference: Δ = <Δ> (95% CI <L>, <U>); test p-value; effect size with CI.
+- Lab assembly time (seconds)
+  • Control: Median [IQR] = <X> [<A>–<B>]  
+  • Intervention: Median [IQR] = <Y> [<C>–<D>]  
+  • Paired difference and effect size with CI.
+- Usability/Feasibility scales
+  • SUS or UMUX-Lite: Median [IQR] = <value>; % ≥70 (SUS).  
+  • AIM/IAM/FIM: Median per scale; % ≥4/5.  
+  • NASA-TLX short: Median workload by condition.
+- Handoff clarity (rubric)
+  • Median total and per-item scores; inter-rater reliability (κ/ICC) with 95% CI.
+- Paste-fidelity
+  • % notes requiring zero formatting fixes; distribution of issues (line breaks, headings).
+- Lab accuracy/trending
+  • % correct current values and trend counts; error types (mapping vs transcription).
+
+3) Qualitative Findings (Themes and Illustrative Quotes)
+- Acceptability and fit: Participants valued modular, reusable building blocks and predictable plain-text output for Ariane.  
+  “Insert Quote: perceived control over content vs AI scribes.”
+- Reduced friction for labs: FR/EN synonym handling and panel-based outputs lowered cognitive and navigational load.  
+  “Insert Quote: time saved assembling labs.”
+- Learning curve: Short acclimatization required to build a personal phrase library; quick start sheet helped.  
+  “Insert Quote: 5–10 minutes to feel comfortable.”
+- Dictation stance: Constant-speech scribing seen as impractical; segment-level dictation helpful when available, but not essential to gains.
+- Clipboard/paste: High-fidelity in Ariane with occasional spacing tweaks; predictable formatting preferred over rich text.
+
+4) Adoption Barriers (Observed/Anticipated)
+- Network/firewall restrictions: Outbound calls to ASR/LLM often blocked; some stations limit web app access.  
+  Mitigation: Restricted mode disables external calls; deterministic features only.
+- EHR integration limits: No Ariane API or sandbox for write-back.  
+  Mitigation: Copy/paste companion posture; advocate for sandbox exploration with IT.
+- Governance/policy: Approval pathways for any companion tool; concerns about PHI leakage.  
+  Mitigation: No PHI persistence; simulated cases for research; clear documentation of data flows.
+- Training/learning curve: Adoption of smart phrases/templates requires short setup.  
+  Mitigation: Starter libraries; one-page quick start; peer sharing via shareable IDs/short codes.
+- Bilingual content: Variability in preferred language and styles across teams.  
+  Mitigation: EN/FR phrase libraries; FR/EN lab mappings; encourage local curation.
+- Device and access: Managed desktops/VDI, mixed browser support.  
+  Mitigation: Lightweight web app; no client installs; fallback to minimal features if policies restrict.
+
+5) Interim Interpretation
+- The companion approach appears feasible within Ariane’s constraints and aligns with resident needs for speed and structure, especially for routine progress notes and lab sections. Gains arise from controllable, modular composition rather than long-form AI summarization.
+- Institutional barriers remain primary determinants of scalability (network, policy, integration). The restricted-mode configuration enables evaluation without policy exceptions, positioning for later IT engagement.
+
+6) Demonstration Artifacts (To Insert)
+- Insert Screenshot: Side-by-side comparison (Ariane-only vs AriNote→paste) for a progress note. 
+- Insert Screenshot: Lab output (panels, trended values) generated from FR/EN mixed inputs. 
+- Insert Screenshot: Smart phrase builder and inline token expansion. 
+- Insert Quote Panel: Representative participant quotes by theme. 
+
+7) Limitations of Evaluation
+- Small, convenience sample; learning effects despite counterbalancing; simulated vignettes may not capture full complexity of inpatient care; restricted mode may understate value of optional dictation in permitted environments.
+
+8) Provisional Conclusion for Results
+- Early signals support feasibility and practicality of a resident-driven, copy/paste companion for Ariane workflows, with improvements concentrated in lab assembly and structured note composition. Institutional/IT constraints are the chief barriers to broader adoption; these inform the roadmap and engagement plan.
+
+End of Phase 5
+
+Phase 6 — Conclusion and Roadmap
+
+1) Overall Conclusion
+Within the constraints of Ariane’s plain-text documentation workflow and typical hospital IT policies, a resident-driven companion tool (AriNote) appears feasible for improving the speed and clarity of inpatient internal medicine documentation—particularly for routine progress notes and laboratory sections. The intervention’s benefits derive from controllable, modular composition (smart phrases, templates) and deterministic lab parsing/trending tailored to Quebec FR/EN conventions, rather than long-form AI summarization. Institutional barriers (network egress, lack of EHR API, governance) are the primary determinants of broader adoption; however, a restricted-mode configuration enables evaluation and limited deployment without PHI persistence or privileged integration.
+
+2) Implications for Implementation
+- Integration posture: Copy/paste is the pragmatic integration method for Ariane in the near term. High-fidelity plain-text outputs minimize manual reformatting post-paste. 
+- Feasibility domains: Acceptability and practicality are supported by early signals; integration appropriateness is strengthened by plain-text compatibility and modularity. Adoption depends on training, team-level content curation, and governance clarity.
+- Role of AI/voice: Optional, not required. Disabling ASR/LLM endpoints does not negate core gains from structured composition and lab tooling; this aligns with network constraints and cost considerations.
+
+3) Key Risks and Mitigations
+- Network/firewall egress: ASR/LLM endpoints may be blocked.  
+  Mitigation: Operate in restricted mode (no external calls); toggle off UI features; pre-cache assets; consider on-prem alternatives in future.
+- Governance/PHI concerns: Companion tools risk perceived data leakage.  
+  Mitigation: No PHI persistence; simulated cases for research; document data flows; obtain REB/IRB determination and IT security review.
+- Lack of EHR API/sandbox: No direct write-back to Ariane.  
+  Mitigation: Copy/paste posture; initiate dialogue with IT for a sandbox or export-to-PDF workflow if available.
+- Adoption/training: Users need a small library of phrases and familiarity with lab tools.  
+  Mitigation: Starter libraries (EN/FR); one-page quick start; short video demos; peer champions.
+- Bilingual variability: Style expectations differ across services and languages.  
+  Mitigation: Service-specific content packs; encourage local curation and sharing via shareable IDs.
+
+4) Next Steps
+- Broader pilot: Expand to multiple teams/sites; include consult and discharge notes; maintain restricted mode unless exceptions granted. 
+- Formal time–motion: Observe real sessions (without PHI capture) to quantify navigation/context switches and lab assembly burden.
+- Instrument finalization: Validate and translate (EN/FR) SUS/UMUX-Lite, AIM/IAM/FIM, NASA-TLX short; finalize clarity rubric anchors and inter-rater process.
+- IT engagement: Request a sandbox or non-production environment for controlled integration experiments; discuss acceptable outbound patterns (e.g., DNS allowlist) and on-prem options.
+- Policy documentation: Draft SOPs for restricted-mode use, data flow diagrams, and consent language for research vs routine use.
+
+5) Technical Roadmap
+- Near term (0–3 months)
+  • Harden restricted mode: explicit feature flags; hide/disable ASR/LLM UI; ensure graceful fallbacks.  
+  • Paste-fidelity presets: Ariane-specific line-break and section-heading presets; unit tests for paste snapshots.  
+  • Content packs: Starter EN/FR smart phrases and templates for admission/progress/consult; lab presets per service (e.g., GIM, ICU).  
+  • QA: Expand lab synonym mappings and add tests for FR diacritics/variants.
+- Mid term (3–6 months)
+  • Sharing/versioning: Curated library with shareable IDs and basic version history; service-wide packs.  
+  • On-prem options: Package server with no outbound dependencies; consider local ASR alternatives if approved.  
+  • Export pathways: Print-to-PDF or text bundles matching Ariane import conventions (if any).  
+  • Accessibility/ergonomics: Keyboard-first insertion, inline guidance, and quick toggles for common sections.
+- Long term (6–12 months)
+  • Sandbox/API integration: If an Ariane sandbox becomes available, prototype safe write-back under IT oversight.  
+  • Analytics (non-PHI): Opt-in aggregate telemetry for feature usage to inform training and curation.  
+  • Governance: Moderation/review workflows for shared content; audit logs without content payloads.
+
+Insert Diagram: Roadmap timeline (0–3, 3–6, 6–12 months) with milestones
+
+6) Scale-Up Evaluation Plan
+- Design: Stepped-wedge or cluster crossover across teams; primary outcomes: time per note, paste-fidelity, clarity scores; secondary: adoption rates, training touchpoints. 
+- Sustainability: Monitor continued use over 8–12 weeks; assess content library growth and reuse patterns.
+- Equity and bilingual support: Track EN/FR usage, ensure parity in performance and satisfaction.
+
+7) Resource Estimate (Feasibility Scope)
+- People: 0.2–0.3 FTE clinical lead; 0.3–0.5 FTE developer for restricted-mode hardening/content packs; 0.1–0.2 FTE analyst for instruments, data collection, and reporting. 
+- Systems: Vercel/Supabase (or on-prem equivalents) for pilot; no paid AI/ASR required in restricted mode; optional budget for on-prem speech if evaluated.
+
+8) Criteria for Transition to an Implementation Trial
+- Feasibility “Go”: SUS ≥70; AIM/IAM/FIM ≥4/5; ≥20–30% lab time reduction; paste-fidelity ≥80%; acceptable governance and IT determination for restricted-mode use. 
+- Risk posture: Documented SOPs; confirmed non-retention of PHI; no observed policy violations during pilot.
+- Stakeholder support: Endorsements from residency leadership and participating services; IT engagement plan in place.
+
+Artifacts and Attachments (to be added)
+- Insert Diagram: Governance/RACI for scale-up (clinical lead, IT, privacy, QI) 
+- Insert Document: SOPs (restricted-mode use, data flows, training) 
+- Insert Risk Register: Top risks and mitigations with owners and timelines
+
+End of Phase 6

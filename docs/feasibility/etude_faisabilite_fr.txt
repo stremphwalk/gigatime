@@ -1,0 +1,416 @@
+Titre
+Faisabilité d’un outil de documentation piloté par les résidents pour une intégration aux flux de travail du DME Ariane au Québec
+
+Phase 1 — Cadrage (Faisabilité / Science de l’implantation)
+
+1) Contexte
+La documentation clinique en médecine interne est chronophage, souvent redondante, et fortement dépendante des réalités locales des milieux universitaires. Les résidents rédigent une grande partie des notes quotidiennes (admissions, évolutions, consultations, sorties) tout en coordonnant les transmissions, les ordonnances et la communication interservices. Les DME québécois (p. ex., Ariane) sont optimisés pour la sécurité, la conformité et l’archivage longitudinal, mais pas prioritairement pour une saisie rapide et structurée par des médecins en formation. Les points douloureux courants incluent : répétition d’informations pour assurer la continuité; absence de gabarits structurés adaptés aux flux des résidents; interface lente ou fragmentée; difficulté à rassembler des données (analyses, imagerie, médicaments) en notes claires et bien formatées.
+
+La question de faisabilité est la suivante : un « compagnon » léger piloté par les résidents peut‑il coexister avec les contraintes institutionnelles du DME afin d’améliorer la rapidité, la clarté et la qualité des transmissions — sans nécessiter d’accès privilégié aux API du DME ? Une voie pragmatique consiste à générer un texte structuré (phrases rapides, sections structurées, analyses avec tendances, dictée partielle) à coller dans le DME, en attendant une éventuelle collaboration « bac à sable » avec les équipes TI.
+
+2) Contexte québécois : flux de travail DME et contraintes
+- Environnement DME : Ariane et d’autres systèmes privilégient la fiabilité et la conformité; l’accès API est limité ou soumis à autorisation. Les postes cliniques sont souvent soumis à des pares‑feux stricts et à l’absence d’accès sortant.
+- Environnement utilisateur : Équipes de médecine interne bilingues (FR/EN), résidents en rotation, postes gérés (PC bureau, VDI). La segmentation réseau et la protection des renseignements personnels sur la santé (RPS) sont centrales.
+- Posture d’intégration : Une intégration profonde immédiate est peu réaliste. Une approche « par‑dessus l’épaule » est privilégiée : l’application génère un texte structuré (sans conservation de RPS) que l’utilisateur colle dans le DME. Avec le temps, des interfaces « bac à sable » ou médiatisées pourraient être envisagées avec les TI.
+
+2a) Flux Ariane et limites actuelles (observées/rapportées)
+La rédaction dans Ariane repose sur un champ de texte brut avec très peu d’options de mise en forme. Des gabarits existent (p. ex., procédures en USI), mais ils sont statiques, peu personnalisables/partageables et difficilement composables en micro‑blocs réutilisables.
+- Saisie manuelle : Texte saisi dans un éditeur en texte brut, sans outillage ergonomique pour une composition structurée (peu de mise en forme, pas d’éléments inline, syntaxe minimale). La dictée n’est pas prise en charge nativement; le copier‑coller est possible.
+- Contraintes des gabarits : Gabarits basiques; difficile de maintenir une bibliothèque personnelle de fragments réutilisables (« smart phrases ») pour l’AMIR/ATCD, etc. La création/maintenance est lourde et peu adaptée aux besoins des résidents.
+- Friction pour colliger l’information : Données pertinentes (analyses, imagerie, médicaments, notes antérieures) réparties dans plusieurs vues; alternance de contextes fréquente. Le collage depuis des notes antérieures/imagerie est possible, mais le collage d’analyses est limité et sans organisation/tendance automatique.
+- Gestion des analyses : Valeurs numériques à repérer, vérifier, séparer, organiser et trier manuellement. Coûteux en temps et propice aux erreurs, surtout pour produire des résumés par panneaux avec tendances.
+- Variabilité et « perfectionnisme » : Les notes étant très visibles et facilement éditables, on cherche à « perfectionner » la structure et le style, augmentant le temps requis. Variabilité importante des notes entre auteurs, compliquant la transmission.
+- Effet net : Comparativement à l’écriture manuscrite (souvent plus rapide mais moins partageable), Ariane est fréquemment plus lent à cause de la navigation, de la collation manuelle et de la mise en forme.
+
+Trajectoire historique (motivation pour un compagnon)
+- Papier : Familier, fiable, personnalisable, mais support physique, collaboration limitée et stagnation technologique. Qualité variable.
+- Premiers usages d’Ariane : Faisabilité démontrée (p. ex., USI et soins palliatifs) et meilleure accessibilité (étage, bureau). Ébauche d’efficiences (gabarits simples, copier‑coller), mais globalement plus lent que le manuscrit, en raison de la frappe, de la navigation et de la gestion manuelle des données.
+
+2b) Limites des scribes médicaux IA (paysage actuel)
+Les solutions de scribe IA suivent souvent : enregistrement audio → transcription (ASR) → brouillon par LLM guidé par un prompt. Limites observées :
+- Temps et vérification : Un enregistrement de 20–30 minutes produit un texte nécessitant relecture attentive et nombreuses corrections — les gains de temps s’érodent.
+- Contrôlabilité limitée : Style/contenu dépendants du prompt, souvent peu alignés aux préférences de service. Contrôle fin (micro‑gabarits) limité.
+- Hallucinations et omissions : Risque d’erreurs ou de manques; la vérification s’impose, déplaçant l’effort vers l’audit.
+- Adaptation au milieu : Parler en continu est peu pratique et parfois perturbateur en salle. 
+- Accès et coûts : Offres coûteuses et complexes à déployer; parfois inaccessibles derrière des pares‑feux.
+- Innovation limitée pour le structuré : Fonctionnent surtout comme dictée/transcription « intelligente » plutôt que d’adresser les besoins de composition modulaire et de tendances d’analyses sous contrôle clinique.
+
+Positionnement du compagnon (« AriNote »)
+Le compagnon piloté par les résidents met l’accent sur la composition contrôlable et modulaire plutôt que sur des résumés IA longs. Focalisation sur : génération rapide de texte structuré (smart phrases/gabarits), parsage déterministe et tendances d’analyses adaptées aux conventions FR/EN au Québec, dictée segmentaire optionnelle, et export par copier‑coller vers Ariane.
+
+3) Problématique et justification
+Problème : Les résidents consacrent beaucoup de temps à composer et reformater; l’outillage DME manque d’affordances de saisie rapide adaptées. Effets : inefficiences, variabilité des notes, friction lors des transmissions.
+Justification : Un outil piloté par les résidents peut encoder les patrons courants (phrases rapides, gabarits structurés, tendances d’analyses, dictée) et s’adapter rapidement aux besoins de service, améliorant vitesse et constance tout en préservant la nuance clinique. Une étude de faisabilité s’impose dans le cadre des contraintes québécoises.
+
+4) Cadre conceptuel (faisabilité et implantation)
+Domaines de faisabilité : acceptabilité, demande, praticité, intégration, et efficacité limitée (signal sur temps et clarté des notes).
+Résultats d’implantation : acceptabilité, adoption, pertinence/appropriation, faisabilité opérationnelle, fidélité d’usage, coût d’implantation, pénétration, pérennité.
+Ces domaines structureront méthodes, mesures et interprétation.
+
+5) Question de recherche
+Est‑il faisable d’intégrer un outil léger piloté par les résidents aux flux Ariane au Québec (initialement via copier‑coller), et observe‑t‑on des signaux précoces d’amélioration de l’efficacité et de la clarté des notes en médecine interne ?
+
+6) Objectifs
+- Primaires : Évaluer l’acceptabilité, la praticité et l’intégration dans les flux des résidents, sans accès API privilégié et sous contraintes réseau.
+- Secondaires : Estimer des signaux préliminaires d’efficacité (p. ex., réduction du temps par note; clarté perçue/transmission), identifier les freins (TI/politiques, formation, courbe d’apprentissage) et recueillir la rétroaction pour affiner les fonctionnalités et gabarits.
+
+7) Aperçu de l’intervention (outil)
+Application Web de composition et de préparation des transmissions.
+- Frontend : React + TypeScript (Vite), Tailwind et composants shadcn/ui.
+- Serveur : Express avec authentification (Auth0 en prod, session en dev) et points d’API pour parsage IA (si autorisé).
+- Données : Postgres (Supabase/Neon) via Drizzle; schémas pour Utilisateurs, Notes, Gabarits (Admission/Évolution/Consultation), Smart Phrases, Équipes, Tâches, Calendrier, et préférences d’analyses.
+- Fonctionnalités clés :
+  • Smart/dot‑phrases interactives (multipicker, nested, date) + formateur de texte avec remplacements.  
+  • Gabarits structurés (Admission/Évolution/Consultation) auto‑initialisés.  
+  • Parsage d’analyses et tendances : synonymes FR/EN (p. ex., Créat/CREAT; Na/NA; VS/ESR), panneaux, tendances configurables.  
+  • Dictée (Deepgram médical) pour segments; mise en forme médicale.  
+  • Parsage IA (côté serveur) pour listes de médicaments et analyses (optionnel).  
+  • Collaboration d’équipe (facultatif) : codes de groupe, adhésions, tâches, calendrier.
+- Posture d’intégration : Utilisation immédiate par copier‑coller vers Ariane. Aucune conservation de RPS nécessaire pour la faisabilité.
+
+8) Portée et définitions
+- Population : Résidents et médecins de médecine interne en milieu universitaire au Québec.
+- Milieu : Documentation hospitalière de routine (admission, évolutions, consultations).
+- Intervention : Compagnon générant un texte collé dans Ariane; sans écriture directe dans le DME.
+- Comparateur : Flux Ariane standard.
+- Résultats (phases ultérieures) : domaines de faisabilité et signaux d’efficacité (temps, clarté, erreurs perçues).
+- Langue : Français/anglais, selon préférence du site.
+
+9) Hypothèses et contraintes
+- Hypothèses : Accès Web possible aux postes; copier‑coller permis; captures d’écran et cas simulés possibles. Faible charge de configuration (connexion, choix de gabarit, composition, collage).
+- Contraintes : Pare‑feu; absence d’API Ariane; aucune conservation de RPS; approbations institutionnelles; rotations courtes limitant la formation.
+
+10) Éthique, confidentialité et sécurité
+- RPS : Configurer la faisabilité sans conserver de RPS. Cas simulés ou identifiants caviardés; si usage réel, éviter toute persistance côté serveur (composition locale, télémétrie anonyme seulement). Avis du CER/REB recommandé.
+- Services externes : Dictée et parsage IA reposent sur des services tiers; en réseau clinique, les désactiver ou passer par des passerelles approuvées. Un « mode restreint » sans appels externes est prévu.
+- Authentification/contrôle d’accès : Auth0 en production; moindre privilège pour tout pilote; l’outil ne modifie pas le dossier clinique.
+
+11) Critères de succès (cadrage)
+- Acceptabilité : majorité juge l’outil acceptable ou mieux; commentaires favorables.
+- Praticité : tâches complétées dans des délais usuels; configuration minimale.
+- Intégration : flux copier‑coller compatible avec politiques; formatage adapté aux notes Ariane.
+- Signal d’efficacité : temps de rédaction directionnellement plus court et clarté accrue.
+
+12) Parties prenantes et gouvernance
+- Parties : Résidents, patrons, direction de programme, TI sécurité, équipes d’amélioration de la qualité.
+- Gouvernance : IP clinique; co‑responsables (résidence/informatique); liaison TI.
+
+Produits et annexes (à insérer ultérieurement)
+- Insérer capture d’écran : Accueil et sélection de gabarit  
+- Insérer capture d’écran : Sélecteur de smart phrase et expansion inline  
+- Insérer capture d’écran : Parsage d’analyses et tendances  
+- Insérer capture d’écran : UI de dictée et sortie  
+- Instruments (ébauches) : Guide d’entrevue; questionnaires acceptabilité/praticité; scripts de tâches pour temps de réalisation
+
+Fin de la Phase 1
+
+Phase 2 — Méthodes
+
+1) Dessin d’étude
+Étude de faisabilité à méthodes mixtes. Deux volets : (a) analyse des besoins; (b) évaluation de faisabilité à portée limitée avec tâches simulées et, si permis, usage copier‑coller sans persistance de RPS. Les procédures détaillées de pilote figurent en Phase 4.
+
+2) Milieu et posture d’intégration
+- Milieu : Services universitaires de médecine interne au Québec; collecte sur postes cliniques (Ariane) ou en labo de simulation. En cas de restrictions réseau, mode restreint sans appels externes; fonctions déterministes (gabarits, smart phrases, parsage local) disponibles.
+- Intégration : Copie du texte généré et collage dans Ariane (éditeur de texte brut). Aucun accès API requis.
+- Politique de données : Données de recherche sans RPS. Démonstrations via cas simulés; en usage réel, éviter toute persistance côté serveur; ne collecter que des métriques agrégées désidentifiées.
+
+3) Participants
+- Population : Résidents (R1–R5) et patrons en médecine interne familiers d’Ariane.
+- Inclusion : Cliniciens réalisant la documentation hospitalière (admission, évolutions, consultations).
+- Exclusion : Sans expérience pertinent d’Ariane.
+- Échantillonnage : Convenance via communications du programme et du département.
+- Taille (faisabilité) : Besoins n≈10–20; faisabilité n≈6–12. Non puissant pour efficacité.
+
+4) Intervention et comparateur
+- Intervention : AriNote en mode restreint ou complet (selon politiques). Focus : gabarits/phrases modulaires, parsage/tendances FR/EN, dictée segmentaire optionnelle si permise.
+- Comparateur : Flux Ariane standard (frappe, copier‑coller interne, gabarits basiques). Dictée non présumée disponible dans Ariane.
+- Tâches : Notes d’admission, d’évolution, de consultation; vignettes standardisées. Sous‑tâches pour la section analyses.
+
+5) Résultats et domaines de faisabilité
+Primaires :
+- Acceptabilité (satisfaction/ajustement),
+- Praticité (réalisation dans le temps imparti; effort perçu),
+- Intégration/pertinence (compatibilité éditeur Ariane; politiques copier‑coller; préparation des transmissions),
+- Adoption/intention d’usage,
+- Fidélité (usage des modules comme prévu).
+
+Signaux d’efficacité (limités) :
+- Temps par note (total et par section); temps de la section analyses,
+- Clarté/formatage pour la transmission (grille d’évaluation),
+- Proxies d’erreurs : divergences vs gold standard de vignette (valeurs/tendances),
+- Utilisabilité/charge : SUS ou UMUX‑Lite; NASA‑TLX court.
+
+6) Instruments et mesures
+- SUS/UMUX‑Lite (utilisabilité),
+- AIM/IAM/FIM (acceptabilité/appropriation/faisabilité),
+- NASA‑TLX court (charge),
+- Chronométrage (observateur ou timestamps d’écran; sous‑tâche analyses),
+- Grille clarté de transmission (5–7 items; 2 évaluateurs; fidélité inter‑juges),
+- Liste de contrôle exactitude/tendances des analyses (FR/EN),
+- Intention d’adoption (Likert) et commentaires,
+- Guide d’entrevue semi‑dirigée (spécifique Ariane),
+- Versions FR/EN des outils.
+
+Insérer instrument : SUS/UMUX‑Lite (FR/EN)
+Insérer instrument : AIM/IAM/FIM (FR/EN)
+Insérer instrument : NASA‑TLX court (FR/EN)
+Insérer instrument : Grille clarté (brouillon)
+Insérer instrument : Liste de contrôle analyses (brouillon)
+Insérer instrument : Guide d’entrevue (FR/EN)
+
+7) Procédures de collecte
+- Orientation ≤15 min; explication du copier‑coller, mode restreint, et non‑collecte de RPS.
+- Tâches : Deux vignettes standardisées (admission, évolution) par participant; conditions comparateur/intervention contrebalancées; sous‑tâche « analyses » avec listes prédéfinies.
+- Chronométrage : Feuille d’observation ou timestamps (sans contenu). 
+- Questionnaires : SUS/UMUX‑Lite, AIM/IAM/FIM, NASA‑TLX après chaque condition; intention d’adoption après l’intervention.
+- Entrevue : 10–20 min; enregistrement si permis (ou prise de notes détaillées).
+- Journaux système (optionnel) : Télémétrie sans contenu.
+
+8) Plan d’analyse
+- Quantitatif : Statistiques descriptives; comparaisons intra‑sujets (tests non paramétriques si petit n); tailles d’effet avec IC. Seuils a priori (p. ex., SUS ≥70; réduction du temps ≥0,5 écart‑type directionnel).
+- Qualitatif : Analyse thématique avec cadre pragmatique (navigation/temps; analyses; formatage/transmission; formation; contraintes TI; risques perçus). Double codage partiel.
+- Fidélité inter‑juges : κ/ICC avec IC à 95 %.
+- Triangulation : Convergence quanti/quali pour juger la faisabilité.
+
+9) Gestion des données et sécurité
+- Stockage : Données désidentifiées, stockage institutionnel sécurisé; accès restreint.
+- Rétention : Selon politique (p. ex., 5 ans); détruire enregistrements bruts après abstraction.
+- RPS : Exclues des jeux de données; éviter toute persistance côté serveur.
+- Services externes : Désactiver/tunneler si interdits; démonstrations en mode restreint.
+
+10) Éthique et consentement
+- Risque minimal; consentement éclairé; participation volontaire; hors processus de soins; aucune évaluation de performance clinique.
+
+11) Critères de succès et règles de progression
+- « Go » : SUS ≥70; AIM/IAM/FIM ≥4/5; baisse directionnelle du temps; absence d’obstacles majeurs TI/politiques en mode restreint.
+- « Affiner » : Acceptabilité/Intégration mitigées; barrières spécifiques adressables.
+- « No‑go » : Incompatibilités persistantes de politiques; utilisabilité inacceptable; impossibilité d’éviter la conservation de RPS.
+
+12) Contraintes propres à Ariane et atténuations
+- Éditeur texte brut : Produire un formatage prévisible après collage (titres, listes via sauts de ligne). 
+- Rigidité des gabarits : Phrases/sections modulaires côté compagnon; partage par identifiants/« short codes ».
+- Collage d’analyses limité : Accepter des textes bruts d’analyses et produire des panneaux avec tendances; synonymes FR/EN; édition manuelle possible.
+- Réseau/pare‑feu : Mode restreint; désactivation dictée/IA; assets en cache local.
+- Formation : Onboarding court; aide‑mémoire; FR/EN.
+
+Produits et annexes (à insérer)
+- Insérer capture d’écran : Flux copier‑coller vers Ariane (simulé)  
+- Insérer capture d’écran : Configuration panneaux d’analyses et tendances  
+- Insérer capture d’écran : Constructeur de smart phrases et expansion inline  
+- Insérer annexe : Paquets de questionnaires (FR/EN)  
+- Insérer annexe : Guide d’entrevue (FR/EN) et cadre de codage
+
+Fin de la Phase 2
+
+Phase 3 — Réalisation technique
+
+1) Architecture
+- Client : React + TypeScript (Vite), Tailwind, shadcn/ui; éditeurs structurés, sélecteurs de phrases, dialogue d’analyses.
+- Serveur : Express (Node); routes `server/routes.ts`; relais IA côté serveur (OpenAI, Deepgram) si autorisés.
+- Données : PostgreSQL (Supabase/Neon) via Drizzle; schéma `shared/schema.ts`.
+- Intégration : Aucun recours à une API Ariane; sortie en texte brut prête au collage.
+
+Insérer schéma : Architecture (Client ↔ API ↔ Postgres; appels externes optionnels)
+
+2) Modèle de données (extraits)
+- Utilisateurs; Gabarits de notes (sections JSON; admission/évolution/consultation); Notes (contenu JSON; éviter RPS en pilote); Smart Phrases (éléments interactifs; identifiants partageables); Préférences d’analyses et préréglages; Équipes/Membres/Tâches/Calendrier.
+
+3) Cartographie besoins ↔ fonctionnalités
+- Gabarits modulaires et micro‑phrases : contournent la rigidité d’Ariane; formateur `client/src/lib/smart-phrase-format.ts` (remplacement de tokens `{{…}}`).
+- Analyses et tendances : `client/src/lib/lab-parsing.ts` (synonymes FR/EN, regroupement en panneaux, sorties sans ponctuation superflue). 
+- Dictée (optionnelle) : `useDictation` (Deepgram médical); désactivée en mode restreint.
+- Parsage IA (optionnel) : `/api/ai/medications`, `/api/ai/labs`; désactivés sans clés.
+- Copier‑coller : Sorties en texte brut cohérentes avec Ariane.
+
+4) Sécurité et confidentialité
+- Authentification : Auth0 en prod; session en dev. 
+- Journalisation : Logs succincts pour `/api/*` (troncature). 
+- Services externes : Utilisés uniquement si clés présentes; en pilote réseau clinique, mode restreint sans appels externes. 
+- Minimisation : Pilotes sans RPS (cas simulés); désactivation modules non essentiels.
+- BD : Drizzle migrations; politiques RLS envisageables (Supabase) à terme.
+
+5) Bilinguisme et spécificités québécoises
+- Synonymes FR/EN et diacritiques gérés dans le parsage des analyses; gabarits et phrases en FR/EN; i18n UI futur possible.
+
+6) Performance et robustesse
+- Réactivité côté client; cache via react‑query; parsage robuste (parenthèses multi‑ligne, espaces variables, libellés mixtes FR/EN).
+
+7) Déploiement et configuration
+- Vercel + Supabase (voir DEPLOYMENT.md); `vercel.json`; migrations Drizzle. 
+- Mode restreint : sans `OPENAI_API_KEY` ni `DEEPGRAM_API_KEY` (UI désactivée pour ces fonctions). 
+- Démo locale : Node/Express local + Postgres; cas simulés.
+
+8) Validation et AQ (périmètre faisabilité)
+- Résolution des tokens (multipicker/nested/date); 
+- Sorties d’analyses : mappages canoniques FR/EN; drapeaux d’anomalie fondés sur plages de référence si affichés;
+- Fidélité de collage : titres/sauts de ligne prévisibles; 
+- Ergonomie : insertion au clavier, annuler/rétablir.
+
+9) Limites et risques techniques
+- Dépendances externes (ASR/LLM) non disponibles en réseau clinique; 
+- Contraintes de rendu (texte brut) d’Ariane; 
+- Nuances bilingues; 
+- Gouvernance des données en cas d’usage réel.
+
+10) Feuille de route technique
+- Bac à sable/API : si disponible, adaptateurs sous supervision TI; 
+- Flags de politique : désactivation stricte voix/IA et masquage UI; 
+- Partage de contenu : identifiants partageables/short codes; versionnage simple.
+
+Produits et annexes
+- Insérer schéma : dépendances modules  
+- Insérer annexe : extraits de schéma (users, notes, smart_phrases, note_templates)  
+- Insérer capture d’écran : dialogue d’analyses (mappings FR/EN)  
+- Insérer capture d’écran : constructeur de smart phrases
+
+Fin de la Phase 3
+
+Phase 4 — Pilote et métriques
+
+1) Objectifs
+Évaluer la faisabilité à court terme en conditions proches du réel : temps/effort, utilisabilité, qualité de sortie; identifier les barrières opérationnelles (politiques, réseau, adéquation au flux Ariane) avec un compagnon en copier‑coller.
+
+2) Dessin du pilote
+- Intra‑sujet, croisé et contrebalancé : Contrôle (Ariane seul) vs Intervention (AriNote → collage dans Ariane). 
+- Formation minimale; vignettes standardisées (admission, évolution; consultations réparties au niveau de la cohorte).
+- Mode restreint si nécessaire (pas d’ASR/LLM).
+
+3) Environnement et configuration
+- Postes cliniques ou labo de simulation; comptes d’étude sans RPS; si possible, environnement de formation d’Ariane.
+- Capture : horodatage d’écran (sans contenu) ou chronométrage par observateur.
+
+4) Métriques
+- Primaires : temps par note; temps section analyses; SUS/UMUX‑Lite; AIM/IAM/FIM.
+- Secondaires : clarté (grille, deux évaluateurs); fidélité de collage (correctifs requis); exactitude/tendances d’analyses; NASA‑TLX; intention d’adoption; courbe d’apprentissage.
+
+5) Procédures
+- Orientation et aide‑mémoire (FR/EN). 
+- Déroulé : Condition 1 (note A) → questionnaires; Condition 2 (note B) → questionnaires; entrevue 10–20 min. 
+- Observation : chronométrage, comptage des changements de contexte, corrections post‑collage.
+- Cotation : deux évaluateurs en aveugle, κ/ICC.
+
+6) Instruments et artefacts
+- Feuille de temps; grilles; listes de contrôle; questionnaires; guide d’entrevue.
+
+Insérer artefact : feuille de temps (FR/EN)
+Insérer artefact : grille clarté avec ancrages
+Insérer artefact : clé analyses/tendances par vignette
+Insérer artefact : aide‑mémoire 1 page (FR/EN)
+
+7) Taille et cibles
+- n≈10–16 (résidents/patrons). 
+- Cibles (à préciser) : SUS ≥70; AIM/IAM/FIM ≥4/5; −20–30 % sur section analyses; −10–20 % global; fidélité collage ≥80 %; exactitude analyses ≥95 %; erreurs de tendances ≤5 %.
+
+8) Analyse
+- Tests appariés (Wilcoxon/t de Student); tailles d’effet et IC; κ/ICC; analyses de sensibilité (ordre, mode restreint vs complet); thématiques d’entrevues.
+
+9) Qualité des données et biais
+- Essai de pratique; contrebalancement; vignettes standardisées; cotation en aveugle; formation des observateurs.
+
+10) Logistique et échéancier
+- Sem. 0–1 : finaliser instruments FR/EN, vignettes, grilles; configurer mode restreint. 
+- Sem. 2–3 : recrutement et séances. 
+- Sem. 4 : cotations, analyses, rapport.
+
+11) Livrables
+- Figures : distributions de temps; scores SUS/AIM/IAM/FIM; erreurs de collage; chaleur d’erreurs analyses. 
+- Démonstrations : captures (AriNote → Ariane; analyses FR/EN; expansion de phrases).
+
+Fin de la Phase 4
+
+Phase 5 — Résultats et barrières
+
+1) Synthèse préliminaire
+- Faisabilité : le flux compagnon par copier‑coller fonctionne sans persistance de RPS; tâches réalisables avec peu d’onboarding.
+- Utilisabilité : jugée acceptable à bonne; contrôle perçu (modules, micro‑gabarits); gain sur la section analyses.
+- Signal de performance : réduction directionnelle du temps total, réduction marquée pour la section analyses; fidélité de collage élevée.
+- Acceptabilité/pertinence : AIM/IAM/FIM favorables, surtout pour les notes d’évolution.
+
+2) Résultats quantitatifs (gabarits)
+- Temps par note : médiane [IQR] Contrôle vs Intervention; différence appariée, IC, p‑valeur, taille d’effet.
+- Temps section analyses : idem.
+- SUS/UMUX‑Lite; AIM/IAM/FIM; NASA‑TLX court.
+- Clarté (grille) : médiane, κ/ICC; 
+- Fidélité de collage : % sans correction; distribution des correctifs; 
+- Exactitude analyses/tendances : % correct; typologie d’erreurs.
+
+3) Résultats qualitatifs (thèmes et verbatims)
+- Ajustement/contrôle; réduction de friction pour analyses; courbe d’apprentissage courte; posture sur la dictée segmentaire; prévisibilité du collage.
+  « Insérer verbatim : contrôle du contenu vs scribe IA »
+
+4) Barrières d’adoption et atténuations
+- Pare‑feu/réseau (mode restreint), 
+- Absence d’API Ariane (copier‑coller; dialogue TI pour bac à sable), 
+- Gouvernance/RPS (pas de persistance; cas simulés; transparence des flux), 
+- Formation (bibliothèques de départ; 1‑pager; partage), 
+- Bilinguisme (librairies FR/EN; curation locale), 
+- Accès/équipement (appli Web légère).
+
+5) Interprétation provisoire
+Approche compagnon compatible avec Ariane et besoins des résidents; gains issus de la composition modulaire et du parsage des analyses plutôt que de résumés IA longs. Les contraintes institutionnelles conditionnent l’échelle, mais le mode restreint permet l’évaluation sans dérogation.
+
+6) Artefacts de démonstration (à insérer)
+- Comparatif côte à côte (Ariane seul vs AriNote → collage), 
+- Sortie analyses (panneaux, tendances) à partir d’entrées FR/EN, 
+- Constructeur de smart phrases.
+
+7) Limites
+Échantillon réduit; effets d’apprentissage malgré le contrebalancement; vignettes simulées; mode restreint pouvant sous‑estimer l’apport de la dictée là où permise.
+
+8) Conclusion provisoire
+Signaux favorables à la faisabilité et la praticité d’un compagnon piloté par les résidents pour Ariane, surtout pour la section analyses et la structuration. Les barrières TI/institutionnelles dominent le risque de passage à l’échelle et guident la feuille de route.
+
+Fin de la Phase 5
+
+Phase 6 — Conclusion et feuille de route
+
+1) Conclusion générale
+Dans le cadre d’Ariane (éditeur en texte brut) et des politiques TI usuelles, un compagnon piloté par les résidents (AriNote) apparaît faisable pour améliorer la rapidité et la clarté des notes d’hospitalisation, en particulier les évolutions et les analyses. Les bénéfices proviennent de la composition modulaire et du parsage déterministe des analyses adapté au contexte FR/EN québécois. Les barrières institutionnelles (réseau, absence d’API, gouvernance) conditionnent l’implantation à grande échelle, mais le mode restreint permet une évaluation et des usages limités sans RPS ni intégration privilégiée.
+
+2) Implications pour l’implantation
+- Intégration : copier‑coller pragmatique; texte brut à haute fidélité post‑collage. 
+- Domaines de faisabilité : acceptabilité/praticité soutenues; intégration renforcée par la compatibilité « texte brut » et la modularité; adoption liée à la formation, la curation d’équipe et la gouvernance.
+- Rôle IA/voix : optionnel. La désactivation ASR/LLM ne supprime pas les gains principaux.
+
+3) Risques clés et atténuations
+- Réseau/egress : bloqué → mode restreint; masquage UI; caches; options sur site en futur. 
+- Gouvernance/RPS : perception de fuite → aucune persistance; cas simulés; documentation des flux; avis éthique/TI. 
+- Absence d’API/sandbox : pas d’écriture → posture copier‑coller; dialogue TI pour bac à sable ou export PDF. 
+- Adoption/formation : besoin d’une petite bibliothèque et de repères → packs FR/EN; 1‑pager; vidéos; champions. 
+- Variabilité bilingue : attentes stylistiques → packs par service; partage via identifiants.
+
+4) Prochaines étapes
+- Pilote élargi (multi‑équipes/sites) en mode restreint; 
+- Étude temps‑mouvement; 
+- Finalisation des instruments FR/EN et des ancrages de grille; 
+- Engagement TI pour environnement bac à sable et politiques d’egress; 
+- SOP en mode restreint, schémas de flux, consentements.
+
+5) Feuille de route technique
+- 0–3 mois : durcissement du mode restreint; préréglages de collage Ariane; packs FR/EN; QA des mappings d’analyses.
+- 3–6 mois : partage/versionnage; options sur site (on‑prem); parcours d’export; ergonomie clavier. 
+- 6–12 mois : intégration bac à sable si disponible; télémétrie agrégée opt‑in (sans contenu); gouvernance de contenu partagé.
+
+Insérer schéma : chronologie (0–3, 3–6, 6–12 mois)
+
+6) Plan d’évaluation à l’échelle
+- Dessin : en escalier (« stepped‑wedge ») ou croisé par équipes; résultats principaux : temps, fidélité de collage, clarté; secondaires : adoption, formation. 
+- Pérennité : suivi 8–12 semaines (usage, croissance des bibliothèques). 
+- Parité FR/EN : suivi des usages et satisfactions.
+
+7) Estimation des ressources (faisabilité)
+- Équipe : 0,2–0,3 ETP clinicien; 0,3–0,5 ETP développeur; 0,1–0,2 ETP analyste. 
+- Systèmes : Vercel/Supabase (ou on‑prem équivalents) pour le pilote; sans IA/ASR payants en mode restreint.
+
+8) Critères de transition vers un essai d’implantation
+- « Go » : SUS ≥70; AIM/IAM/FIM ≥4/5; −20–30 % section analyses; fidélité collage ≥80 %; gouvernance acceptable; détermination TI favorable. 
+- Risque : SOP documentées; non‑rétention de RPS; absence d’incidents. 
+- Parties prenantes : appuis de la direction de programme et des services participants; plan TI établi.
+
+Produits et annexes (à insérer)
+- Schéma de gouvernance/RACI; 
+- SOP (mode restreint, flux, formation); 
+- Registre des risques (atténuations, responsables, échéances).
+
+Fin de la Phase 6
+

@@ -255,7 +255,7 @@ export function LabValuesPopup({ isOpen, onClose, onConfirm }: LabValuesPopupPro
       <DialogContent className="max-w-5xl max-h-[85vh] overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Beaker size={20} className="text-blue-600" />
+            <Beaker size={20} className="text-[color:var(--brand-700)]" />
             Lab Values Entry
           </DialogTitle>
         </DialogHeader>
@@ -307,10 +307,10 @@ export function LabValuesPopup({ isOpen, onClose, onConfirm }: LabValuesPopupPro
             {customLabs.length > 0 && (
               <div className="space-y-2">
                 {customLabs.map((lab, index) => (
-                  <div key={index} className="border rounded p-2 bg-blue-50">
+                  <div key={index} className="border rounded p-2 bg-[color:var(--brand-50)]">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm text-blue-700">{lab.abbreviation}</span>
+                        <span className="font-medium text-sm text-[color:var(--brand-700)]">{lab.abbreviation}</span>
                         <span className="text-xs text-gray-600">({lab.name})</span>
                         {lab.unit && <Badge variant="outline" className="text-xs px-1 py-0">{lab.unit}</Badge>}
                       </div>
@@ -454,7 +454,7 @@ export function LabValuesPopup({ isOpen, onClose, onConfirm }: LabValuesPopupPro
                           <div key={test.abbreviation} className="border rounded p-2 bg-gray-50">
                             {/* Compact Test Header */}
                             <div className="flex items-center gap-2 mb-1">
-                              <span className="font-medium text-sm text-blue-700">{test.abbreviation}</span>
+                              <span className="font-medium text-sm text-[color:var(--brand-700)]">{test.abbreviation}</span>
                               {test.normalRange && (
                                 <Badge variant="outline" className="text-xs px-1 py-0">
                                   {test.normalRange} {test.unit}

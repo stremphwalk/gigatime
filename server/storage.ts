@@ -7,6 +7,8 @@ import {
   smartPhrases,
   teamTodos,
   teamCalendarEvents,
+  teamBulletinPosts,
+  teamTodoAssignees,
   pertinentNegativePresets,
   userLabSettings,
   autocompleteItems,
@@ -26,6 +28,8 @@ import {
   type TeamCalendarEvent,
   type InsertTeamCalendarEvent,
   type TeamMember,
+  type TeamBulletinPost,
+  type InsertTeamBulletinPost,
   type PertinentNegativePreset,
   type InsertPertinentNegativePreset,
   type UserLabSetting,
@@ -34,7 +38,7 @@ import {
   type InsertAutocompleteItem,
 } from "../shared/schema.js";
 import { db } from "./db.js";
-import { eq, and, desc, like, or } from "drizzle-orm";
+import { eq, and, desc, like, or, sql, gt, isNull } from "drizzle-orm";
 
 export interface IStorage {
   // User operations (required for Replit Auth)
@@ -54,6 +58,7 @@ export interface IStorage {
   leaveTeam(teamId: string, userId: string): Promise<{ success: boolean; message: string }>;
   addTeamMember(teamId: string, userId: string, role?: string): Promise<void>;
   generateUniqueGroupCode(): Promise<string>;
+  deleteExpiredTeams(): Promise<number>;
 
   // Note template operations
   getNoteTemplates(userId?: string): Promise<NoteTemplate[]>;
@@ -69,6 +74,7 @@ export interface IStorage {
   createNote(note: InsertNote): Promise<Note>;
   updateNote(id: string, note: Partial<InsertNote>): Promise<Note>;
   deleteNote(id: string): Promise<void>;
+  purgeExpiredNotes(): Promise<number>;
 
   // Smart phrase operations
   getSmartPhrases(userId: string): Promise<SmartPhrase[]>;
@@ -90,6 +96,12 @@ export interface IStorage {
   updateTeamCalendarEvent(id: string, event: Partial<InsertTeamCalendarEvent>): Promise<TeamCalendarEvent>;
   deleteTeamCalendarEvent(id: string): Promise<void>;
 
+  // Bulletin operations
+  getTeamBulletinPosts(teamId: string): Promise<(TeamBulletinPost & { createdBy: User })[]>;
+  createTeamBulletinPost(post: InsertTeamBulletinPost, creatorRole: string): Promise<TeamBulletinPost>;
+  updateTeamBulletinPost(id: string, post: Partial<InsertTeamBulletinPost>): Promise<TeamBulletinPost>;
+  deleteTeamBulletinPost(id: string): Promise<void>;
+
   // Pertinent negative preset operations
   getPertinentNegativePresets(userId: string): Promise<PertinentNegativePreset[]>;
   createPertinentNegativePreset(preset: Omit<InsertPertinentNegativePreset, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<PertinentNegativePreset>;
@@ -110,6 +122,189 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
   public db = db;
+  /**
+   * Ensure core tables and columns exist in production. This provides
+   * resilience on fresh deployments where migrations may not have run.
+   */
+  public async ensureCoreSchema(): Promise<void> {
+    // Create extension for gen_random_uuid if missing
+    try {
+      await this.db.execute(`CREATE EXTENSION IF NOT EXISTS pgcrypto;`);
+    } catch {}
+
+    // note_templates table and columns
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS note_templates (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        shareable_id VARCHAR(12) UNIQUE NOT NULL DEFAULT upper(substring(replace(gen_random_uuid()::text, '-', ''), 1, 12)),
+        short_code VARCHAR(4) UNIQUE,
+        name VARCHAR(100) NOT NULL,
+        type VARCHAR(50) NOT NULL,
+        description TEXT,
+        sections JSONB NOT NULL,
+        is_default BOOLEAN DEFAULT FALSE,
+        is_public BOOLEAN DEFAULT FALSE,
+        download_count INTEGER DEFAULT 0,
+        user_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+      ALTER TABLE note_templates
+        ADD COLUMN IF NOT EXISTS shareable_id VARCHAR(12) UNIQUE,
+        ADD COLUMN IF NOT EXISTS short_code VARCHAR(4),
+        ADD COLUMN IF NOT EXISTS description TEXT,
+        ADD COLUMN IF NOT EXISTS is_default BOOLEAN DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS download_count INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS sections JSONB,
+        ADD COLUMN IF NOT EXISTS user_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW(),
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'note_templates_short_code_key'
+        ) THEN
+          CREATE UNIQUE INDEX note_templates_short_code_key ON note_templates(short_code);
+        END IF;
+      END $$;
+    `);
+
+    // smart_phrases table and columns
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS smart_phrases (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        shareable_id VARCHAR(12) UNIQUE NOT NULL DEFAULT upper(substring(replace(gen_random_uuid()::text, '-', ''), 1, 12)),
+        short_code VARCHAR(4) UNIQUE,
+        trigger VARCHAR(50) NOT NULL,
+        content TEXT NOT NULL,
+        description VARCHAR(200),
+        category VARCHAR(50),
+        elements JSONB,
+        is_public BOOLEAN DEFAULT FALSE,
+        download_count INTEGER DEFAULT 0,
+        user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+      ALTER TABLE smart_phrases
+        ADD COLUMN IF NOT EXISTS shareable_id VARCHAR(12) UNIQUE,
+        ADD COLUMN IF NOT EXISTS short_code VARCHAR(4),
+        ADD COLUMN IF NOT EXISTS description VARCHAR(200),
+        ADD COLUMN IF NOT EXISTS category VARCHAR(50),
+        ADD COLUMN IF NOT EXISTS elements JSONB,
+        ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS download_count INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS user_id VARCHAR,
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW(),
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'smart_phrases_short_code_key'
+        ) THEN
+          CREATE UNIQUE INDEX smart_phrases_short_code_key ON smart_phrases(short_code);
+        END IF;
+      END $$;
+    `);
+
+    // Seed a system user for public samples (if not present) and a few sample smart phrases with fixed short codes
+    try {
+      await this.db.execute(`
+        INSERT INTO users(id, email, first_name, last_name, specialty)
+        VALUES ('seed-public', 'seed@gigatime.app', 'Seed', 'User', 'General')
+        ON CONFLICT (id) DO NOTHING;
+
+        -- Text example
+        INSERT INTO smart_phrases (short_code, shareable_id, trigger, content, description, category, elements, is_public, user_id)
+        VALUES ('SP01', upper(substring(replace(gen_random_uuid()::text, '-', ''), 1, 12)), 'testtext', 'This is a sample text smart phrase for testing.', 'Sample text smart phrase', 'general', '[]', true, 'seed-public')
+        ON CONFLICT (short_code) DO NOTHING;
+
+        -- Date example
+        INSERT INTO smart_phrases (short_code, shareable_id, trigger, content, description, category, elements, is_public, user_id)
+        VALUES ('SP02', upper(substring(replace(gen_random_uuid()::text, '-', ''), 1, 12)), 'testdate', 'Date: {date}', 'Sample date smart phrase', 'general', '[{"id":"date","type":"date","label":"Date","placeholder":"{date}"}]', true, 'seed-public')
+        ON CONFLICT (short_code) DO NOTHING;
+
+        -- Multipicker example
+        INSERT INTO smart_phrases (short_code, shareable_id, trigger, content, description, category, elements, is_public, user_id)
+        VALUES ('SP03', upper(substring(replace(gen_random_uuid()::text, '-', ''), 1, 12)), 'testmulti', 'Choose: {option}', 'Sample multipicker smart phrase', 'general', '[{"id":"option","type":"multipicker","label":"Options","placeholder":"{option}","options":["Option A","Option B","Option C"]}]', true, 'seed-public')
+        ON CONFLICT (short_code) DO NOTHING;
+
+        -- Nested multipicker example
+        INSERT INTO smart_phrases (short_code, shareable_id, trigger, content, description, category, elements, is_public, user_id)
+        VALUES ('SP04', upper(substring(replace(gen_random_uuid()::text, '-', ''), 1, 12)), 'testnested', 'Path: {option}', 'Sample nested multipicker smart phrase', 'general', '[{"id":"option","type":"nested_multipicker","label":"Path","placeholder":"{option}","options":[{"label":"A","options":["A1","A2"]},{"label":"B","options":["B1","B2"]}]}]', true, 'seed-public')
+        ON CONFLICT (short_code) DO NOTHING;
+      `);
+    } catch (e) {
+      // non-fatal
+    }
+
+    // autocomplete_items table and columns
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS autocomplete_items (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        shareable_id VARCHAR(12) UNIQUE,
+        short_code VARCHAR(4) UNIQUE,
+        text VARCHAR(500) NOT NULL,
+        category VARCHAR(100) NOT NULL,
+        is_priority BOOLEAN DEFAULT FALSE,
+        is_public BOOLEAN DEFAULT FALSE,
+        download_count INTEGER DEFAULT 0,
+        dosage VARCHAR(100),
+        frequency VARCHAR(100),
+        dosage_options JSONB,
+        frequency_options JSONB,
+        description TEXT,
+        user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+      ALTER TABLE autocomplete_items
+        ADD COLUMN IF NOT EXISTS shareable_id VARCHAR(12) UNIQUE,
+        ADD COLUMN IF NOT EXISTS short_code VARCHAR(4),
+        ADD COLUMN IF NOT EXISTS is_public BOOLEAN DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS download_count INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS dosage_options JSONB,
+        ADD COLUMN IF NOT EXISTS frequency_options JSONB,
+        ADD COLUMN IF NOT EXISTS description TEXT,
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW(),
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'ux_autocomplete_items_user_category_text'
+        ) THEN
+          CREATE UNIQUE INDEX ux_autocomplete_items_user_category_text
+            ON public.autocomplete_items(user_id, category, text);
+        END IF;
+      END $$;
+      CREATE INDEX IF NOT EXISTS idx_autocomplete_items_user_id ON public.autocomplete_items(user_id);
+      CREATE INDEX IF NOT EXISTS idx_autocomplete_items_category ON public.autocomplete_items(category);
+      CREATE INDEX IF NOT EXISTS idx_autocomplete_items_priority ON public.autocomplete_items(is_priority);
+    `);
+
+    // user_preferences table
+    await this.db.execute(`
+      CREATE TABLE IF NOT EXISTS user_preferences (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+        data JSONB NOT NULL DEFAULT '{}',
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'ux_user_preferences_user'
+        ) THEN
+          CREATE UNIQUE INDEX ux_user_preferences_user ON user_preferences(user_id);
+        END IF;
+      END $$;
+    `);
+
+    // Ensure notes has expires_at for auto-delete policy
+    await this.db.execute(`
+      ALTER TABLE IF EXISTS notes
+        ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;
+      CREATE INDEX IF NOT EXISTS idx_notes_expires_at ON public.notes(expires_at);
+    `);
+  }
   private async generateUniqueShortCodeFor(table: 'smartPhrases' | 'noteTemplates' | 'autocompleteItems'): Promise<string> {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let attempts = 0;
@@ -245,7 +440,7 @@ export class DatabaseStorage implements IStorage {
 
     while (attempts < maxAttempts) {
       let code = '';
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < 6; i++) {
         code += chars.charAt(Math.floor(Math.random() * chars.length));
       }
 
@@ -262,7 +457,9 @@ export class DatabaseStorage implements IStorage {
 
   async getUserActiveTeam(userId: string): Promise<(TeamMember & { team: Team }) | undefined> {
     const userTeams = await this.getUserTeams(userId);
-    return userTeams.length > 0 ? userTeams[0] : undefined;
+    const now = new Date();
+    const active = userTeams.find((ut) => ut.team.expiresAt && new Date(ut.team.expiresAt) > now);
+    return active;
   }
 
   async joinTeamByGroupCode(groupCode: string, userId: string): Promise<{ success: boolean; message: string; team?: Team }> {
@@ -318,6 +515,13 @@ export class DatabaseStorage implements IStorage {
 
   async addTeamMember(teamId: string, userId: string, role: string = "member"): Promise<void> {
     await db.insert(teamMembers).values({ teamId, userId, role });
+  }
+
+  async deleteExpiredTeams(): Promise<number> {
+    const now = new Date();
+    const res: any = await db.execute(sql`DELETE FROM ${teams} WHERE ${teams.expiresAt} < ${now}`);
+    // drizzle returns command tag; return rows affected when available
+    return (res as any)?.rowCount ?? 0;
   }
 
   // Note template operations
@@ -430,6 +634,12 @@ export class DatabaseStorage implements IStorage {
     };
 
     const [newTemplate] = await db.insert(noteTemplates).values(templateCopy as any).returning();
+    // Increment source download counter
+    try {
+      await db.update(noteTemplates)
+        .set({ downloadCount: sql`${noteTemplates.downloadCount} + 1` as any })
+        .where(eq(noteTemplates.id, sourceTemplate.id));
+    } catch {}
     try {
       const code = await this.generateUniqueShortCodeFor('noteTemplates');
       await db.update(noteTemplates).set({ shortCode: code as any }).where(eq(noteTemplates.id, newTemplate.id));
@@ -458,15 +668,25 @@ export class DatabaseStorage implements IStorage {
       await db.update(noteTemplates).set({ shortCode: code as any }).where(eq(noteTemplates.id, newTemplate.id));
       (newTemplate as any).shortCode = code;
     } catch {}
+    // Increment source download counter
+    try {
+      await db.update(noteTemplates)
+        .set({ downloadCount: sql`${noteTemplates.downloadCount} + 1` as any })
+        .where(eq(noteTemplates.id, sourceTemplate.id));
+    } catch {}
     return { success: true, message: 'Template imported', template: newTemplate };
   }
 
   // Note operations
   async getNotes(userId: string, limit: number = 50): Promise<Note[]> {
+    const now = new Date();
     return await db
       .select()
       .from(notes)
-      .where(eq(notes.userId, userId))
+      .where(and(
+        eq(notes.userId, userId),
+        or(isNull(notes.expiresAt), gt(notes.expiresAt, now))
+      ))
       .orderBy(desc(notes.updatedAt))
       .limit(limit);
   }
@@ -477,7 +697,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createNote(noteData: InsertNote): Promise<Note> {
-    const [note] = await db.insert(notes).values(noteData).returning();
+    const expires = noteData.expiresAt ?? new Date(Date.now() + 48 * 60 * 60 * 1000);
+    const [note] = await db.insert(notes).values({ ...noteData, expiresAt: expires }).returning();
     return note;
   }
 
@@ -494,12 +715,21 @@ export class DatabaseStorage implements IStorage {
     await db.delete(notes).where(eq(notes.id, id));
   }
 
+  async purgeExpiredNotes(): Promise<number> {
+    const now = new Date();
+    const result = await db.execute(sql`DELETE FROM notes WHERE expires_at IS NOT NULL AND expires_at <= ${now}`);
+    // drizzle execute returns object; try to parse rowCount if available; fallback 0
+    const rc: any = result as any;
+    const deleted = typeof rc.rowCount === 'number' ? rc.rowCount : 0;
+    return deleted;
+  }
+
   // Smart phrase operations
   async getSmartPhrases(userId: string): Promise<SmartPhrase[]> {
     return await db
       .select()
       .from(smartPhrases)
-      .where(or(eq(smartPhrases.userId, userId), eq(smartPhrases.isPublic, true)))
+      .where(eq(smartPhrases.userId, userId))
       .orderBy(desc(smartPhrases.createdAt));
   }
 
@@ -509,7 +739,7 @@ export class DatabaseStorage implements IStorage {
       .from(smartPhrases)
       .where(
         and(
-          or(eq(smartPhrases.userId, userId), eq(smartPhrases.isPublic, true)),
+          eq(smartPhrases.userId, userId),
           or(
             like(smartPhrases.trigger, `%${query}%`),
             like(smartPhrases.description, `%${query}%`)
@@ -595,6 +825,12 @@ export class DatabaseStorage implements IStorage {
     } catch (e) {
       throw e;
     }
+    // Increment source download counter
+    try {
+      await db.update(smartPhrases)
+        .set({ downloadCount: sql`${smartPhrases.downloadCount} + 1` as any })
+        .where(eq(smartPhrases.id, sourcePhrase.id));
+    } catch {}
     return { success: true, message: 'Smart phrase imported successfully', phrase: newPhrase };
   }
 
@@ -614,11 +850,17 @@ export class DatabaseStorage implements IStorage {
       userId,
       shortCode: await this.generateUniqueShortCodeFor('smartPhrases'),
     }).returning();
+    // Increment source download counter
+    try {
+      await db.update(smartPhrases)
+        .set({ downloadCount: sql`${smartPhrases.downloadCount} + 1` as any })
+        .where(eq(smartPhrases.id, sourcePhrase.id));
+    } catch {}
     return { success: true, message: 'Smart phrase imported', phrase: newPhrase };
   }
 
   // Team todo operations
-  async getTeamTodos(teamId: string): Promise<(TeamTodo & { assignedTo?: User; createdBy: User })[]> {
+  async getTeamTodos(teamId: string): Promise<(TeamTodo & { assignedTo?: User; assignees?: User[]; createdBy: User })[]> {
     const todos = await db
       .select({
         id: teamTodos.id,
@@ -628,6 +870,8 @@ export class DatabaseStorage implements IStorage {
         priority: teamTodos.priority,
         dueDate: teamTodos.dueDate,
         assignedToId: teamTodos.assignedToId,
+        status: (teamTodos as any).status,
+        completedAt: (teamTodos as any).completedAt,
         teamId: teamTodos.teamId,
         createdById: teamTodos.createdById,
         createdAt: teamTodos.createdAt,
@@ -640,13 +884,26 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(teamTodos.createdAt));
 
     // Get assigned users separately to avoid complex joins
+    const { teamTodoAssignees } = await import("../shared/schema.js");
     const todosWithAssignedUsers = await Promise.all(
       todos.map(async (todo) => {
         let assignedTo: User | undefined;
+        let assignees: User[] | undefined;
         if (todo.assignedToId) {
           assignedTo = await this.getUser(todo.assignedToId);
         }
-        return { ...todo, assignedTo };
+        try {
+          const links = await db.select().from(teamTodoAssignees).where(eq(teamTodoAssignees.todoId, todo.id));
+          if (links.length > 0) {
+            const usersList: User[] = [] as any;
+            for (const l of links) {
+              const u = await this.getUser(l.userId);
+              if (u) usersList.push(u as any);
+            }
+            assignees = usersList;
+          }
+        } catch {}
+        return { ...todo, assignedTo, assignees };
       })
     );
 
@@ -678,6 +935,7 @@ export class DatabaseStorage implements IStorage {
         id: teamCalendarEvents.id,
         title: teamCalendarEvents.title,
         description: teamCalendarEvents.description,
+        type: teamCalendarEvents.type,
         startDate: teamCalendarEvents.startDate,
         endDate: teamCalendarEvents.endDate,
         allDay: teamCalendarEvents.allDay,
@@ -711,6 +969,47 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTeamCalendarEvent(id: string): Promise<void> {
     await db.delete(teamCalendarEvents).where(eq(teamCalendarEvents.id, id));
+  }
+
+  // Bulletin operations
+  async getTeamBulletinPosts(teamId: string): Promise<(TeamBulletinPost & { createdBy: User })[]> {
+    const rows = await db
+      .select({
+        id: teamBulletinPosts.id,
+        teamId: teamBulletinPosts.teamId,
+        createdById: teamBulletinPosts.createdById,
+        title: teamBulletinPosts.title,
+        content: teamBulletinPosts.content,
+        pinned: teamBulletinPosts.pinned,
+        isAdminPost: teamBulletinPosts.isAdminPost,
+        createdAt: teamBulletinPosts.createdAt,
+        updatedAt: teamBulletinPosts.updatedAt,
+        createdBy: users,
+      })
+      .from(teamBulletinPosts)
+      .innerJoin(users, eq(teamBulletinPosts.createdById, users.id))
+      .where(eq(teamBulletinPosts.teamId, teamId))
+      .orderBy(desc(teamBulletinPosts.pinned as any), desc(teamBulletinPosts.createdAt));
+    return rows as any;
+  }
+
+  async createTeamBulletinPost(post: InsertTeamBulletinPost, creatorRole: string): Promise<TeamBulletinPost> {
+    const isAdminPost = creatorRole === 'admin';
+    const [row] = await db.insert(teamBulletinPosts).values({ ...post, isAdminPost } as any).returning();
+    return row;
+  }
+
+  async updateTeamBulletinPost(id: string, post: Partial<InsertTeamBulletinPost>): Promise<TeamBulletinPost> {
+    const [row] = await db
+      .update(teamBulletinPosts)
+      .set({ ...post, updatedAt: new Date() } as any)
+      .where(eq(teamBulletinPosts.id, id))
+      .returning();
+    return row;
+  }
+
+  async deleteTeamBulletinPost(id: string): Promise<void> {
+    await db.delete(teamBulletinPosts).where(eq(teamBulletinPosts.id, id));
   }
 
   // Pertinent negative preset operations
@@ -806,7 +1105,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createAutocompleteItem(item: InsertAutocompleteItem): Promise<AutocompleteItem> {
-    const [newItem] = await db.insert(autocompleteItems).values(item).returning();
+    const [newItem] = await db.insert(autocompleteItems).values(item as any).returning();
     try {
       if (!(newItem as any).shortCode) {
         const code = await this.generateUniqueShortCodeFor('autocompleteItems');
@@ -820,7 +1119,7 @@ export class DatabaseStorage implements IStorage {
   async updateAutocompleteItem(id: string, item: Partial<InsertAutocompleteItem>): Promise<AutocompleteItem> {
     const [updated] = await db
       .update(autocompleteItems)
-      .set(item)
+      .set(item as any)
       .where(eq(autocompleteItems.id, id))
       .returning();
     return updated;
@@ -828,6 +1127,21 @@ export class DatabaseStorage implements IStorage {
 
   async deleteAutocompleteItem(id: string): Promise<void> {
     await db.delete(autocompleteItems).where(eq(autocompleteItems.id, id));
+  }
+
+  async getUserPreferences(userId: string) {
+    const { userPreferences } = await import("../shared/schema.js");
+    const [row] = await db.select().from(userPreferences).where(eq(userPreferences.userId, userId));
+    return row as any;
+  }
+  async upsertUserPreferences(userId: string, data: any) {
+    const { userPreferences } = await import("../shared/schema.js");
+    const [row] = await db
+      .insert(userPreferences)
+      .values({ userId, data })
+      .onConflictDoUpdate({ target: userPreferences.userId, set: { data, updatedAt: new Date() } })
+      .returning();
+    return row as any;
   }
   async importAutocompleteByShortCode(shortCode: string, userId: string): Promise<{ success: boolean; message: string; item?: AutocompleteItem }> {
     const [src] = await db.select().from(autocompleteItems).where(eq(autocompleteItems.shortCode, shortCode.toUpperCase()));
@@ -848,27 +1162,33 @@ export class DatabaseStorage implements IStorage {
       await db.update(autocompleteItems).set({ shortCode: code as any }).where(eq(autocompleteItems.id, row.id));
       (row as any).shortCode = code;
     } catch {}
+    // Increment source download counter
+    try {
+      await db.update(autocompleteItems)
+        .set({ downloadCount: sql`${autocompleteItems.downloadCount} + 1` as any })
+        .where(eq(autocompleteItems.id, src.id));
+    } catch {}
     return { success: true, message: 'Autocomplete imported', item: row };
   }
 
   // Lab presets operations
   async getLabPresets(userId: string) {
-    const { labPresets } = await import("@shared/schema");
+    const { labPresets } = await import("../shared/schema.js");
     const rows = await db.select().from(labPresets).where(eq(labPresets.userId, userId)).orderBy(desc(labPresets.createdAt));
     return rows;
   }
   async createLabPreset(preset: { userId: string; name: string; settings: any }) {
-    const { labPresets } = await import("@shared/schema");
+    const { labPresets } = await import("../shared/schema.js");
     const [row] = await db.insert(labPresets).values({ userId: preset.userId, name: preset.name, settings: preset.settings }).returning();
     return row;
   }
   async updateLabPreset(id: string, updates: Partial<{ name: string; settings: any }>) {
-    const { labPresets } = await import("@shared/schema");
+    const { labPresets } = await import("../shared/schema.js");
     const [row] = await db.update(labPresets).set({ ...updates, updatedAt: new Date() }).where(eq(labPresets.id, id)).returning();
     return row;
   }
   async deleteLabPreset(id: string): Promise<void> {
-    const { labPresets } = await import("@shared/schema");
+    const { labPresets } = await import("../shared/schema.js");
     await db.delete(labPresets).where(eq(labPresets.id, id));
   }
 }

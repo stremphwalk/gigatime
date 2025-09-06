@@ -272,7 +272,7 @@ export function PertinentNegativesPopup({
 
             {/* Preset Save Section */}
             {showPresetSave && (
-              <div className="mb-4 p-3 bg-blue-50 rounded border border-blue-200">
+              <div className="mb-4 p-3 bg-[color:var(--brand-50)] rounded border border-[color:var(--brand-200)]">
                 <Label className="text-sm font-medium mb-2 block">Save as Preset:</Label>
                 <div className="flex space-x-2">
                   <Input
@@ -290,7 +290,7 @@ export function PertinentNegativesPopup({
                     size="sm"
                     onClick={handleSavePreset}
                     disabled={!presetName.trim()}
-                    className="bg-blue-600 hover:bg-blue-700"
+                    className="bg-[color:var(--brand-700)] hover:opacity-95"
                   >
                     <Save size={14} className="mr-1" />
                     Save

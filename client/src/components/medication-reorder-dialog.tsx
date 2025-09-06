@@ -131,7 +131,7 @@ export function MedicationReorderDialog({
                         className={cn(
                           "cursor-pointer transition-all hover:shadow-md",
                           isSelected 
-                            ? "border-blue-500 bg-blue-50 dark:bg-blue-950" 
+                            ? "border-[color:var(--brand-600)] bg-[color:var(--brand-50)] dark:bg-blue-950" 
                             : "hover:border-gray-300"
                         )}
                         onClick={() => handleMedicationClick(index)}
@@ -153,7 +153,7 @@ export function MedicationReorderDialog({
                               </div>
                             </div>
                             {isSelected && (
-                              <div className="w-8 h-8 bg-blue-500 text-white rounded-full flex items-center justify-center font-bold text-sm">
+                              <div className="w-8 h-8 bg-[color:var(--brand-600)] text-white rounded-full flex items-center justify-center font-bold text-sm">
                                 {selectionNumber}
                               </div>
                             )}

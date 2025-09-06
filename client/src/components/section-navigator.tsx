@@ -77,7 +77,17 @@ export function SectionNavigator({
   const getSectionIcon = (section: Section) => {
     const name = section.name.toLowerCase();
     const type = section.type;
-    
+
+    // ICU systems specific
+    if (name.includes('neuro')) return '🧠';
+    if (name.includes('cardio') || name.includes('cv') || name.includes('cardiovascular')) return '🫀';
+    if (name.includes('resp') || name.includes('pulm') || name.includes('respiratory') || name.includes('pulmonary')) return '🫁';
+    if (name.includes('gastro') || name === 'gi' || name.includes('abdomen') || name.includes('abdominal')) return '🍽️';
+    if (name.includes('nephro') || name.includes('renal') || name.includes('metabolic')) return '💧';
+    if (name.includes('infect')) return '🦠';
+    if (name.includes('hema') || name.includes('hematology')) return '🩸';
+
+    // General sections
     if (type === 'chiefComplaint' || name.includes('chief complaint') || name.includes('reason')) return '📋';
     if (type === 'historyPresentIllness' || name.includes('hpi') || name.includes('history of present')) return '📖';
     if (type === 'pastMedicalHistory' || name.includes('past medical') || name.includes('pmh')) return '🏥';

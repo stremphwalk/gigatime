@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -37,7 +38,8 @@ export function TemplateBuilderDialog({ template, onClose }: TemplateBuilderDial
   const [formData, setFormData] = useState({
     name: template?.name || "",
     type: template?.type || "custom",
-    description: ""
+    description: "",
+    isPublic: template?.isPublic ?? false,
   });
   
   const [sections, setSections] = useState<TemplateSection[]>(
@@ -63,7 +65,7 @@ export function TemplateBuilderDialog({ template, onClose }: TemplateBuilderDial
         description: formData.description || null,
         sections: sections,
         isDefault: false,
-        isPublic: false,
+        isPublic: formData.isPublic,
         userId: null // Will be set by server
       };
 
@@ -173,6 +175,12 @@ export function TemplateBuilderDialog({ template, onClose }: TemplateBuilderDial
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/* Template Sections */}
+          <div className="flex items-center gap-3">
+            <Switch id="public" checked={formData.isPublic} onCheckedChange={(v)=>setFormData(prev=>({...prev, isPublic: v}))} />
+            <Label htmlFor="public">Make this template public</Label>
           </div>
 
           {/* Template Sections */}

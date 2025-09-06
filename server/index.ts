@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes.js";
+import { storage } from "./storage.js";
 import { setupVite, serveStatic, log } from "./vite.js";
 
 const app = express();
@@ -39,6 +40,13 @@ app.use((req, res, next) => {
 
 (async () => {
   const server = await registerRoutes(app);
+  // Periodic cleanup of expired notes (every hour)
+  setInterval(async () => {
+    try {
+      const n = await storage.purgeExpiredNotes();
+      if (n > 0) log(`purged ${n} expired notes`);
+    } catch {}
+  }, 60 * 60 * 1000);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
