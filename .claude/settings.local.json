@@ -29,10 +29,13 @@
       "Bash(grep:*)",
       "Bash(npx tsx:*)",
       "Bash(rg:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(git reset:*)",
+      "Bash(convert:*)",
+      "Bash(brew install:*)"
     ],
     "deny": [],
-    "defaultMode": "acceptEdits",
-    "ask": []
+    "ask": [],
+    "defaultMode": "acceptEdits"
   }
 }
