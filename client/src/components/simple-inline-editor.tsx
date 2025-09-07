@@ -138,7 +138,7 @@ export function SimpleInlineEditor({
               trigger={phrase.trigger}
               options={phrase.options}
               selectedOptions={phrase.selectedOptions}
-              onOptionToggle={(option) => onSmartPhraseOptionToggle?.(phraseId, option)}
+              onOptionToggle={(option: string) => onSmartPhraseOptionToggle?.(phraseId, option)}
               onComplete={() => onSmartPhraseComplete?.(phraseId)}
             />
           </div>

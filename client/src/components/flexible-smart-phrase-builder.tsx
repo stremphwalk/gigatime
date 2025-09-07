@@ -485,7 +485,7 @@ export function FlexibleSmartPhraseBuilder({
   return (
     <div className="flex flex-col h-full">
       {/* Fixed Header */}
-      <div className="flex-shrink-0 p-6 border-b bg-white">
+      <div className="flex-shrink-0 p-6 border-b bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-2xl font-bold">Flexible Smart Phrase Builder</h2>
@@ -565,7 +565,7 @@ export function FlexibleSmartPhraseBuilder({
             <Textarea
               id="content"
               value={formData.content}
-              onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData(prev => ({ ...prev, content: e.target.value }))}
               placeholder="Enter your text with placeholder markers for interactive elements"
               className="min-h-[120px]"
               required

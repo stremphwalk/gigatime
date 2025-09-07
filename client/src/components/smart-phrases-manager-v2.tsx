@@ -236,7 +236,7 @@ export function SmartPhrasesManager() {
   return (
     <TooltipProvider>
       <div className="h-full flex flex-col">
-        <div className="border-b border-gray-200 p-4 bg-white">
+        <div className="border-b border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800">
           <div className="mb-3 flex items-center justify-between">
             <div>
               <h1 className="text-xl font-semibold tracking-tight">Smart Phrases</h1>
@@ -303,7 +303,7 @@ export function SmartPhrasesManager() {
           )}
         </div>
         {exportCodes && (
-          <div className="p-4 border-t bg-white">
+          <div className="p-4 border-t bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
             <div className="max-w-2xl mx-auto">
               <Label>Share these codes</Label>
               <Textarea readOnly value={exportCodes.join(' ')} className="mt-1" />

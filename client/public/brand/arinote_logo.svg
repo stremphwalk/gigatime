@@ -1,0 +1,37 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="borderGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0096;stop-opacity:1" />
+      <stop offset="37%" style="stop-color:#4e4ecf;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#68c6d9;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="letterGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4e4ecf;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#68c6d9;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Rounded rectangle border with gradient -->
+  <rect x="8" y="8" width="240" height="240" rx="48" ry="48" fill="none" stroke="url(#borderGradient)" stroke-width="16"/>
+  
+  <!-- White background for document -->
+  <rect x="24" y="24" width="208" height="208" rx="32" ry="32" fill="white"/>
+  
+  <!-- Large "A" letter -->
+  <path d="M 80 200 L 100 200 L 110 175 L 146 175 L 156 200 L 176 200 L 140 80 L 116 80 Z M 118 155 L 138 155 L 128 125 Z" fill="url(#letterGradient)"/>
+  
+  <!-- Dollar sign "$" -->
+  <g>
+    <!-- Vertical line of dollar sign -->
+    <rect x="126" y="120" width="4" height="50" fill="url(#letterGradient)"/>
+    
+    <!-- Top S curve -->
+    <path d="M 120 135 C 120 130, 124 125, 132 125 C 140 125, 144 130, 144 135 C 144 140, 140 142, 132 142 C 124 142, 120 144, 120 148 C 120 150, 122 152, 128 152 L 136 152 C 140 152, 144 148, 144 145" stroke="url(#letterGradient)" stroke-width="4" fill="none" stroke-linecap="round"/>
+    
+    <!-- Bottom S curve -->
+    <path d="M 144 155 C 144 160, 140 165, 132 165 C 124 165, 120 160, 120 155 C 120 150, 124 148, 132 148 C 140 148, 144 146, 144 142" stroke="url(#letterGradient)" stroke-width="4" fill="none" stroke-linecap="round"/>
+  </g>
+  
+  <!-- Stethoscope dot accent -->
+  <circle cx="186" cy="70" r="6" fill="url(#letterGradient)"/>
+</svg>

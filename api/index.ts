@@ -335,9 +335,9 @@ async function initializeRoutes() {
     }
   });
 
-  // Deepgram API key endpoint
-  app.get("/api/deepgram-key", requireAuth, (req, res) => {
-    res.json({ apiKey: process.env.DEEPGRAM_API_KEY });
+  // Soniox API key endpoint
+  app.get("/api/soniox-key", requireAuth, (req, res) => {
+    res.json({ apiKey: process.env.SONIOX_API_KEY });
   });
 
   // Initialize user (parity with server routes)

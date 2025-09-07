@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { createClient, LiveTranscriptionEvents, type LiveSchema } from '@deepgram/sdk';
-import { formatMedicalText, addMedicalPunctuation, MEDICAL_CONTEXT_HINTS, isMedicalContext } from '@/utils/medicalFormatting';
+import { SonioxClient } from '@soniox/speech-to-text-web';
+import { formatMedicalText, MEDICAL_CONTEXT_HINTS } from '@/utils/medicalFormatting';
 
 interface DictationState {
   isListening: boolean;
@@ -27,21 +27,18 @@ export function useDictation() {
     sessionId: ''
   });
 
-  const connectionRef = useRef<any>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const sonioxClientRef = useRef<SonioxClient | null>(null);
   const isActiveRef = useRef(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
   const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const reconnectAttemptsRef = useRef(0);
-  const lastFinalTranscriptRef = useRef('');
+  const streamRef = useRef<MediaStream | null>(null);
   const finalBufferRef = useRef<string[]>([]);
-  const currentModelRef = useRef<string>('nova-3-medical'); // Use latest medical model for best medical terminology accuracy
   const currentSessionRef = useRef<string>('');
-  const processedTranscriptsRef = useRef<Set<string>>(new Set());
+  const reconnectAttemptsRef = useRef(0);
+  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const processedFinalTranscriptsRef = useRef<Set<string>>(new Set());
+  const lastInterimTranscriptRef = useRef<string>('');
 
   const startDictation = useCallback(async () => {
     if (isActiveRef.current) return;
@@ -67,202 +64,155 @@ export function useDictation() {
         reconnectTimeoutRef.current = null;
       }
       reconnectAttemptsRef.current = 0;
-      lastFinalTranscriptRef.current = '';
       finalBufferRef.current = [];
       currentSessionRef.current = newSessionId;
-      processedTranscriptsRef.current.clear();
+      processedFinalTranscriptsRef.current.clear();
+      lastInterimTranscriptRef.current = '';
 
-      // Get API key from backend
-      const keyResponse = await fetch('/api/deepgram-key');
-      const { apiKey } = await keyResponse.json();
-      
-      // Create Deepgram client
-      const deepgram = createClient(apiKey);
+      console.log('🎤 Starting Soniox dictation...');
 
-      // Get microphone access with optimized settings for medical dictation
+      // Create Soniox client with API key fetching
+      const sonioxClient = new SonioxClient({
+        // Fetch API key from backend when needed
+        apiKey: async () => {
+          const keyResponse = await fetch('/api/soniox-key');
+          const { apiKey } = await keyResponse.json();
+          return apiKey;
+        },
+        
+        // Global callbacks
+        onStarted: () => {
+          console.log('🎤 Soniox transcription started');
+          setState(prev => ({ ...prev, isConnected: true }));
+        },
+        
+        onFinished: () => {
+          console.log('🎤 Soniox transcription finished');
+          setState(prev => ({ ...prev, isConnected: false }));
+        },
+        
+        onError: (status, message, errorCode) => {
+          console.error('🎤 Soniox error:', { status, message, errorCode });
+          handleConnectionError(new Error(`${status}: ${message}`));
+        },
+
+        onStateChange: ({ newState, oldState }) => {
+          console.log('🎤 Soniox state changed:', { oldState, newState });
+        }
+      });
+
+      sonioxClientRef.current = sonioxClient;
+
+      // Get microphone access and set up audio monitoring
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          sampleRate: 48000, // Higher quality for better medical term recognition
-          channelCount: 1 // Mono for better speech recognition
+          sampleRate: 16000, // Soniox prefers 16kHz
+          channelCount: 1
         } 
       });
       streamRef.current = stream;
       
-      // Set up audio analysis for level monitoring
+      // Set up audio level monitoring
       setupAudioAnalysis(stream);
 
-      // Set up raw PCM capture via Web Audio API to avoid container/codec mismatches
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
-      audioContextRef.current = audioContext;
-      const sourceNode = audioContext.createMediaStreamSource(stream);
-      sourceNodeRef.current = sourceNode;
-      const processor = audioContext.createScriptProcessor(4096, 1, 1);
-      processorRef.current = processor;
-      sourceNode.connect(processor);
-      processor.connect(audioContext.destination);
-
-      // Buffer to group a bit of audio before sending
-      let pcmBuffer: Int16Array[] = [];
-      const sendBufferedPcm = () => {
-        if (!connectionRef.current || pcmBuffer.length === 0) return;
-        const totalLength = pcmBuffer.reduce((sum, arr) => sum + arr.length, 0);
-        const merged = new Int16Array(totalLength);
-        let offset = 0;
-        for (const chunk of pcmBuffer) {
-          merged.set(chunk, offset);
-          offset += chunk.length;
-        }
-        pcmBuffer = [];
-        try {
-          connectionRef.current.send(merged.buffer);
-          console.log('🎤 PCM audio sent to Deepgram successfully, bytes:', merged.byteLength);
-        } catch (error) {
-          console.error('🎤 Error sending PCM audio:', error);
-        }
-      };
-
-      processor.onaudioprocess = (e) => {
-        if (!isActiveRef.current) return;
-        const input = e.inputBuffer.getChannelData(0);
-        const pcm16 = new Int16Array(input.length);
-        for (let i = 0; i < input.length; i++) {
-          const s = Math.max(-1, Math.min(1, input[i]));
-          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-        }
-        pcmBuffer.push(pcm16);
-      };
-
-      // Configure Deepgram for raw PCM: 16 kHz mono linear16
-      const liveOptions: any = {
-        model: 'nova-3-medical',
-        language: 'en-US',
-        smart_format: true,
-        interim_results: true,
-        punctuate: true,
-        endpointing: 1000,
-        utterance_end_ms: 1500,
-        encoding: 'linear16',
-        sample_rate: 16000,
-        channels: 1
-      };
-      console.log('🎤 Using Deepgram encoding:', liveOptions.encoding);
-
-      // Create live transcription connection with container-aware encoding
-      console.log(`🎤 Using minimal configuration for reliable connection`);
-      const connection = deepgram.listen.live(liveOptions);
-
-      connectionRef.current = connection;
-
-      // Set up event listeners - try the simplest possible approach
-      connection.on(LiveTranscriptionEvents.Open, () => {
-        console.log('🎤 Deepgram connection opened');
-        setState(prev => ({ ...prev, isConnected: true }));
+      // Start transcription with medical-specific configuration
+      await sonioxClient.start({
+        // Use real-time medical model when available, fallback to preview
+        model: 'stt-rt-preview',
         
-        // Start PCM flushing at a steady interval
-        const flushInterval = setInterval(() => {
-          if (!isActiveRef.current || !connectionRef.current) return;
-          try {
-            // send whatever is buffered
-            // the sendBufferedPcm function is closed over from above
-            (sendBufferedPcm as any)();
-          } catch {}
-        }, 200);
-        // Store interval id on the connection for cleanup
-        if (connectionRef.current) {
-          (connectionRef.current as any)._pcmFlush = flushInterval;
-        }
-      });
-
-      // Avoid handling raw WebSocket messages to prevent duplicate processing
-
-      connection.on(LiveTranscriptionEvents.Transcript, (data: any) => {
-        console.log('🎤 Transcript received:', data);
-        console.log('🎤 Full data structure:', JSON.stringify(data, null, 2));
+        // Set medical context for better accuracy with medical terminology
+        context: MEDICAL_CONTEXT_HINTS.join(', '),
         
-        // Extract transcript data
-        const transcript = data.channel?.alternatives?.[0]?.transcript;
-        const isFinal = data.is_final || false;
-        const confidence = data.channel?.alternatives?.[0]?.confidence || 0;
+        // Language settings for medical dictation
+        languageHints: ['en'],
         
-        if (transcript && transcript.trim()) {
-          console.log('🎤 Raw transcript:', transcript);
-          console.log('🎤 Is final:', isFinal);
+        // Enable features for better medical transcription
+        enableEndpointDetection: true,
+        enableLanguageIdentification: false, // Keep it simple for medical use
+        enableSpeakerDiarization: false, // Not needed for individual dictation
+        
+        // Audio configuration
+        audioFormat: 'auto', // Let Soniox handle format detection
+        
+        // Use the microphone stream
+        stream: stream,
+        
+        // Audio constraints for high-quality medical dictation
+        audioConstraints: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+          sampleRate: 16000
+        },
+        
+        // Result callback
+        onPartialResult: (result) => {
+          console.log('🎤 Soniox partial result:', result);
           
-          // Create unique identifier for this transcript event
-          const transcriptId = `${currentSessionRef.current}-${transcript}-${isFinal}`;
-          
-          // Check for duplicates
-          if (processedTranscriptsRef.current.has(transcriptId)) {
-            console.log('🎤 Duplicate transcript detected, skipping:', transcriptId);
-            return;
-          }
-          
-          processedTranscriptsRef.current.add(transcriptId);
-          
-          // Apply medical formatting
-          const formattedTranscript = formatMedicalText(transcript);
-          console.log('🎤 Formatted transcript:', formattedTranscript);
-          console.log('🎤 Transcript ID:', transcriptId);
-          
-          setState(prev => {
-            // If this is a final transcript, clear any previous final transcript
-            const newState = { 
-              ...prev, 
-              transcript: formattedTranscript,
-              confidence: confidence
-            };
+          if (result.tokens && result.tokens.length > 0) {
+            // Extract transcript from tokens
+            let rawTranscript = result.tokens.map(token => token.text).join('');
+            const isFinal = result.tokens.some(token => token.is_final);
             
-            if (isFinal) {
-              // Accumulate all final chunks during this session
-              try {
-                finalBufferRef.current.push(formattedTranscript);
-              } catch {}
-              const aggregated = finalBufferRef.current.join('\n').trim();
-              newState.finalTranscript = aggregated || formattedTranscript;
-              newState.interimTranscript = '';
-            } else {
-              newState.interimTranscript = formattedTranscript;
-              // Don't clear finalTranscript for interim results
+            if (rawTranscript && rawTranscript.trim()) {
+              // Clean up unwanted artifacts
+              rawTranscript = rawTranscript
+                .replace(/\.<end>/gi, '')  // Remove .<end> artifacts
+                .replace(/<end>/gi, '')    // Remove <end> artifacts
+                .replace(/\.\s*end\b/gi, '') // Remove . end patterns
+                .replace(/\bend\b/gi, '')   // Remove standalone "end" words
+                .trim();
+              
+              // Skip if transcript is empty after cleanup
+              if (!rawTranscript) return;
+              
+              // Apply medical formatting
+              const formattedTranscript = formatMedicalText(rawTranscript);
+              console.log('🎤 Cleaned & formatted transcript:', formattedTranscript, 'isFinal:', isFinal);
+              
+              setState(prev => {
+                const newState = { 
+                  ...prev, 
+                  transcript: formattedTranscript,
+                  confidence: result.tokens[0]?.confidence || 0
+                };
+                
+                if (isFinal) {
+                  // Only add to final buffer if it's genuinely new content
+                  const transcriptHash = `${currentSessionRef.current}-${formattedTranscript}`;
+                  if (!processedFinalTranscriptsRef.current.has(transcriptHash)) {
+                    processedFinalTranscriptsRef.current.add(transcriptHash);
+                    finalBufferRef.current.push(formattedTranscript);
+                    
+                    // Join with space and clean up any duplicate spacing
+                    const aggregated = finalBufferRef.current.join(' ').replace(/\s+/g, ' ').trim();
+                    newState.finalTranscript = aggregated;
+                  }
+                  newState.interimTranscript = '';
+                  lastInterimTranscriptRef.current = '';
+                } else {
+                  // Only update interim if it's different and not empty
+                  if (formattedTranscript !== lastInterimTranscriptRef.current && formattedTranscript.length > 0) {
+                    newState.interimTranscript = formattedTranscript;
+                    lastInterimTranscriptRef.current = formattedTranscript;
+                  }
+                }
+                
+                return newState;
+              });
             }
-            
-            return newState;
-          });
+          }
         }
       });
 
-      // Remove alternate 'Results' handler to avoid duplicate updates
-
-      // Removed generic message handler to prevent duplicate processing
-
-      connection.on(LiveTranscriptionEvents.Error, (error: any) => {
-        console.error('🎤 Deepgram error:', error);
-        handleConnectionError(error);
-      });
-
-      connection.on(LiveTranscriptionEvents.Close, (event: any) => {
-        console.log('🎤 Deepgram connection closed');
-        console.log('🎤 Close event details:', event);
-        setState(prev => ({ ...prev, isConnected: false }));
-        // Clear PCM flush interval if present
-        try {
-          const intervalId = (connectionRef.current as any)?._pcmFlush;
-          if (intervalId) clearInterval(intervalId);
-        } catch {}
-      });
-      
-      // Debug metadata
-      connection.on('Metadata', (data: any) => {
-        console.log('🎤 Metadata event:', data);
-        console.log('🎤 Metadata details:', JSON.stringify(data, null, 2));
-      });
-
-      // Recording is started in the connection Open handler
+      console.log('🎤 Soniox dictation started successfully');
 
     } catch (error) {
-      console.error('Failed to start dictation:', error);
+      console.error('Failed to start Soniox dictation:', error);
       setState(prev => ({ 
         ...prev, 
         error: error instanceof Error ? error.message : 'Failed to start dictation',
@@ -283,6 +233,7 @@ export function useDictation() {
       analyser.smoothingTimeConstant = 0.8;
       source.connect(analyser);
       analyserRef.current = analyser;
+      sourceNodeRef.current = source;
       
       // Start monitoring audio levels
       monitorAudioLevel();
@@ -314,20 +265,14 @@ export function useDictation() {
     }
   }, []);
 
-  // Handle connection errors with automatic fallback and reconnection
+  // Handle connection errors with automatic reconnection
   const handleConnectionError = useCallback((error: any) => {
-    console.error('🎤 Connection error:', error);
+    console.error('🎤 Soniox connection error:', error);
     
     setState(prev => ({ ...prev, error: error.message || 'Connection error' }));
     
-    // If it's a WebSocket connection error, try simpler config
-    if (error.message && error.message.toLowerCase().includes('websocket')) {
-      console.log('🎤 WebSocket error detected - will try simplified configuration');
-    }
-    
-    // For any connection error, try simpler configuration
+    // Attempt reconnection for certain types of errors
     if (reconnectAttemptsRef.current < 2) {
-      // Attempt reconnection with simpler config
       attemptReconnection();
     } else {
       console.log('🎤 Max reconnection attempts reached');
@@ -340,58 +285,14 @@ export function useDictation() {
     if (!isActiveRef.current || reconnectAttemptsRef.current >= 3) return;
     
     reconnectAttemptsRef.current++;
-    console.log(`🎤 Attempting reconnection ${reconnectAttemptsRef.current}/3 with model: ${currentModelRef.current}`);
+    console.log(`🎤 Attempting Soniox reconnection ${reconnectAttemptsRef.current}/3`);
     
     setState(prev => ({ ...prev, error: `Reconnecting... (${reconnectAttemptsRef.current}/3)` }));
     
     reconnectTimeoutRef.current = setTimeout(() => {
       if (isActiveRef.current) {
-        // Stop first
-        isActiveRef.current = false;
-        
-        // Clear reconnection timeout
-        if (reconnectTimeoutRef.current) {
-          clearTimeout(reconnectTimeoutRef.current);
-          reconnectTimeoutRef.current = null;
-        }
-        
-        // Disconnect audio processor chain
-        if (processorRef.current) {
-          try { processorRef.current.disconnect(); } catch {}
-          processorRef.current = null;
-        }
-        if (sourceNodeRef.current) {
-          try { sourceNodeRef.current.disconnect(); } catch {}
-          sourceNodeRef.current = null;
-        }
-
-        // Close microphone stream
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach(track => track.stop());
-          streamRef.current = null;
-        }
-
-        // Close audio context
-        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-          audioContextRef.current.close();
-          audioContextRef.current = null;
-        }
-        analyserRef.current = null;
-
-        // Close Deepgram connection
-        if (connectionRef.current) {
-          connectionRef.current.finish();
-          connectionRef.current = null;
-        }
-
-        setState(prev => ({ 
-          ...prev, 
-          isListening: false, 
-          isConnected: false,
-          audioLevel: 0
-        }));
-        
-        // Restart after cleanup
+        // Stop and restart
+        stopDictation();
         setTimeout(() => {
           if (!isActiveRef.current) { // Only restart if not manually stopped
             startDictation();
@@ -399,11 +300,12 @@ export function useDictation() {
         }, 1000);
       }
     }, 2000);
-  }, [startDictation]);
+  }, []);
 
   const stopDictation = useCallback(() => {
     if (!isActiveRef.current) return;
 
+    console.log('🎤 Stopping Soniox dictation...');
     isActiveRef.current = false;
     
     // Clear reconnection timeout
@@ -412,11 +314,17 @@ export function useDictation() {
       reconnectTimeoutRef.current = null;
     }
     
-    // Disconnect audio processor chain
-    if (processorRef.current) {
-      try { processorRef.current.disconnect(); } catch {}
-      processorRef.current = null;
+    // Stop Soniox client
+    if (sonioxClientRef.current) {
+      try {
+        sonioxClientRef.current.stop(); // Gracefully stop with final results
+      } catch (error) {
+        console.error('Error stopping Soniox client:', error);
+      }
+      sonioxClientRef.current = null;
     }
+
+    // Clean up audio monitoring
     if (sourceNodeRef.current) {
       try { sourceNodeRef.current.disconnect(); } catch {}
       sourceNodeRef.current = null;
@@ -435,23 +343,8 @@ export function useDictation() {
     }
     analyserRef.current = null;
 
-    // Close Deepgram connection
-    if (connectionRef.current) {
-      try {
-        const conn: any = connectionRef.current;
-        if (conn._pcmFlush) clearInterval(conn._pcmFlush);
-        if (typeof conn.finish === 'function') conn.finish();
-      } catch (e) {
-        // ignore cleanup errors
-      } finally {
-        connectionRef.current = null;
-      }
-    }
-
-    // Reset model to latest medical model
-    currentModelRef.current = 'nova-3-medical';
+    // Reset attempts
     reconnectAttemptsRef.current = 0;
-    lastFinalTranscriptRef.current = '';
 
     setState(prev => ({ 
       ...prev, 
@@ -459,6 +352,8 @@ export function useDictation() {
       isConnected: false,
       audioLevel: 0
     }));
+
+    console.log('🎤 Soniox dictation stopped');
   }, []);
 
   // Cleanup on unmount
@@ -472,8 +367,8 @@ export function useDictation() {
     ...state,
     startDictation,
     stopDictation,
-    // Additional utilities for advanced features
-    currentModel: currentModelRef.current,
+    // Additional utilities for compatibility
+    currentModel: 'stt-rt-preview', // Soniox model
     reconnectAttempts: reconnectAttemptsRef.current
   };
 }

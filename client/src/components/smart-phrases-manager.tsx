@@ -110,7 +110,7 @@ export function SmartPhrasesManager() {
         ...prev,
         options: {
           ...prev.options,
-          choices: (prev.options.choices || []).filter((_, index) => index !== parseInt(path[0]))
+          choices: (prev.options.choices || []).filter((_: any, index: number) => index !== parseInt(path[0]))
         }
       }));
     } else {
@@ -379,7 +379,7 @@ export function SmartPhrasesManager() {
                 <Textarea
                   id="content"
                   value={formData.content}
-                  onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData(prev => ({ ...prev, content: e.target.value }))}
                   placeholder={
                     formData.type === 'text' ? "The text that will be inserted when this phrase is triggered..." :
                     formData.type === 'multipicker' ? "Use {option} as placeholder for selected choice. Example: Patient denies {option}." :
@@ -539,7 +539,7 @@ export function SmartPhrasesManager() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="border-b border-gray-200 p-6 bg-white">
+      <div className="border-b border-gray-200 dark:border-gray-700 p-6 bg-white dark:bg-gray-800">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-text-primary">Smart Phrases Library</h1>
@@ -693,7 +693,7 @@ export function SmartPhrasesManager() {
         )}
       </div>
       {exportCodes && (
-        <div className="p-4 border-t bg-white">
+        <div className="p-4 border-t bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
           <div className="max-w-2xl mx-auto">
             <Label>Share these codes</Label>
             <Textarea readOnly value={exportCodes.join(' ')} className="mt-1" />

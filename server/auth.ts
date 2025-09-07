@@ -22,6 +22,7 @@ function extractAuth0UserFromCookie(req: any): { sub: string; email?: string; na
 
 export const requireAuth: RequestHandler = async (req: any, res, next) => {
   console.log("[requireAuth] Starting auth check, NODE_ENV:", process.env.NODE_ENV);
+  
   // Explicit no-auth override for local development/testing
   if (process.env.NO_AUTH === '1') {
     if (!req.session) req.session = {} as any;
@@ -29,21 +30,27 @@ export const requireAuth: RequestHandler = async (req: any, res, next) => {
       return res.status(401).json({ message: "Not authenticated" });
     }
     if (!req.user) {
+      // Generate a unique development user ID per session to avoid conflicts
+      const devUserId = req.session.devUserId || `dev-user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      if (!req.session.devUserId) {
+        req.session.devUserId = devUserId;
+      }
+      
       req.user = {
         claims: {
-          sub: "123e4567-e89b-12d3-a456-426614174000",
-          email: "doctor@hospital.com",
-          first_name: "Dr. Sarah",
-          last_name: "Mitchell"
+          sub: devUserId,
+          email: process.env.DEV_USER_EMAIL || "dev@example.com",
+          first_name: process.env.DEV_USER_FIRST_NAME || "Development",
+          last_name: process.env.DEV_USER_LAST_NAME || "User"
         }
       };
     }
     return next();
   }
   
-  // In development with no Auth0 config, use mock user
+  // In development with no Auth0 config, use session-based development authentication
   if (process.env.NODE_ENV === 'development' && !process.env.AUTH0_CLIENT_ID) {
-    console.log("[requireAuth] Using development mock user");
+    console.log("[requireAuth] Using development authentication");
     // Initialize session if it doesn't exist
     if (!req.session) {
       req.session = {};
@@ -55,18 +62,23 @@ export const requireAuth: RequestHandler = async (req: any, res, next) => {
       return res.status(401).json({ message: "Not authenticated" });
     }
     
-    // Set mock user
+    // Set development user with session-based ID
     if (!req.user) {
+      const devUserId = req.session.devUserId || `dev-user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      if (!req.session.devUserId) {
+        req.session.devUserId = devUserId;
+      }
+      
       req.user = {
         claims: {
-          sub: "123e4567-e89b-12d3-a456-426614174000",
-          email: "doctor@hospital.com",
-          first_name: "Dr. Sarah",
-          last_name: "Mitchell"
+          sub: devUserId,
+          email: process.env.DEV_USER_EMAIL || "dev@example.com",
+          first_name: process.env.DEV_USER_FIRST_NAME || "Development",
+          last_name: process.env.DEV_USER_LAST_NAME || "User"
         }
       };
     }
-    console.log("[requireAuth] Mock user set, proceeding");
+    console.log("[requireAuth] Development user set, proceeding");
     
     return next();
   }
@@ -100,18 +112,24 @@ export const optionalAuth: RequestHandler = async (req: any, res, next) => {
   if (process.env.NO_AUTH === '1') {
     if (!req.session) req.session = {} as any;
     if (req.session.loggedOut !== true && !req.user) {
+      const devUserId = req.session.devUserId || `dev-user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      if (!req.session.devUserId) {
+        req.session.devUserId = devUserId;
+      }
+      
       req.user = {
         claims: {
-          sub: "123e4567-e89b-12d3-a456-426614174000",
-          email: "doctor@hospital.com",
-          first_name: "Dr. Sarah",
-          last_name: "Mitchell"
+          sub: devUserId,
+          email: process.env.DEV_USER_EMAIL || "dev@example.com",
+          first_name: process.env.DEV_USER_FIRST_NAME || "Development",
+          last_name: process.env.DEV_USER_LAST_NAME || "User"
         }
       };
     }
     return next();
   }
-  // In development with no Auth0 config, set mock user if not logged out
+  
+  // In development with no Auth0 config, set development user if not logged out
   if (process.env.NODE_ENV === 'development' && !process.env.AUTH0_CLIENT_ID) {
     // Initialize session if it doesn't exist
     if (!req.session) {
@@ -119,12 +137,17 @@ export const optionalAuth: RequestHandler = async (req: any, res, next) => {
     }
     
     if (req.session.loggedOut !== true && !req.user) {
+      const devUserId = req.session.devUserId || `dev-user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      if (!req.session.devUserId) {
+        req.session.devUserId = devUserId;
+      }
+      
       req.user = {
         claims: {
-          sub: "123e4567-e89b-12d3-a456-426614174000",
-          email: "doctor@hospital.com",
-          first_name: "Dr. Sarah",
-          last_name: "Mitchell"
+          sub: devUserId,
+          email: process.env.DEV_USER_EMAIL || "dev@example.com",
+          first_name: process.env.DEV_USER_FIRST_NAME || "Development",
+          last_name: process.env.DEV_USER_LAST_NAME || "User"
         }
       };
     }
@@ -154,10 +177,14 @@ export const getCurrentUserId = (req: any): string => {
   if (process.env.NO_AUTH === '1') {
     if (!req.session) req.session = {} as any;
     if (req.session.loggedOut !== true) {
-      return "123e4567-e89b-12d3-a456-426614174000";
+      if (!req.session.devUserId) {
+        req.session.devUserId = `dev-user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      }
+      return req.session.devUserId;
     }
     throw new Error("User not authenticated");
   }
+  
   // Check for Auth0 user first
   if (req.oidc && req.oidc.isAuthenticated() && req.oidc.user) {
     return getAuth0UserId(req);
@@ -169,12 +196,12 @@ export const getCurrentUserId = (req: any): string => {
     return cookieUser.sub;
   }
   
-  // Fallback to mock user in development
+  // Fallback to development user in development
   if (req.user?.claims?.sub) {
     return req.user.claims.sub;
   }
   
-  // In development with no Auth0, return mock user ID if not logged out
+  // In development with no Auth0, return session-based development user ID if not logged out
   if (process.env.NODE_ENV === 'development' && !process.env.AUTH0_CLIENT_ID) {
     // Initialize session if it doesn't exist
     if (!req.session) {
@@ -182,7 +209,10 @@ export const getCurrentUserId = (req: any): string => {
     }
     
     if (req.session.loggedOut !== true) {
-      return "123e4567-e89b-12d3-a456-426614174000";
+      if (!req.session.devUserId) {
+        req.session.devUserId = `dev-user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      }
+      return req.session.devUserId;
     }
   }
   

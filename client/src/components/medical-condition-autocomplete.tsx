@@ -38,7 +38,7 @@ export function MedicalConditionAutocomplete({
     }
 
     // Check if query matches an abbreviation
-    const abbreviation = abbreviations[query.toLowerCase()];
+    const abbreviation = abbreviations[query.toLowerCase() as keyof typeof abbreviations];
     if (abbreviation) {
       // Include priority custom items that also match
       const customMatches = customItems
@@ -155,7 +155,7 @@ export function MedicalConditionAutocomplete({
               )}
             </div>
           ))}
-          {query && abbreviations[query.toLowerCase()] && (
+          {query && abbreviations[query.toLowerCase() as keyof typeof abbreviations] && (
             <div className="border-t border-gray-100 mt-2 pt-2">
               <div className="text-xs text-gray-500 px-2">
                 Abbreviation: <span className="font-mono font-medium">{query.toUpperCase()}</span>

@@ -242,7 +242,7 @@ export const searchMedicalConditions = (query: string, limit = 10): string[] => 
     .slice(0, limit);
   
   // Remove duplicates while preserving order
-  return [...new Set(results)];
+  return Array.from(new Set(results));
 };
 
 // Simple fuzzy matching algorithm for spell tolerance

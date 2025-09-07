@@ -206,6 +206,120 @@ export class DatabaseStorage implements IStorage {
       END $$;
     `);
 
+    // Run List feature tables
+    await this.db.execute(`
+      -- run_lists: one per user per day
+      CREATE TABLE IF NOT EXISTS run_lists (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        day TIMESTAMP NOT NULL,
+        mode VARCHAR(20) DEFAULT 'prepost',
+        carry_forward_defaults JSONB DEFAULT '{}'::jsonb,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+      ALTER TABLE run_lists
+        ADD COLUMN IF NOT EXISTS user_id VARCHAR,
+        ADD COLUMN IF NOT EXISTS day TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS mode VARCHAR(20) DEFAULT 'prepost',
+        ADD COLUMN IF NOT EXISTS carry_forward_defaults JSONB DEFAULT '{}'::jsonb,
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW(),
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'ux_run_lists_user_day'
+        ) THEN
+          CREATE UNIQUE INDEX ux_run_lists_user_day ON run_lists(user_id, day);
+        END IF;
+      END $$;
+
+      -- list_patients: ordered patients within a run_list
+      CREATE TABLE IF NOT EXISTS list_patients (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        run_list_id UUID NOT NULL REFERENCES run_lists(id) ON DELETE CASCADE,
+        position INTEGER NOT NULL DEFAULT 0,
+        alias VARCHAR(32),
+        active BOOLEAN DEFAULT TRUE,
+        archived_at TIMESTAMP,
+        carry_forward_overrides JSONB,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      );
+      ALTER TABLE list_patients
+        ADD COLUMN IF NOT EXISTS run_list_id UUID,
+        ADD COLUMN IF NOT EXISTS position INTEGER DEFAULT 0,
+        ADD COLUMN IF NOT EXISTS alias VARCHAR(32),
+        ADD COLUMN IF NOT EXISTS active BOOLEAN DEFAULT TRUE,
+        ADD COLUMN IF NOT EXISTS archived_at TIMESTAMP,
+        ADD COLUMN IF NOT EXISTS carry_forward_overrides JSONB,
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW(),
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'idx_list_patients_run_list_position'
+        ) THEN
+          CREATE INDEX idx_list_patients_run_list_position ON list_patients(run_list_id, position);
+        END IF;
+      END $$;
+
+      -- run_list_notes: single note per list_patient (with TTL)
+      CREATE TABLE IF NOT EXISTS run_list_notes (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        list_patient_id UUID NOT NULL UNIQUE REFERENCES list_patients(id) ON DELETE CASCADE,
+        raw_text TEXT NOT NULL DEFAULT '',
+        structured_sections JSONB DEFAULT '{}'::jsonb,
+        status VARCHAR(20) DEFAULT 'draft',
+        version_head_id UUID,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW(),
+        expires_at TIMESTAMP
+      );
+      ALTER TABLE run_list_notes
+        ADD COLUMN IF NOT EXISTS list_patient_id UUID,
+        ADD COLUMN IF NOT EXISTS raw_text TEXT DEFAULT '',
+        ADD COLUMN IF NOT EXISTS structured_sections JSONB DEFAULT '{}'::jsonb,
+        ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'draft',
+        ADD COLUMN IF NOT EXISTS version_head_id UUID,
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW(),
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW(),
+        ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'idx_run_list_notes_expires'
+        ) THEN
+          CREATE INDEX idx_run_list_notes_expires ON run_list_notes(expires_at);
+        END IF;
+      END $$;
+
+      -- run_list_note_versions: version history per note
+      CREATE TABLE IF NOT EXISTS run_list_note_versions (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        note_id UUID NOT NULL REFERENCES run_list_notes(id) ON DELETE CASCADE,
+        raw_text TEXT NOT NULL DEFAULT '',
+        structured_sections JSONB DEFAULT '{}'::jsonb,
+        source VARCHAR(20) DEFAULT 'user_edit',
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+      ALTER TABLE run_list_note_versions
+        ADD COLUMN IF NOT EXISTS note_id UUID,
+        ADD COLUMN IF NOT EXISTS raw_text TEXT DEFAULT '',
+        ADD COLUMN IF NOT EXISTS structured_sections JSONB DEFAULT '{}'::jsonb,
+        ADD COLUMN IF NOT EXISTS source VARCHAR(20) DEFAULT 'user_edit',
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();
+      DO $$ BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_indexes WHERE schemaname = 'public' AND indexname = 'idx_run_list_note_versions_note'
+        ) THEN
+          CREATE INDEX idx_run_list_note_versions_note ON run_list_note_versions(note_id);
+        END IF;
+      END $$;
+    `);
+
+    // Background cleanup job: delete expired run list notes and prune empty old lists
+    (async () => {
+      try { await (this as any).cleanupExpiredRunListData?.(); } catch {}
+    })();
+
     // Seed a system user for public samples (if not present) and a few sample smart phrases with fixed short codes
     try {
       await this.db.execute(`
@@ -304,6 +418,34 @@ export class DatabaseStorage implements IStorage {
         ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;
       CREATE INDEX IF NOT EXISTS idx_notes_expires_at ON public.notes(expires_at);
     `);
+  }
+
+  async cleanupExpiredRunListData() {
+    // Delete expired notes first (versions cascade on note delete)
+    try {
+      const now = new Date();
+      await this.db.delete((await import('../shared/schema.js')).runListNotes)
+        .where((await import('drizzle-orm')).lt((await import('../shared/schema.js')).runListNotes.expiresAt as any, now as any));
+    } catch (e) {
+      // non-fatal
+    }
+    // Prune run lists older than 4 days that have no patients
+    try {
+      const { runLists, listPatients } = await import('../shared/schema.js');
+      const { lt, and } = await import('drizzle-orm');
+      const threshold = new Date();
+      threshold.setDate(threshold.getDate() - 4);
+      // Fetch candidates
+      const rows: any[] = await this.db.select().from(runLists).where(lt(runLists.day as any, threshold as any));
+      for (const rl of rows) {
+        const [anyPatient] = await this.db.select().from(listPatients).where((await import('drizzle-orm')).eq(listPatients.runListId, rl.id)).limit(1);
+        if (!anyPatient) {
+          await this.db.delete(runLists).where((await import('drizzle-orm')).eq(runLists.id, rl.id));
+        }
+      }
+    } catch (e) {
+      // non-fatal
+    }
   }
   private async generateUniqueShortCodeFor(table: 'smartPhrases' | 'noteTemplates' | 'autocompleteItems'): Promise<string> {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';

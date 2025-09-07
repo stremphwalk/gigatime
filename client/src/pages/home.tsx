@@ -10,6 +10,7 @@ import { useNotes } from "../hooks/use-notes";
 import CommunityPage from "./community";
 import SettingsPage from "./settings";
 import NotesLibrary from "./notes-library";
+import { RunListView } from "@/components/run-list-view";
 import { apiRequest } from "@/lib/queryClient";
 import { ConfirmLeaveModal } from "@/components/confirm-leave-modal";
 import type { Note } from "@shared/schema";
@@ -20,7 +21,7 @@ export default function Home() {
   const [isCreatingNote, setIsCreatingNote] = useState(false);
   const [notesPanelMode, setNotesPanelMode] = useState<'welcome' | 'editor'>('welcome');
   const [initialTemplateType, setInitialTemplateType] = useState<string | null>(null);
-  const [currentView, setCurrentView] = useState<'notes' | 'teams' | 'smart-phrases' | 'template-builder' | 'autocomplete-builder' | 'community' | 'settings' | 'notes-library'>('notes');
+  const [currentView, setCurrentView] = useState<'notes' | 'teams' | 'smart-phrases' | 'template-builder' | 'autocomplete-builder' | 'community' | 'settings' | 'notes-library' | 'run-list'>('notes');
   const { notes, isLoading } = useNotes();
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -155,7 +156,7 @@ export default function Home() {
     setIsCreatingNote(false);
   };
 
-  const handleViewChange = (view: 'notes' | 'teams' | 'smart-phrases' | 'template-builder' | 'autocomplete-builder' | 'community' | 'settings' | 'notes-library') => {
+  const handleViewChange = (view: 'notes' | 'teams' | 'smart-phrases' | 'template-builder' | 'autocomplete-builder' | 'community' | 'settings' | 'notes-library' | 'run-list') => {
     const doIt = () => {
       setCurrentView(view);
       if (view === 'teams' || view === 'smart-phrases' || view === 'template-builder' || view === 'settings' || view === 'notes-library') {
@@ -179,10 +180,10 @@ export default function Home() {
         selectedNote={selectedNote}
         isLoading={isLoading}
         notes={notes || []}
-        currentView={currentView}
-        onViewChange={handleViewChange}
+        currentView={currentView as any}
+        onViewChange={handleViewChange as any}
       />
-      <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-gray-900">
+      <div className="flex-1 flex flex-col overflow-hidden bg-slate-50/30 dark:bg-gray-900">
         {currentView === 'notes' ? (
           notesPanelMode === 'welcome' ? (
             <NoteWelcome
@@ -223,6 +224,8 @@ export default function Home() {
           <SettingsPage />
         ) : currentView === 'notes-library' ? (
           <NotesLibrary onOpenNote={handleNoteSelect} />
+        ) : currentView === 'run-list' ? (
+          <RunListView />
         ) : null}
         <ConfirmLeaveModal 
           open={confirmOpen}

@@ -18,8 +18,29 @@ const DEV_USER = {
   role: "doctor"
 };
 
+// Autocomplete type definition
+type AutocompleteItem = {
+  id: string;
+  text: string;
+  category: string;
+  isPriority: boolean;
+  dosage?: string;
+  frequency?: string;
+  dosageOptions?: string[];
+  frequencyOptions?: string[];
+  description?: string;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 // In-memory storage for testing
-const mockStorage = {
+const mockStorage: {
+  notes: any[];
+  smartPhrases: any[];
+  templates: any[];
+  autocompleteItems?: AutocompleteItem[];
+} = {
   notes: [] as any[],
   smartPhrases: [
     {
@@ -213,22 +234,8 @@ app.delete('/api/smart-phrases/:id', (req, res) => {
 });
 
 // Autocomplete APIs (mock responses)
-type AutocompleteItem = {
-  id: string;
-  text: string;
-  category: string;
-  isPriority: boolean;
-  dosage?: string;
-  frequency?: string;
-  dosageOptions?: string[];
-  frequencyOptions?: string[];
-  description?: string;
-  userId: string;
-  createdAt: string;
-  updatedAt: string;
-};
 
-mockStorage.autocompleteItems = [] as AutocompleteItem[];
+mockStorage.autocompleteItems = [];
 
 // New endpoints matching client expectations
 app.get('/api/autocomplete-items', (req, res) => {

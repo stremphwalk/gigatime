@@ -2111,7 +2111,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Top Bar - redesigned */}
-      <div className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
+      <div className="bg-white/80 backdrop-blur-sm dark:bg-gray-900 dark:backdrop-blur-none border-b border-slate-200/60 dark:border-gray-800 px-4 sm:px-6 py-3 flex items-center justify-between gap-3">
         <div className="flex items-center gap-4 min-w-0">
           <Input
             value={noteData.title}
@@ -2211,12 +2211,12 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
           {/* Patient Information Header removed */}
 
           {/* Note Sections */}
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm">
+          <div className="bg-white/90 backdrop-blur-sm dark:bg-gray-800 dark:backdrop-blur-none rounded-lg border border-slate-200/60 dark:border-gray-700 shadow-sm">
           {sections.map((section, index) => (
-            <div key={section.id} className={`section-card ${index > 0 ? 'border-t border-gray-100' : ''}`} data-section-id={section.id}>
+            <div key={section.id} className={`section-card ${index > 0 ? 'border-t border-slate-200/60 dark:border-gray-700' : ''}`} data-section-id={section.id}>
               {/* Hide header for blank note template */}
               {selectedTemplate?.type !== 'blank' && (
-                <div className="px-4 py-3 bg-gray-50/70 dark:bg-gray-800/60 supports-[backdrop-filter]:backdrop-blur-sm dark:supports-[backdrop-filter]:bg-gray-800/40 transition-colors">
+                <div className="px-4 py-3 bg-slate-50/50 supports-[backdrop-filter]:backdrop-blur-sm dark:bg-gray-800/60 dark:supports-[backdrop-filter]:bg-gray-800/60 dark:backdrop-blur-none transition-colors">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center flex-wrap gap-2">
                     <h4 className="text-sm font-medium text-gray-800 dark:text-gray-100 flex items-center space-x-2 transition-colors">

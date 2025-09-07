@@ -1,8 +1,10 @@
 import type { Express } from "express";
+import express from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage.js";
 import { requireAuth, optionalAuth, getCurrentUserId } from "./auth.js";
 import { verifyClerkToken, syncClerkUser, getClerkUserId } from "./clerkAuth.js";
+import { applySecurity, configureAuthRateLimit } from "./security.js";
 import session from "express-session";
   import { 
     insertNoteSchema, 
@@ -16,13 +18,22 @@ import session from "express-session";
   smartPhrases,
   noteTemplates,
   autocompleteItems,
-  users
+  users,
+  runLists,
+  listPatients,
+  runListNotes,
+  runListNoteVersions
 } from "../shared/schema.js";
 import { z } from "zod";
-import { eq, or } from "drizzle-orm";
-import { MEDICATIONS_SYSTEM_PROMPT, LABS_SYSTEM_PROMPT, PMH_SYSTEM_PROMPT } from "./ai/prompts.js";
+import { eq, or, and, lt, desc } from "drizzle-orm";
+import { MEDICATIONS_SYSTEM_PROMPT, LABS_SYSTEM_PROMPT, PMH_SYSTEM_PROMPT, RUNLIST_SOAP_SYSTEM_PROMPT } from "./ai/prompts.js";
+import { canonicalizeLab, canonicalizeVital, canonicalizeImagingType } from "./ai/canonical.js";
+import { callNovaMicro, isNovaConfigured } from "./ai/nova.js";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Apply security middleware first
+  applySecurity(app);
+  
   // Set up Auth0 if configured, otherwise use session for development
   if (process.env.AUTH0_CLIENT_ID) {
     const { setupAuth0 } = await import('./auth0.js');
@@ -35,8 +46,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       saveUninitialized: false,
       cookie: {
         httpOnly: true,
-        secure: false, // Allow in development over HTTP
-        maxAge: 7 * 24 * 60 * 60 * 1000 // 1 week
+        secure: (process.env.NODE_ENV as string) === 'production', // Secure cookies in production only
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 1 week
+        sameSite: (process.env.NODE_ENV as string) === 'production' ? 'strict' : 'lax' // Stricter in production
       }
     }));
   }
@@ -51,7 +63,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Clerk sync endpoint (when Clerk is configured)
   app.post('/api/auth/sync', verifyClerkToken, syncClerkUser);
 
-  // Auth routes with proper authentication
+  // Auth routes with proper authentication and enhanced rate limiting
+  app.use('/api/auth/', configureAuthRateLimit()); // Apply stricter rate limiting to auth endpoints
+  
   app.get('/api/auth/user', optionalAuth, async (req: any, res) => {
     try {
       // In development mode, allow access unless explicitly logged out
@@ -556,50 +570,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Deepgram API key endpoint
-  app.get("/api/deepgram-key", requireAuth, (req, res) => {
-    res.json({ apiKey: process.env.DEEPGRAM_API_KEY });
+  // Soniox API key endpoint
+  app.get("/api/soniox-key", requireAuth, (req, res) => {
+    res.json({ apiKey: process.env.SONIOX_API_KEY });
   });
 
-  // AI: Parse medications from dictation via OpenAI
+  // File-based transcription endpoint (Soniox batch)
+  app.post('/api/transcribe', requireAuth, express.raw({ type: '*/*', limit: '50mb' }), async (req, res) => {
+    try {
+      const apiKey = process.env.SONIOX_API_KEY;
+      if (!apiKey) {
+        return res.status(501).json({ message: 'SONIOX_API_KEY not configured' });
+      }
+      const buf: Buffer = Buffer.isBuffer(req.body) ? req.body as Buffer : Buffer.from(req.body as any);
+      if (!buf || buf.length === 0) {
+        return res.status(400).json({ message: 'Empty audio body' });
+      }
+      const mime = (req.query?.mime as string) || (req.headers['content-type'] as string) || 'application/octet-stream';
+
+      // Map MIME to Soniox audio_format names
+      const mapMimeToFormat = (m: string): string => {
+        const mm = (m || '').toLowerCase();
+        if (mm.includes('webm')) return 'WEBM_OPUS';
+        if (mm.includes('ogg')) return 'OGG_OPUS';
+        if (mm.includes('wav')) return 'WAV';
+        if (mm.includes('x-wav')) return 'WAV';
+        if (mm.includes('mpeg') || mm.includes('mp3')) return 'MP3';
+        if (mm.includes('mp4')) return 'MP4';
+        return 'AUTO';
+      };
+      const audio_format = mapMimeToFormat(mime);
+
+      // Soniox batch transcription API
+      const endpoint = process.env.SONIOX_API_URL || 'https://api.soniox.com/speech-recognition/v2/recognize';
+      const audio_b64 = buf.toString('base64');
+      const reqBody = {
+        audio: audio_b64,
+        audio_format,
+        language: 'en',
+        enable_punctuation: true,
+        enable_inverse_text_normalization: true,
+        diarize: false
+      };
+
+      const r = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(reqBody)
+      });
+
+      if (!r.ok) {
+        const t = await r.text().catch(() => '');
+        console.error('[Soniox] Non-OK response:', r.status, t);
+        return res.status(502).json({ message: 'Soniox error', status: r.status, details: t?.slice(0, 500) });
+      }
+      const json: any = await r.json().catch(() => ({}));
+
+      // Attempt to extract transcript from common fields
+      let text: string = '';
+      if (typeof json?.text === 'string') text = json.text;
+      else if (Array.isArray(json?.results) && json.results.length > 0 && typeof json.results[0]?.text === 'string') text = json.results[0].text;
+      else if (typeof json?.result?.text === 'string') text = json.result.text;
+      text = String(text || '').trim();
+
+      return res.json({ text });
+    } catch (error) {
+      console.error('Error in /api/transcribe:', error);
+      return res.status(500).json({ message: 'Failed to transcribe audio' });
+    }
+  });
+
+  // AI: Parse medications from dictation via Amazon Nova Micro
   app.post("/api/ai/medications", requireAuth, async (req, res) => {
     try {
       const schema = z.object({ dictation: z.string().min(1) });
       const { dictation } = schema.parse(req.body);
 
-      const apiKey = process.env.OPENAI_API_KEY;
-      if (!apiKey) {
-        return res.status(500).json({ message: "OPENAI_API_KEY not configured" });
+      if (!isNovaConfigured()) {
+        return res.status(500).json({ message: "Amazon Nova Micro not configured. Please check AWS credentials and region." });
       }
 
       const systemPrompt = MEDICATIONS_SYSTEM_PROMPT;
 
-      const body = {
-        model: "gpt-4o-mini",
-        temperature: 0,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: dictation }
-        ]
-      } as const;
-
-      const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
-        },
-        body: JSON.stringify(body)
+      const response = await callNovaMicro({
+        systemPrompt,
+        userMessage: dictation,
+        temperature: 0
       });
-
-      if (!resp.ok) {
-        const errTxt = await resp.text().catch(() => "");
-        console.error("/api/ai/medications upstream error:", resp.status, errTxt);
-        return res.status(502).json({ message: "AI service error" });
-      }
-
-      const data: any = await resp.json();
-      const raw = data?.choices?.[0]?.message?.content || "";
 
       // Sanitize to ensure strict format and compatibility with reordering
       const sanitize = (t: string) => (
@@ -613,7 +673,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .join("\n")
       );
 
-      const text = sanitize(raw);
+      const text = sanitize(response.text);
       return res.json({ text });
     } catch (error: any) {
       console.error("Error in /api/ai/medications:", error);
@@ -622,45 +682,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // AI: Parse labs from dictation via OpenAI
+  // AI: Parse labs from dictation via Amazon Nova Micro
   app.post("/api/ai/labs", requireAuth, async (req, res) => {
     try {
       const schema = z.object({ dictation: z.string().min(1) });
       const { dictation } = schema.parse(req.body);
 
-      const apiKey = process.env.OPENAI_API_KEY;
-      if (!apiKey) {
-        return res.status(500).json({ message: "OPENAI_API_KEY not configured" });
+      if (!isNovaConfigured()) {
+        return res.status(500).json({ message: "Amazon Nova Micro not configured. Please check AWS credentials and region." });
       }
 
       const systemPrompt = LABS_SYSTEM_PROMPT;
 
-      const body = {
-        model: "gpt-4o-mini",
-        temperature: 0,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: dictation }
-        ]
-      } as const;
-
-      const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
-        },
-        body: JSON.stringify(body)
+      const response = await callNovaMicro({
+        systemPrompt,
+        userMessage: dictation,
+        temperature: 0
       });
-
-      if (!resp.ok) {
-        const errTxt = await resp.text().catch(() => "");
-        console.error("/api/ai/labs upstream error:", resp.status, errTxt);
-        return res.status(502).json({ message: "AI service error" });
-      }
-
-      const data: any = await resp.json();
-      const raw = data?.choices?.[0]?.message?.content || "";
 
       // Minimal sanitize: normalize CR, trim lines, keep punctuation/arrows
       const sanitize = (t: string) => (
@@ -671,7 +709,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .join("\n")
       );
 
-      const text = sanitize(raw);
+      const text = sanitize(response.text);
       return res.json({ text });
     } catch (error: any) {
       console.error("Error in /api/ai/labs:", error);
@@ -680,45 +718,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // AI: Parse Past Medical History (PMH) from dictation via OpenAI
+  // AI: Parse Past Medical History (PMH) from dictation via Amazon Nova Micro
   app.post("/api/ai/pmh", requireAuth, async (req, res) => {
     try {
       const schema = z.object({ dictation: z.string().min(1) });
       const { dictation } = schema.parse(req.body);
 
-      const apiKey = process.env.OPENAI_API_KEY;
-      if (!apiKey) {
-        return res.status(500).json({ message: "OPENAI_API_KEY not configured" });
+      if (!isNovaConfigured()) {
+        return res.status(500).json({ message: "Amazon Nova Micro not configured. Please check AWS credentials and region." });
       }
 
       const systemPrompt = PMH_SYSTEM_PROMPT;
 
-      const body = {
-        model: "gpt-4o-mini",
-        temperature: 0,
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: dictation }
-        ]
-      } as const;
-
-      const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
-        },
-        body: JSON.stringify(body)
+      const response = await callNovaMicro({
+        systemPrompt,
+        userMessage: dictation,
+        temperature: 0
       });
-
-      if (!resp.ok) {
-        const errTxt = await resp.text().catch(() => "");
-        console.error("/api/ai/pmh upstream error:", resp.status, errTxt);
-        return res.status(502).json({ message: "AI service error" });
-      }
-
-      const data: any = await resp.json();
-      const raw = data?.choices?.[0]?.message?.content || "";
 
       // Minimal sanitize: normalize CR, trim trailing spaces; keep exact formatting otherwise
       const sanitize = (t: string) => (
@@ -729,7 +745,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .join("\n")
       );
 
-      const text = sanitize(raw);
+      const text = sanitize(response.text);
       return res.json({ text });
     } catch (error: any) {
       console.error("Error in /api/ai/pmh:", error);
@@ -2183,6 +2199,823 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting user lab setting:", error);
       res.status(500).json({ message: "Failed to delete lab setting" });
+    }
+  });
+
+  // =============================
+  // Run List Endpoints (Phase 2/4/6)
+  // =============================
+
+  // Helper: get start-of-day Date (server local) from query param or now
+  function getStartOfDayFromQuery(req: any): Date {
+    const q = (req.query?.day as string) || '';
+    let d: Date;
+    if (q) {
+      // Accept YYYY-MM-DD or ISO date
+      const parsed = new Date(q);
+      if (!isNaN(parsed.getTime())) {
+        d = parsed;
+      } else {
+        d = new Date();
+      }
+    } else {
+      d = new Date();
+    }
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
+
+  const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
+
+  // Shape of the run list response
+  async function fetchRunListPayload(db: any, runListId: string) {
+    // Patients with optional notes
+    const rows = await db
+      .select({
+        patient: listPatients,
+        note: runListNotes,
+      })
+      .from(listPatients)
+      .leftJoin(runListNotes, eq(runListNotes.listPatientId, listPatients.id))
+      .where(eq(listPatients.runListId, runListId))
+      .orderBy(listPatients.position);
+
+    return rows.map((r: any) => ({
+      id: r.patient.id,
+      position: r.patient.position,
+      alias: r.patient.alias,
+      active: r.patient.active,
+      archivedAt: r.patient.archivedAt,
+      carryForwardOverrides: (r.patient as any).carryForwardOverrides || null,
+      note: r.note ? {
+        id: r.note.id,
+        listPatientId: r.note.listPatientId,
+        rawText: r.note.rawText,
+        structuredSections: r.note.structuredSections,
+        status: r.note.status,
+        updatedAt: r.note.updatedAt,
+        expiresAt: r.note.expiresAt,
+      } : null,
+    }));
+  }
+
+  // GET /api/run-list/today?day=YYYY-MM-DD&carryForward=true|false
+  app.get('/api/run-list/today', requireAuth, async (req: any, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const db = storage.db;
+      const day = getStartOfDayFromQuery(req);
+      const carryForward = String(req.query?.carryForward || 'false') === 'true';
+      const autoclone = String(req.query?.autoclone || 'true') === 'true';
+
+      // Try to get today's list
+      const [existing] = await db.select().from(runLists)
+        .where(and(eq(runLists.userId, userId), eq(runLists.day, day)));
+
+      if (existing) {
+        const patients = await fetchRunListPayload(db, existing.id);
+        return res.json({ runList: existing, patients });
+      }
+
+      // Find most recent previous list
+      const previous = await db
+        .select()
+        .from(runLists)
+        .where(and(eq(runLists.userId, userId), lt(runLists.day, day)))
+        .orderBy(desc(runLists.day))
+        .limit(1);
+
+      const prev = previous[0] || null;
+
+      // Create new run list (clone mode/carry_forward_defaults from previous if present)
+      const [created] = await db.insert(runLists).values({
+        userId,
+        day,
+        mode: prev?.mode || 'prepost',
+        carryForwardDefaults: prev?.carryForwardDefaults || {},
+      }).returning();
+
+      // Clone patients from previous (if any). If none, create empty list.
+      if (autoclone && prev) {
+        // Fetch prev patients + notes
+        const prevRows = await db
+          .select({
+            patient: listPatients,
+            note: runListNotes,
+          })
+          .from(listPatients)
+          .leftJoin(runListNotes, eq(runListNotes.listPatientId, listPatients.id))
+          .where(eq(listPatients.runListId, prev.id))
+          .orderBy(listPatients.position);
+
+        // Insert patients into new list and notes per patient
+        for (const r of prevRows) {
+          const [p] = await db.insert(listPatients).values({
+            runListId: created.id,
+            position: r.patient.position,
+            alias: r.patient.alias,
+            active: true,
+          }).returning();
+
+          const newNote = {
+            listPatientId: p.id,
+            rawText: carryForward && r.note ? (r.note.rawText || '') : '',
+            structuredSections: carryForward && r.note ? (r.note.structuredSections || {}) : {},
+            status: 'draft',
+            expiresAt: new Date(Date.now() + FORTY_EIGHT_HOURS_MS),
+          } as any;
+          await db.insert(runListNotes).values(newNote);
+        }
+      }
+
+      const patients = await fetchRunListPayload(db, created.id);
+      return res.json({ runList: created, patients });
+    } catch (error) {
+      console.error('Error in GET /api/run-list/today:', error);
+      return res.status(500).json({ message: 'Failed to get or create today\'s run list' });
+    }
+  });
+
+  // POST /api/run-list/:id/patients { alias? }
+  app.post('/api/run-list/:id/patients', requireAuth, async (req: any, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const db = storage.db;
+      const runListId = req.params.id;
+
+      // Ensure run list belongs to user
+      const [rl] = await db.select().from(runLists).where(and(eq(runLists.id, runListId), eq(runLists.userId, userId)));
+      if (!rl) return res.status(404).json({ message: 'Run list not found' });
+
+      const aliasRaw = (req.body?.alias || '').toString();
+      const alias = aliasRaw ? aliasRaw.substring(0, 32) : null;
+
+      // Next position
+      const rows = await db.select().from(listPatients).where(eq(listPatients.runListId, runListId)).orderBy(desc(listPatients.position)).limit(1);
+      const nextPos = rows.length > 0 ? (rows[0].position + 1) : 0;
+
+      const [patient] = await db.insert(listPatients).values({ runListId, position: nextPos, alias, active: true }).returning();
+
+      const [note] = await db.insert(runListNotes).values({
+        listPatientId: patient.id,
+        rawText: '',
+        structuredSections: {},
+        status: 'draft',
+        expiresAt: new Date(Date.now() + FORTY_EIGHT_HOURS_MS),
+      } as any).returning();
+
+      return res.json({ patient: { ...patient }, note });
+    } catch (error) {
+      console.error('Error in POST /api/run-list/:id/patients:', error);
+      return res.status(500).json({ message: 'Failed to add patient' });
+    }
+  });
+
+  // PUT /api/run-list/:id/patients/reorder { order: string[] }
+  app.put('/api/run-list/:id/patients/reorder', requireAuth, async (req: any, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const db = storage.db;
+      const runListId = req.params.id;
+      const schema = z.object({ order: z.array(z.string().uuid()).min(1) });
+      const { order } = schema.parse(req.body || {});
+
+      const [rl] = await db.select().from(runLists).where(and(eq(runLists.id, runListId), eq(runLists.userId, userId)));
+      if (!rl) return res.status(404).json({ message: 'Run list not found' });
+
+      // Update positions in sequence
+      for (let i = 0; i < order.length; i++) {
+        const id = order[i];
+        await db.update(listPatients).set({ position: i, updatedAt: new Date() }).where(and(eq(listPatients.id, id), eq(listPatients.runListId, runListId)));
+      }
+
+      const patients = await fetchRunListPayload(db, runListId);
+      return res.json({ message: 'Reordered', patients });
+    } catch (error) {
+      console.error('Error in PUT /api/run-list/:id/patients/reorder:', error);
+      return res.status(500).json({ message: 'Failed to reorder patients' });
+    }
+  });
+
+  // PUT /api/run-list/patients/:id { alias?: string, active?: boolean }
+  app.put('/api/run-list/patients/:id', requireAuth, async (req: any, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const db = storage.db;
+      const patientId = req.params.id;
+
+      // Verify ownership via join
+      const rows = await db
+        .select({ rl: runLists, p: listPatients })
+        .from(listPatients)
+        .innerJoin(runLists, eq(runLists.id, listPatients.runListId))
+        .where(eq(listPatients.id, patientId));
+      const row = rows[0];
+      if (!row || row.rl.userId !== userId) return res.status(404).json({ message: 'Patient not found' });
+
+      const data: any = {};
+      if (typeof req.body?.alias === 'string') data.alias = req.body.alias.substring(0, 32);
+      if (typeof req.body?.active === 'boolean') data.active = req.body.active;
+      if (req.body && typeof req.body.carryForwardOverrides === 'object' && req.body.carryForwardOverrides) {
+        const allowed = ['assessment','active_orders','allergies','labs','medications','objective','subjective','imaging','plan','physical_exam'];
+        const out: Record<string, boolean> = {};
+        for (const k of allowed) if (k in req.body.carryForwardOverrides) out[k] = Boolean(req.body.carryForwardOverrides[k]);
+        data.carryForwardOverrides = out;
+      }
+      if (Object.keys(data).length === 0) return res.status(400).json({ message: 'No fields to update' });
+
+      const [updated] = await db.update(listPatients).set({ ...data, updatedAt: new Date() }).where(eq(listPatients.id, patientId)).returning();
+      return res.json({ patient: updated });
+    } catch (error) {
+      console.error('Error in PUT /api/run-list/patients/:id:', error);
+      return res.status(500).json({ message: 'Failed to update patient' });
+    }
+  });
+
+  // DELETE /api/run-list/patients/:id (archive for the day)
+  app.delete('/api/run-list/patients/:id', requireAuth, async (req: any, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const db = storage.db;
+      const patientId = req.params.id;
+
+      const rows = await db
+        .select({ rl: runLists, p: listPatients })
+        .from(listPatients)
+        .innerJoin(runLists, eq(runLists.id, listPatients.runListId))
+        .where(eq(listPatients.id, patientId));
+      const row = rows[0];
+      if (!row || row.rl.userId !== userId) return res.status(404).json({ message: 'Patient not found' });
+
+      const [updated] = await db.update(listPatients).set({ active: false, archivedAt: new Date(), updatedAt: new Date() }).where(eq(listPatients.id, patientId)).returning();
+      return res.json({ patient: updated });
+    } catch (error) {
+      console.error('Error in DELETE /api/run-list/patients/:id:', error);
+      return res.status(500).json({ message: 'Failed to archive patient' });
+    }
+  });
+
+  // PUT /api/run-list/notes/:listPatientId { rawText?, structuredSections?, status? }
+  app.put('/api/run-list/notes/:listPatientId', requireAuth, async (req: any, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const db = storage.db;
+      const listPatientId = req.params.listPatientId;
+      const expectedUpdatedAtRaw = req.body?.expectedUpdatedAt ? new Date(req.body.expectedUpdatedAt) : null;
+
+      // Verify ownership via join
+      const rows = await db
+        .select({ rl: runLists, p: listPatients, n: runListNotes })
+        .from(listPatients)
+        .leftJoin(runListNotes, eq(runListNotes.listPatientId, listPatients.id))
+        .innerJoin(runLists, eq(runLists.id, listPatients.runListId))
+        .where(eq(listPatients.id, listPatientId));
+      const row = rows[0];
+      if (!row || row.rl.userId !== userId) return res.status(404).json({ message: 'List patient not found' });
+
+      const allowedStatus = new Set(['draft', 'preround', 'postround', 'complete']);
+      const payload: any = {};
+      if (typeof req.body?.rawText === 'string') payload.rawText = req.body.rawText;
+      if (typeof req.body?.structuredSections === 'object' && req.body.structuredSections) payload.structuredSections = req.body.structuredSections;
+      if (typeof req.body?.status === 'string' && allowedStatus.has(req.body.status)) payload.status = req.body.status;
+      payload.updatedAt = new Date();
+      payload.expiresAt = new Date(Date.now() + FORTY_EIGHT_HOURS_MS);
+
+      let noteRow;
+      if (row.n) {
+        // Optimistic locking: when provided, ensure no concurrent update
+        if (expectedUpdatedAtRaw && new Date(row.n.updatedAt).getTime() !== expectedUpdatedAtRaw.getTime()) {
+          return res.status(409).json({ message: 'Conflict: note was updated by another source' });
+        }
+        const [updated] = await db.update(runListNotes).set(payload).where(eq(runListNotes.id, row.n.id)).returning();
+        noteRow = updated;
+      } else {
+        const [created] = await db.insert(runListNotes).values({ listPatientId, rawText: payload.rawText || '', structuredSections: payload.structuredSections || {}, status: payload.status || 'draft', updatedAt: new Date(), createdAt: new Date(), expiresAt: payload.expiresAt } as any).returning();
+        noteRow = created;
+      }
+
+      // Record a version entry
+      try {
+        await db.insert(runListNoteVersions).values({
+          noteId: noteRow.id,
+          rawText: noteRow.rawText,
+          structuredSections: noteRow.structuredSections,
+          source: 'user_edit',
+        } as any);
+      } catch {}
+
+      return res.json({ note: noteRow });
+    } catch (error) {
+      console.error('Error in PUT /api/run-list/notes/:listPatientId:', error);
+      return res.status(500).json({ message: 'Failed to update note' });
+    }
+  });
+
+  // GET /api/run-list/:id/carry-forward
+  app.get('/api/run-list/:id/carry-forward', requireAuth, async (req: any, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const runListId = req.params.id;
+      const [rl] = await storage.db.select().from(runLists).where(and(eq(runLists.id, runListId), eq(runLists.userId, userId)));
+      if (!rl) return res.status(404).json({ message: 'Run list not found' });
+      return res.json({ carryForwardDefaults: (rl as any).carryForwardDefaults || {} });
+    } catch (error) {
+      console.error('Error in GET /api/run-list/:id/carry-forward:', error);
+      return res.status(500).json({ message: 'Failed to fetch carry-forward defaults' });
+    }
+  });
+
+  // PUT /api/run-list/:id/carry-forward { carryForwardDefaults }
+  app.put('/api/run-list/:id/carry-forward', requireAuth, async (req: any, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const runListId = req.params.id;
+      const body = req.body || {};
+      const inDefaults = (body.carryForwardDefaults || {}) as Record<string, any>;
+      // Whitelist keys and coerce to booleans
+      const allowed = ['assessment','active_orders','allergies','labs','medications','objective','subjective','imaging','plan','physical_exam'];
+      const out: Record<string, boolean> = {};
+      for (const k of allowed) out[k] = Boolean(inDefaults[k]);
+
+      const [rl] = await storage.db.select().from(runLists).where(and(eq(runLists.id, runListId), eq(runLists.userId, userId)));
+      if (!rl) return res.status(404).json({ message: 'Run list not found' });
+      const [updated] = await storage.db.update(runLists).set({ carryForwardDefaults: out, updatedAt: new Date() }).where(eq(runLists.id, runListId)).returning();
+      return res.json({ carryForwardDefaults: (updated as any).carryForwardDefaults || {} });
+    } catch (error) {
+  console.error('Error in PUT /api/run-list/:id/carry-forward:', error);
+      return res.status(500).json({ message: 'Failed to update carry-forward defaults' });
+    }
+  });
+
+  // PUT /api/run-list/:id/mode { mode: 'prepost' | 'full' }
+  app.put('/api/run-list/:id/mode', requireAuth, async (req: any, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const runListId = req.params.id;
+      const modeRaw = String((req.body || {}).mode || '').toLowerCase();
+      const mode = modeRaw === 'full' ? 'full' : 'prepost';
+      const [rl] = await storage.db.select().from(runLists).where(and(eq(runLists.id, runListId), eq(runLists.userId, userId)));
+      if (!rl) return res.status(404).json({ message: 'Run list not found' });
+      const [updated] = await storage.db.update(runLists).set({ mode, updatedAt: new Date() } as any).where(eq(runLists.id, runListId)).returning();
+      return res.json({ mode: (updated as any).mode });
+    } catch (error) {
+      console.error('Error in PUT /api/run-list/:id/mode:', error);
+      return res.status(500).json({ message: 'Failed to update run list mode' });
+    }
+  });
+
+  // POST /api/run-list/:id/clone-from-previous?strategy=all|selected|none
+  app.post('/api/run-list/:id/clone-from-previous', requireAuth, async (req: any, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const runListId = req.params.id;
+      const strategyRaw = (req.query?.strategy as string) || 'selected';
+      const strategy = ['all','selected','none'].includes(strategyRaw) ? strategyRaw : 'selected';
+
+      // Load today's run list and verify ownership
+      const [todayRL] = await storage.db.select().from(runLists).where(and(eq(runLists.id, runListId), eq(runLists.userId, userId)));
+      if (!todayRL) return res.status(404).json({ message: 'Run list not found' });
+      const todayDay = new Date((todayRL as any).day);
+
+      // Ensure list is empty (no patients) to avoid duplication
+      const existingTodayPatients = await storage.db.select().from(listPatients).where(eq(listPatients.runListId, runListId)).limit(1);
+      if (existingTodayPatients.length > 0) {
+        return res.status(409).json({ message: 'Run list already has patients' });
+      }
+
+      // Find previous run list by same user and day < today
+      const prevListRows = await storage.db
+        .select()
+        .from(runLists)
+        .where(and(eq(runLists.userId, userId), lt(runLists.day, todayDay)))
+        .orderBy(desc(runLists.day))
+        .limit(1);
+      const prevRL = prevListRows[0];
+      if (!prevRL) return res.status(404).json({ message: 'No previous run list found' });
+
+      // Determine carry-forward defaults: prefer body -> today's rl -> previous rl -> empty
+      const allowedKeys = ['assessment','active_orders','allergies','labs','medications','objective','subjective','imaging','plan','physical_exam'];
+      const coerceDefaults = (src: any): Record<string, boolean> => {
+        const out: Record<string, boolean> = {};
+        for (const k of allowedKeys) out[k] = Boolean(src?.[k]);
+        return out;
+      };
+      const bodyDefaults = coerceDefaults((req.body || {}).carryForwardDefaults || {});
+      const todayDefaults = coerceDefaults((todayRL as any).carryForwardDefaults || {});
+      const prevDefaults = coerceDefaults((prevRL as any).carryForwardDefaults || {});
+      const defaults = Object.values(bodyDefaults).some(Boolean) ? bodyDefaults : (Object.values(todayDefaults).some(Boolean) ? todayDefaults : prevDefaults);
+
+      // Fetch previous patients + notes
+      const prevRows = await storage.db
+        .select({ patient: listPatients, note: runListNotes })
+        .from(listPatients)
+        .leftJoin(runListNotes, eq(runListNotes.listPatientId, listPatients.id))
+        .where(eq(listPatients.runListId, (prevRL as any).id))
+        .orderBy(listPatients.position);
+
+      // Helpers to rebuild minimal raw text for selected strategy
+      const buildLabsLine = (labs: any): string => {
+        try {
+          if (!labs || typeof labs !== 'object') return '';
+          const parts: string[] = [];
+          const entries = Object.entries(labs);
+          for (let i = 0; i < Math.min(entries.length, 8); i++) {
+            const [name, vals] = entries[i] as [string, any];
+            const arr = Array.isArray((vals as any)?.values) ? (vals as any).values : Array.isArray(vals) ? vals : [];
+            const latest = arr && arr.length > 0 ? String(arr[0]) : '';
+            if (latest) parts.push(`${name}: ${latest}`);
+          }
+          return parts.length ? `Labs: ${parts.join(', ')}` : '';
+        } catch { return ''; }
+      };
+      const buildVitalsLine = (vitals: any): string => {
+        try {
+          if (!vitals || typeof vitals !== 'object') return '';
+          const parts: string[] = [];
+          const entries = Object.entries(vitals);
+          for (let i = 0; i < Math.min(entries.length, 8); i++) {
+            const [name, v] = entries[i] as [string, any];
+            const latest = typeof v === 'string' ? v : (Array.isArray(v?.values) ? String(v.values[0] || '') : (v?.value || v?.current));
+            if (latest) parts.push(`${name}: ${latest}`);
+          }
+          return parts.length ? `Vitals: ${parts.join(', ')}` : '';
+        } catch { return ''; }
+      };
+      const buildImagingLine = (imaging: any): string => {
+        try {
+          if (!imaging || typeof imaging !== 'object') return '';
+          const parts: string[] = [];
+          const entries = Object.entries(imaging);
+          for (let i = 0; i < Math.min(entries.length, 4); i++) {
+            const [type, arr] = entries[i] as [string, any];
+            let latestText = '';
+            if (Array.isArray(arr) && arr.length > 0) {
+              const first = arr[0];
+              latestText = first?.impression || first?.text || '';
+            } else if (typeof arr === 'object' && arr) {
+              latestText = arr?.impression || arr?.text || '';
+            }
+            if (latestText) parts.push(`${type}: ${latestText}`);
+          }
+          return parts.length ? `Imaging: ${parts.join(' | ')}` : '';
+        } catch { return ''; }
+      };
+
+      // Perform cloning
+      const createdPatients: any[] = [];
+      for (const r of prevRows as any[]) {
+        const [p] = await storage.db.insert(listPatients).values({
+          runListId,
+          position: r.patient.position,
+          alias: r.patient.alias,
+          active: true,
+          carryForwardOverrides: (r.patient as any).carryForwardOverrides || null,
+        } as any).returning();
+        createdPatients.push(p);
+
+        const prevNote = r.note;
+        let rawText = '';
+        let sections: any = {};
+        let structured: any = {};
+
+        if (strategy === 'all') {
+          rawText = prevNote?.rawText || '';
+          const ss = (prevNote as any)?.structuredSections;
+          if (ss && typeof ss === 'object') {
+            sections = ss.sections || {};
+            structured = ss.structured || {};
+          }
+        } else if (strategy === 'none') {
+          rawText = '';
+          sections = {};
+          structured = {};
+        } else {
+          // selected
+          const ss = (prevNote as any)?.structuredSections || {};
+          const prevSections = (ss.sections || {}) as Record<string, string>;
+          const prevStructured = (ss.structured || {}) as Record<string, any>;
+
+          // Apply per-patient overrides from previous day when present
+          const prevOverrides = ((r.patient as any).carryForwardOverrides || {}) as Record<string, boolean>;
+          const eff = { ...defaults } as Record<string, boolean>;
+          for (const k of Object.keys(prevOverrides)) {
+            if (typeof prevOverrides[k] === 'boolean') eff[k] = prevOverrides[k];
+          }
+
+          // Filter structured by effective defaults
+          structured = {};
+          if (eff.labs && prevStructured.labs) (structured as any).labs = prevStructured.labs;
+          if (defaults.imaging && prevStructured.imaging) (structured as any).imaging = prevStructured.imaging;
+          if (defaults.objective && prevStructured.vitals) (structured as any).vitals = prevStructured.vitals;
+          if (defaults.medications && prevStructured.medications) (structured as any).medications = prevStructured.medications;
+          if (defaults.allergies && prevStructured.allergies) (structured as any).allergies = prevStructured.allergies;
+
+          // Filter sections by defaults (SOAP + optional physical exam)
+          const pushIf = (key: string, cond: boolean) => { if (cond && prevSections[key]) sections[key] = prevSections[key]; };
+          pushIf('Subjective', defaults.subjective);
+          pushIf('Objective', defaults.objective);
+          pushIf('Assessment', defaults.assessment);
+          pushIf('Plan', defaults.plan);
+          pushIf('Physical Exam', defaults.physical_exam);
+
+          // Build minimal raw text with headings
+          const parts: string[] = [];
+          if (sections['Subjective']) parts.push(`Subjective:\n${sections['Subjective'].trim()}`);
+
+          const objLines: string[] = [];
+          if (sections['Objective']) objLines.push(sections['Objective'].trim());
+          if (eff.objective && structured.vitals) {
+            const line = buildVitalsLine(structured.vitals);
+            if (line) objLines.push(line);
+          }
+          if (eff.labs && structured.labs) {
+            const line = buildLabsLine(structured.labs);
+            if (line) objLines.push(line);
+          }
+          if (eff.imaging && structured.imaging) {
+            const line = buildImagingLine(structured.imaging);
+            if (line) objLines.push(line);
+          }
+          if (objLines.length) parts.push(`Objective:\n${objLines.join('\n')}`);
+
+          if (eff.physical_exam && sections['Physical Exam']) parts.push(`Physical Exam:\n${sections['Physical Exam'].trim()}`);
+          if (eff.assessment && sections['Assessment']) parts.push(`Assessment:\n${sections['Assessment'].trim()}`);
+          if (eff.plan && sections['Plan']) parts.push(`Plan:\n${sections['Plan'].trim()}`);
+
+          rawText = parts.join('\n\n');
+        }
+
+        // Create note for patient
+        await storage.db.insert(runListNotes).values({
+          listPatientId: p.id,
+          rawText,
+          structuredSections: { sections, structured },
+          status: 'draft',
+          expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+        } as any);
+      }
+
+      // Return today payload
+      const patients = await fetchRunListPayload(storage.db, runListId);
+      return res.json({ runList: todayRL, patients, strategy, defaults });
+    } catch (error) {
+      console.error('Error in POST /api/run-list/:id/clone-from-previous:', error);
+      return res.status(500).json({ message: 'Failed to clone from previous' });
+    }
+  });
+
+  // POST /api/run-list/ai/generate { listPatientId, transcript, mode?: 'prepost'|'full' }
+  app.post('/api/run-list/ai/generate', requireAuth, async (req: any, res) => {
+    try {
+      const schema = z.object({
+        listPatientId: z.string().uuid(),
+        transcript: z.string().min(1),
+        mode: z.enum(['prepost','full']).optional()
+      });
+      const { listPatientId, transcript, mode } = schema.parse(req.body || {});
+
+      if (!isNovaConfigured()) {
+        return res.status(500).json({ message: "Amazon Nova Micro not configured. Please check AWS credentials and region." });
+      }
+
+      // Verify ownership and fetch current note
+      const rows = await storage.db
+        .select({ rl: runLists, p: listPatients, n: runListNotes })
+        .from(listPatients)
+        .leftJoin(runListNotes, eq(runListNotes.listPatientId, listPatients.id))
+        .innerJoin(runLists, eq(runLists.id, listPatients.runListId))
+        .where(eq(listPatients.id, listPatientId));
+      const row = rows[0];
+      if (!row) return res.status(404).json({ message: 'List patient not found' });
+      const userId = getCurrentUserId(req);
+      if (row.rl.userId !== userId) return res.status(403).json({ message: 'Forbidden' });
+
+      const previousText = row.n?.rawText || '';
+      const workflow = (mode || row.rl.mode || 'prepost');
+
+      // Include previous structured facts to aid trending (best-effort)
+      let prevStructured: any = {};
+      try {
+        const ss = (row.n as any)?.structuredSections;
+        if (ss && typeof ss === 'object') prevStructured = ss.structured || {};
+      } catch {}
+
+      // Compose user message for the LLM
+      const userMessage = [
+        `Workflow mode: ${workflow}`,
+        `\nPrevious note (may be empty):\n---\n${previousText}\n---`,
+        `\nPrevious structured facts (JSON, may be empty):\n---\n${JSON.stringify(prevStructured).slice(0, 4000)}\n---`,
+        `\nNew dictation to merge:\n---\n${transcript}\n---`,
+        `\nReturn strict JSON with {"merged_note": string, "sections": {"Subjective"?: string, "Objective"?: string, "Assessment"?: string, "Plan"?: string}, "structured"?: {"vitals"?: any, "labs"?: any, "imaging"?: any}}`
+      ].join('\n');
+
+      const { text } = await callNovaMicro({
+        systemPrompt: RUNLIST_SOAP_SYSTEM_PROMPT,
+        userMessage,
+        temperature: 0
+      });
+
+      let merged_note = '';
+      let sections: any = {};
+      let structured: any = {};
+      try {
+        const parsed = JSON.parse(text);
+        merged_note = String(parsed?.merged_note || '').trim();
+        sections = parsed?.sections && typeof parsed.sections === 'object' ? parsed.sections : {};
+        structured = parsed?.structured && typeof parsed.structured === 'object' ? parsed.structured : {};
+      } catch (e) {
+        // Fallback: treat entire output as note text
+        merged_note = text.trim();
+        sections = {};
+        structured = {};
+      }
+      if (!merged_note) merged_note = previousText; // last resort
+
+      // Merge structured facts for trending (labs)
+      const normalizeLabs = (labs: any): Record<string, string[]> => {
+        const out: Record<string, string[]> = {};
+        if (!labs) return out;
+        const addVals = (name: string, vals: any) => {
+          const key = canonicalizeLab(String(name || '').trim());
+          if (!key) return;
+          const arr: string[] = [];
+          if (Array.isArray(vals)) {
+            for (const v of vals) {
+              if (v == null) continue;
+              if (typeof v === 'string' || typeof v === 'number') arr.push(String(v));
+              else if (typeof v === 'object') {
+                if (v.value != null) arr.push(String(v.value));
+                else if (v.current != null) arr.push(String(v.current));
+              }
+            }
+          } else if (typeof vals === 'object') {
+            if (Array.isArray(vals.values)) addVals(name, vals.values);
+            if (vals.current != null) arr.unshift(String(vals.current));
+            if (Array.isArray(vals.trends)) addVals(name, vals.trends);
+          } else if (typeof vals === 'string' || typeof vals === 'number') {
+            arr.push(String(vals));
+          }
+          if (!out[key]) out[key] = [];
+          out[key].push(...arr);
+        };
+        if (Array.isArray(labs)) {
+          for (const item of labs) {
+            if (item && typeof item === 'object') addVals(item.name || item.test || item.id || 'Unknown', item.values ?? item);
+          }
+        } else if (typeof labs === 'object') {
+          for (const [k, v] of Object.entries(labs)) addVals(k, v);
+        }
+        // Dedup while preserving order
+        for (const k of Object.keys(out)) {
+          const seen = new Set<string>();
+          out[k] = out[k].filter((x) => { const s = String(x).trim(); if (!s || seen.has(s)) return false; seen.add(s); return true; });
+        }
+        return out;
+      };
+
+      const prevLabs = normalizeLabs(prevStructured?.labs);
+      const newLabs = normalizeLabs(structured?.labs);
+      const mergedLabs: Record<string, string[]> = {};
+      const labsKeys = Array.from(new Set([...Object.keys(newLabs), ...Object.keys(prevLabs)]));
+      for (const name of labsKeys) {
+        const combined = [...(newLabs[name] || []), ...(prevLabs[name] || [])];
+        // Limit history to last 6 for brevity
+        mergedLabs[name] = combined.slice(0, 6);
+      }
+
+      // Vitals merge (similar shape as labs: name -> { values: [] })
+      const normalizeVitals = (vitals: any): Record<string, string[]> => {
+        const out: Record<string, string[]> = {};
+        if (!vitals) return out;
+        const addVals = (name: string, vals: any) => {
+          const key = canonicalizeVital(String(name || '').trim());
+          if (!key) return;
+          const arr: string[] = [];
+          if (Array.isArray(vals)) {
+            for (const v of vals) {
+              if (v == null) continue;
+              if (typeof v === 'string' || typeof v === 'number') arr.push(String(v));
+              else if (typeof v === 'object') {
+                if (v.value != null) arr.push(String(v.value));
+                else if (v.current != null) arr.push(String(v.current));
+              }
+            }
+          } else if (typeof vals === 'object') {
+            if (Array.isArray(vals.values)) addVals(name, vals.values);
+            if (vals.current != null) arr.unshift(String(vals.current));
+            if (Array.isArray(vals.trends)) addVals(name, vals.trends);
+            if (vals.value != null) arr.unshift(String(vals.value));
+          } else if (typeof vals === 'string' || typeof vals === 'number') {
+            arr.push(String(vals));
+          }
+          if (!out[key]) out[key] = [];
+          out[key].push(...arr);
+        };
+        if (Array.isArray(vitals)) {
+          for (const item of vitals) {
+            if (item && typeof item === 'object') addVals(item.name || item.id || 'Unknown', item.values ?? item);
+          }
+        } else if (typeof vitals === 'object') {
+          for (const [k, v] of Object.entries(vitals)) addVals(k, v);
+        }
+        // Dedup while preserving order
+        for (const k of Object.keys(out)) {
+          const seen = new Set<string>();
+          out[k] = out[k].filter((x) => { const s = String(x).trim(); if (!s || seen.has(s)) return false; seen.add(s); return true; });
+        }
+        return out;
+      };
+      const prevVitals = normalizeVitals(prevStructured?.vitals);
+      const newVitals = normalizeVitals(structured?.vitals);
+      const mergedVitals: Record<string, string[]> = {};
+      const vitalsKeys = Array.from(new Set([...Object.keys(newVitals), ...Object.keys(prevVitals)]));
+      for (const name of vitalsKeys) {
+        const combined = [...(newVitals[name] || []), ...(prevVitals[name] || [])];
+        mergedVitals[name] = combined.slice(0, 6);
+      }
+
+      // Imaging merge: map type -> array of { impression, when? }, latest first, dedup by impression+when
+      const normalizeImaging = (im: any): Record<string, { impression: string; when?: string }[]> => {
+        const out: Record<string, { impression: string; when?: string }[]> = {};
+        if (!im) return out;
+        const add = (type: string, entry: any) => {
+          const t = canonicalizeImagingType(String(type || '').trim() || 'Imaging');
+          const imp = String(entry?.impression || entry?.text || '').trim();
+          const when = entry?.when ? String(entry.when) : (entry?.date ? String(entry.date) : undefined);
+          if (!imp) return;
+          if (!out[t]) out[t] = [];
+          out[t].push({ impression: imp, when });
+        };
+        if (Array.isArray(im)) {
+          for (const item of im) {
+            if (item && typeof item === 'object') add(item.type || item.modality || 'Imaging', item);
+          }
+        } else if (typeof im === 'object') {
+          for (const [k, v] of Object.entries(im)) {
+            if (Array.isArray(v)) { for (const e of v) add(k, e); }
+            else if (typeof v === 'object') add(k, v);
+            else if (typeof v === 'string') add(k, { impression: v });
+          }
+        }
+        // Dedup per type
+        for (const k of Object.keys(out)) {
+          const seen = new Set<string>();
+          out[k] = out[k].filter((e) => {
+            const key = e.impression + '|' + (e.when || '');
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+        }
+        return out;
+      };
+      const prevImaging = normalizeImaging(prevStructured?.imaging);
+      const newImaging = normalizeImaging(structured?.imaging);
+      const mergedImaging: Record<string, { impression: string; when?: string }[]> = {};
+      const imagingKeys = Array.from(new Set([...Object.keys(newImaging), ...Object.keys(prevImaging)]));
+      for (const type of imagingKeys) {
+        const combined = [...(newImaging[type] || []), ...(prevImaging[type] || [])];
+        mergedImaging[type] = combined.slice(0, 6);
+      }
+
+      // Rebuild structured with merges
+      const mergedStructured = {
+        ...prevStructured,
+        ...structured,
+        labs: Object.fromEntries(Object.entries(mergedLabs).map(([k, v]) => [k, { values: v }])),
+        vitals: Object.fromEntries(Object.entries(mergedVitals).map(([k, v]) => [k, { values: v }])),
+        imaging: mergedImaging,
+      };
+
+      // Update note and version
+      const payload: any = {
+        rawText: merged_note,
+        structuredSections: { sections, structured: mergedStructured },
+        status: workflow === 'prepost' ? (row.n?.status === 'preround' ? 'postround' : 'preround') : 'complete',
+        updatedAt: new Date(),
+        expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
+      };
+
+      let noteRow;
+      if (row.n) {
+        const [updated] = await storage.db.update(runListNotes).set(payload).where(eq(runListNotes.id, row.n.id)).returning();
+        noteRow = updated;
+      } else {
+        const [created] = await storage.db.insert(runListNotes).values({ listPatientId, ...payload } as any).returning();
+        noteRow = created;
+      }
+      try {
+        await storage.db.insert(runListNoteVersions).values({
+          noteId: noteRow.id,
+          rawText: noteRow.rawText,
+          structuredSections: noteRow.structuredSections,
+          source: 'ai_merge',
+        } as any);
+      } catch {}
+
+      return res.json({ note: noteRow });
+    } catch (error) {
+      console.error('Error in POST /api/run-list/ai/generate:', error);
+      return res.status(500).json({ message: 'Failed to generate AI note' });
     }
   });
 

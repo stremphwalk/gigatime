@@ -245,7 +245,7 @@ export function LabParsingDialog({ isOpen, onClose, onConfirm, initialTab = 'pas
               <Textarea
                 id="raw-labs"
                 value={rawLabText}
-                onChange={(e) => setRawLabText(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setRawLabText(e.target.value)}
                 placeholder="Paste your lab results here (e.g., from EHR system)..."
                 className="min-h-[200px] font-mono text-sm"
                 data-testid="textarea-raw-labs"

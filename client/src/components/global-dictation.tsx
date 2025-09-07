@@ -8,9 +8,19 @@ interface CaretPosition {
   element: HTMLElement | null;
 }
 
+// Per-session anchor to support late finals
+interface SessionAnchor {
+  element: HTMLInputElement | HTMLTextAreaElement | HTMLElement | null;
+  type: 'input' | 'textarea' | 'contenteditable' | 'other';
+  // caret position after last insertion for this session (for input/textarea)
+  caretPos: number;
+  lastInterim: string;
+}
+
 export function GlobalDictation() {
   const [isPressed, setIsPressed] = useState(false);
   const [showIcon, setShowIcon] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(false);
   const [caretPosition, setCaretPosition] = useState<CaretPosition>({ x: 0, y: 0, element: null });
   
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -20,6 +30,17 @@ export function GlobalDictation() {
   const insertionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const currentSessionRef = useRef('');
   const lastInsertedSessionRef = useRef('');
+  const bufferTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isBufferingRef = useRef(false);
+  const keyPressStartTimeRef = useRef<number>(0);
+  const hasReceivedAudioRef = useRef(false);
+
+  // Map of sessionId -> anchor
+  const sessionAnchorsRef = useRef<Map<string, SessionAnchor>>(new Map());
+  // Cleanup timers per session (to handle upgraded finals)
+  const sessionCleanupTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  // Anchor captured at start, to be bound when sessionId is known
+  const pendingAnchorRef = useRef<SessionAnchor | null>(null);
   
   const { 
     isListening, 
@@ -81,25 +102,25 @@ export function GlobalDictation() {
         const paddingLeft = parseInt(style.paddingLeft) || 0;
         const paddingTop = parseInt(style.paddingTop) || 0;
         
-        // Position indicator at the actual text cursor location
-        x = rect.left + paddingLeft + (textRect.width % (rect.width - paddingLeft * 2)) + 5;
-        y = rect.top + paddingTop + Math.floor(textRect.width / (rect.width - paddingLeft * 2)) * lineHeight - 40;
+        // Position indicator above the actual text cursor location
+        x = rect.left + paddingLeft + (textRect.width % (rect.width - paddingLeft * 2));
+        y = rect.top + paddingTop + Math.floor(textRect.width / (rect.width - paddingLeft * 2)) * lineHeight - 70;
       } else if (activeElement.matches('[contenteditable]')) {
         const selection = window.getSelection();
         if (selection && selection.rangeCount > 0) {
           const range = selection.getRangeAt(0);
           const rect = range.getBoundingClientRect();
-          x = rect.left + 10;
-          y = rect.top - 35;
+          x = rect.left;
+          y = rect.top - 80; // Position well above the cursor
         } else {
           const rect = activeElement.getBoundingClientRect();
-          x = rect.left + 10;
-          y = rect.top - 35;
+          x = rect.left;
+          y = rect.top - 80; // Position well above the cursor
         }
       } else {
         const rect = activeElement.getBoundingClientRect();
-        x = rect.left + 10;
-        y = rect.top - 35;
+        x = rect.left;
+        y = rect.top - 80;
       }
       
       // Ensure indicator stays within viewport bounds
@@ -128,107 +149,96 @@ export function GlobalDictation() {
     } catch (error) {
       console.error('Error getting caret position:', error);
       const rect = activeElement.getBoundingClientRect();
-      return { x: rect.left + 10, y: rect.top - 35, element: activeElement };
+      return { x: rect.left, y: rect.top - 80, element: activeElement };
     }
   }, []);
 
-  // Insert or update text at current caret position with live streaming
-  const insertTextAtCaret = useCallback((text: string, isInterim: boolean = false, session: string = '') => {
+// Insert or update text for a specific session using its anchor
+  const insertTextForSession = useCallback((text: string, isInterim: boolean = false, session: string = '') => {
+    if (!session) return;
+
+    // For partials, ignore if this session is not the current active session
+    if (isInterim && session !== currentSessionRef.current) {
+      console.log('🎤 Skipping interim from old session:', session);
+      return;
+    }
+
+    const anchor = sessionAnchorsRef.current.get(session);
+    if (!anchor || !anchor.element) {
+      console.log('🎤 No anchor for session, attempting activeElement fallback:', session);
+      // As a last resort, attempt to capture an anchor now for current session
+      if (session === currentSessionRef.current) {
+        const ae = document.activeElement as HTMLElement | null;
+        if (ae && (ae.matches('input, textarea') || ae.matches('[contenteditable]'))) {
+          const a: SessionAnchor = {
+            element: ae as any,
+            type: ae.matches('textarea') ? 'textarea' : ae.matches('input') ? 'input' : ae.matches('[contenteditable]') ? 'contenteditable' : 'other',
+            caretPos: (ae as any).selectionStart ?? 0,
+            lastInterim: ''
+          };
+          sessionAnchorsRef.current.set(session, a);
+          console.log('🎤 Fallback anchor captured for session:', session);
+        } else {
+          return;
+        }
+      } else {
+        return;
+      }
+    }
+
+    const a = sessionAnchorsRef.current.get(session)!;
+
     if (isInsertingRef.current) {
       console.log('🎤 Insertion blocked - already inserting');
       return;
     }
-    
-    // Skip if this is from an old session
-    if (session && session !== currentSessionRef.current) {
-      console.log('🎤 Skipping insertion from old session:', session);
-      return;
-    }
-    
     isInsertingRef.current = true;
     console.log(`🎤 Inserting text: "${text}", isInterim: ${isInterim}, session: ${session}`);
 
-    const activeElement = document.activeElement as HTMLElement;
-    
     try {
-      if (activeElement && activeElement.matches('input, textarea')) {
-        const input = activeElement as HTMLInputElement | HTMLTextAreaElement;
-        const start = input.selectionStart || 0;
-        const end = input.selectionEnd || 0;
-        const value = input.value;
-        
-        if (isInterim) {
-          // For interim results, replace the last interim text
-          const interimLength = lastInterimRef.current.length;
-          const beforeInterim = value.substring(0, start - interimLength);
-          const afterInterim = value.substring(end);
-          const newValue = beforeInterim + text + afterInterim;
-          
-          input.value = newValue;
-          {
-            const len = (input.value || '').length;
-            const pos = Math.max(0, Math.min(beforeInterim.length + text.length, len));
-            input.setSelectionRange(pos, pos);
-          }
-          lastInterimRef.current = text;
-          console.log('🎤 Interim text inserted, length:', text.length);
-        } else {
-          // For final results, replace any interim text that might be there
-          const interimLength = lastInterimRef.current.length;
-          const beforeFinal = value.substring(0, start - interimLength);
-          const afterFinal = value.substring(end);
-          const newValue = beforeFinal + text + afterFinal;
-          
-          input.value = newValue;
-          {
-            const len = (input.value || '').length;
-            const pos = Math.max(0, Math.min(beforeFinal.length + text.length, len));
-            input.setSelectionRange(pos, pos);
-          }
-          lastInterimRef.current = '';
-          lastInsertedSessionRef.current = session;
-          console.log('🎤 Final text inserted, length:', text.length);
-        }
-        
-        // Trigger input event for React
+      const el = a.element as any;
+      if (a.type === 'input' || a.type === 'textarea') {
+        const input = el as HTMLInputElement | HTMLTextAreaElement;
+        const value = input.value || '';
+        const startForReplace = Math.max(0, (a.caretPos || 0) - (a.lastInterim?.length || 0));
+        const before = value.substring(0, startForReplace);
+        const after = value.substring(a.caretPos || 0);
+        const newValue = before + text + after;
+        input.value = newValue;
+        const newCaret = Math.min((before + text).length, newValue.length);
+        try { input.setSelectionRange(newCaret, newCaret); } catch {}
+        // Update anchor tracking for this session
+        a.caretPos = newCaret;
+        a.lastInterim = isInterim ? text : '';
+        sessionAnchorsRef.current.set(session, a);
+        // Trigger React change
         const event = new Event('input', { bubbles: true });
         input.dispatchEvent(event);
-        
-        // Update indicator position after text insertion
+        // Update indicator after insertion
         setTimeout(() => {
           const newPosition = getCaretPosition();
-          if (newPosition.element) {
-            setCaretPosition(newPosition);
-          }
+          if (newPosition.element) setCaretPosition(newPosition);
         }, 10);
-      } else if (activeElement && activeElement.matches('[contenteditable]')) {
+        console.log(isInterim ? '🎤 Interim text inserted, length:' : '🎤 Final text inserted, length:', text.length);
+      } else if (a.type === 'contenteditable') {
         const selection = window.getSelection();
         if (selection && selection.rangeCount > 0) {
           const range = selection.getRangeAt(0);
-          
-          if (lastInterimRef.current) {
-            // Remove previous interim text (works for both interim and final)
-            range.setStart(range.startContainer, Math.max(0, range.startOffset - lastInterimRef.current.length));
+          if (a.lastInterim) {
+            range.setStart(range.startContainer, Math.max(0, range.startOffset - a.lastInterim.length));
           }
-          
           range.deleteContents();
           range.insertNode(document.createTextNode(text));
           range.collapse(false);
           selection.removeAllRanges();
           selection.addRange(range);
-          
-          lastInterimRef.current = isInterim ? text : '';
-          if (!isInterim) {
-            lastInsertedSessionRef.current = session;
-          }
-          
-          // Update indicator position after text insertion
+          a.lastInterim = isInterim ? text : '';
+          sessionAnchorsRef.current.set(session, a);
           setTimeout(() => {
             const newPosition = getCaretPosition();
-            if (newPosition.element) {
-              setCaretPosition(newPosition);
-            }
+            if (newPosition.element) setCaretPosition(newPosition);
           }, 10);
+          console.log(isInterim ? '🎤 Interim text inserted (CE), length:' : '🎤 Final text inserted (CE), length:', text.length);
         }
       }
     } catch (error) {
@@ -236,13 +246,53 @@ export function GlobalDictation() {
     } finally {
       isInsertingRef.current = false;
     }
-  }, []);
-
-  // Update session tracking
+  }, [getCaretPosition]);
+  
+// Helper function to fully stop dictation and clean up
+  const stopDictationCompletely = useCallback(() => {
+    console.log('🎤 Stopping dictation completely');
+    
+    // Clear all timeouts
+    if (bufferTimeoutRef.current) {
+      clearTimeout(bufferTimeoutRef.current);
+      bufferTimeoutRef.current = null;
+    }
+    if (insertionTimeoutRef.current) {
+      clearTimeout(insertionTimeoutRef.current);
+      insertionTimeoutRef.current = null;
+    }
+    
+    // Reset pressed/buffer states (do NOT clear session anchors here to allow late finals)
+    setIsPressed(false);
+    setShowIcon(false);
+    setIsBuffering(false);
+    isBufferingRef.current = false;
+    
+    // Clear non-anchor state references
+    lastInterimRef.current = '';
+    lastFinalInsertedRef.current = '';
+    currentSessionRef.current = '';
+    lastInsertedSessionRef.current = '';
+    
+    // Reset insertion lock
+    isInsertingRef.current = false;
+    
+    // Stop the actual dictation
+    stopDictation();
+  }, [stopDictation]);
+  
+// Update session tracking and bind pending anchor
   useEffect(() => {
     if (sessionId) {
       currentSessionRef.current = sessionId;
-      console.log('🎤 Session updated:', sessionId);
+      // Bind pending anchor to this session if available
+      if (pendingAnchorRef.current) {
+        sessionAnchorsRef.current.set(sessionId, { ...pendingAnchorRef.current });
+        console.log('🎤 Session updated and anchor bound:', sessionId);
+        pendingAnchorRef.current = null;
+      } else {
+        console.log('🎤 Session updated:', sessionId);
+      }
     }
   }, [sessionId]);
 
@@ -268,15 +318,23 @@ export function GlobalDictation() {
     };
   }, [isListening, showIcon, getCaretPosition]);
 
-  // Handle interim transcript updates (no timeout, immediate insertion)
+  // Track audio activity to detect speech
+  useEffect(() => {
+    if (audioLevel > 10) {
+      hasReceivedAudioRef.current = true;
+    }
+  }, [audioLevel]);
+  
+// Handle interim transcript updates (no timeout, immediate insertion)
   useEffect(() => {
     if (interimTranscript && interimTranscript.trim() && sessionId) {
+      hasReceivedAudioRef.current = true; // Mark that we've received speech
       console.log('🎤 Processing interim transcript:', interimTranscript);
-      insertTextAtCaret(interimTranscript + ' ', true, sessionId);
+      insertTextForSession(interimTranscript + ' ', true, sessionId);
     }
-  }, [interimTranscript, sessionId, insertTextAtCaret]);
+  }, [interimTranscript, sessionId, insertTextForSession]);
   
-  // Handle final transcript
+// Handle final transcript
   useEffect(() => {
     if (finalTranscript && finalTranscript.trim() && sessionId) {
       // Create a unique key for this final transcript
@@ -289,13 +347,35 @@ export function GlobalDictation() {
       
       console.log('🎤 Processing final transcript:', finalTranscript);
       
-      // Insert final text, always replacing any previously inserted interim text
-      insertTextAtCaret(finalTranscript + ' ', false, sessionId);
+      // Insert final text for the originating session (even if it's no longer current)
+      insertTextForSession(finalTranscript + ' ', false, sessionId);
       lastFinalInsertedRef.current = finalKey;
-    }
-  }, [finalTranscript, sessionId, insertTextAtCaret]);
 
-  // Handle Alt/Option key press
+      // Schedule cleanup for this session's anchor after a grace period.
+      // If more finals arrive for the same session, refresh the timer.
+      const prevTimer = sessionCleanupTimersRef.current.get(sessionId);
+      if (prevTimer) clearTimeout(prevTimer);
+      const timer = setTimeout(() => {
+        if (sessionAnchorsRef.current.has(sessionId)) {
+          sessionAnchorsRef.current.delete(sessionId);
+          console.log('🎤 Finalized and cleaned anchor for session (grace elapsed):', sessionId);
+        }
+        sessionCleanupTimersRef.current.delete(sessionId);
+      }, 5000);
+      sessionCleanupTimersRef.current.set(sessionId, timer);
+      
+      // If we're in buffer mode and got a final transcript, stop immediately
+      if (isBufferingRef.current) {
+        console.log('🎤 Final transcript received during buffer - stopping dictation');
+        // Small delay to ensure text insertion completes
+        setTimeout(() => {
+          stopDictationCompletely();
+        }, 100);
+      }
+    }
+  }, [finalTranscript, sessionId, insertTextForSession, stopDictationCompletely]);
+
+// Handle Alt/Option key press
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Check for Alt/Option key and prevent repeat events
@@ -304,7 +384,11 @@ export function GlobalDictation() {
         e.preventDefault();
         setIsPressed(true);
         
-        // Clear all previous state
+        // Track key press start time
+        keyPressStartTimeRef.current = Date.now();
+        hasReceivedAudioRef.current = false;
+        
+        // Clear previous non-anchor state
         lastFinalInsertedRef.current = '';
         lastInterimRef.current = '';
         currentSessionRef.current = '';
@@ -315,7 +399,22 @@ export function GlobalDictation() {
           clearTimeout(insertionTimeoutRef.current);
         }
         
-        // Get the current caret position
+        // Capture anchor for where this session starts
+        const activeElement = document.activeElement as HTMLElement | null;
+        if (activeElement && (activeElement.matches('input, textarea') || activeElement.matches('[contenteditable]'))) {
+          const anchor: SessionAnchor = {
+            element: activeElement as any,
+            type: activeElement.matches('textarea') ? 'textarea' : activeElement.matches('input') ? 'input' : 'contenteditable',
+            caretPos: (activeElement as any).selectionStart ?? 0,
+            lastInterim: ''
+          };
+          pendingAnchorRef.current = anchor;
+          console.log('🎤 Pending anchor captured for next session');
+        } else {
+          pendingAnchorRef.current = null;
+        }
+
+        // Get the current caret position for overlay
         const position = getCaretPosition();
         if (position.element) {
           setCaretPosition(position);
@@ -330,53 +429,39 @@ export function GlobalDictation() {
 
     const handleKeyUp = (e: KeyboardEvent) => {
       // Check for Alt key release
-      if (!e.altKey && isPressed) {
-        console.log('🎤 Alt key released - stopping dictation');
+      if (!e.altKey && isPressed && !isBufferingRef.current) {
+        const pressDuration = Date.now() - keyPressStartTimeRef.current;
+        const hasAudio = audioLevel > 5 || hasReceivedAudioRef.current;
+        
+        console.log('🎤 Alt key released - press duration:', pressDuration + 'ms', 'hasAudio:', hasAudio);
         e.preventDefault();
         
-        setIsPressed(false);
-        setShowIcon(false);
-        
-        // Clear all state references
-        lastInterimRef.current = '';
-        lastFinalInsertedRef.current = '';
-        currentSessionRef.current = '';
-        lastInsertedSessionRef.current = '';
-        
-        // Clear any pending insertions
-        if (insertionTimeoutRef.current) {
-          clearTimeout(insertionTimeoutRef.current);
+        // Quick dismissal for very short presses (< 200ms) with no audio activity
+        if (pressDuration < 200 && !hasAudio) {
+          console.log('🎤 Quick dismissal - accidental trigger detected');
+          stopDictationCompletely();
+          return;
         }
         
-        // Reset insertion lock
-        isInsertingRef.current = false;
+        setIsPressed(false);
+        setIsBuffering(true);
+        isBufferingRef.current = true;
         
-        stopDictation();
+// Start buffer timeout (1000ms to process remaining audio/text)
+        bufferTimeoutRef.current = setTimeout(() => {
+          console.log('🎤 Buffer period expired - stopping dictation');
+          stopDictationCompletely();
+        }, 1000); // increased buffer
+        
+        console.log('🎤 Buffer period started - will stop in 1000ms unless final transcript received');
       }
     };
 
     // Handle window blur to stop dictation if Alt is held when window loses focus
     const handleBlur = () => {
-      if (isPressed) {
+      if (isPressed || isBufferingRef.current) {
         console.log('🎤 Window lost focus - stopping dictation');
-        setIsPressed(false);
-        setShowIcon(false);
-        
-        // Clear all state references
-        lastInterimRef.current = '';
-        lastFinalInsertedRef.current = '';
-        currentSessionRef.current = '';
-        lastInsertedSessionRef.current = '';
-        
-        // Clear any pending insertions
-        if (insertionTimeoutRef.current) {
-          clearTimeout(insertionTimeoutRef.current);
-        }
-        
-        // Reset insertion lock
-        isInsertingRef.current = false;
-        
-        stopDictation();
+        stopDictationCompletely();
       }
     };
 
@@ -390,14 +475,17 @@ export function GlobalDictation() {
       document.removeEventListener('keyup', handleKeyUp, true);
       window.removeEventListener('blur', handleBlur);
       
-      // Clean up timeouts
+      // Clean up all timeouts
       if (insertionTimeoutRef.current) {
         clearTimeout(insertionTimeoutRef.current);
       }
+      if (bufferTimeoutRef.current) {
+        clearTimeout(bufferTimeoutRef.current);
+      }
     };
-  }, [isPressed, startDictation, stopDictation, getCaretPosition]);
+  }, [isPressed, startDictation, stopDictationCompletely, getCaretPosition]);
 
-  if (!showIcon || !caretPosition.element) {
+  if ((!showIcon && !isBuffering) || !caretPosition.element) {
     return null;
   }
 
@@ -410,29 +498,38 @@ export function GlobalDictation() {
       }}
     >
       {/* Audio level visualization */}
-      <div className="absolute -top-1 -right-1 w-3 h-3">
+      <div className="absolute -top-2 -right-2 w-4 h-4">
         <div 
-          className="w-full h-full rounded-full transition-all duration-150"
+          className="w-full h-full rounded-full transition-all duration-150 shadow-lg border-2 border-white/30"
           style={{
             backgroundColor: audioLevel > 30 ? '#10b981' : audioLevel > 10 ? '#f59e0b' : '#6b7280',
-            transform: `scale(${Math.max(0.5, audioLevel / 100)})`
+            transform: `scale(${Math.max(0.6, Math.min(1.4, audioLevel / 60))})`
           }}
         />
       </div>
       
-      <div className="flex items-center space-x-2 bg-[color:var(--brand-700)] text-white px-3 py-2 rounded-lg shadow-lg border border-[color:var(--brand-600)]">
+      <div className="flex items-center space-x-3 bg-gray-900/95 backdrop-blur-sm text-white px-4 py-3 rounded-xl shadow-2xl border border-gray-700/50">
         {isListening ? (
-          <Mic className="w-4 h-4 animate-pulse text-green-300" />
+          <Mic className="w-5 h-5 animate-pulse text-green-400" />
+        ) : isBuffering ? (
+          <Mic className="w-5 h-5 animate-spin text-yellow-400" />
         ) : (
-          <MicOff className="w-4 h-4 text-red-300" />
+          <MicOff className="w-5 h-5 text-red-400" />
         )}
         <div className="flex flex-col">
-          <span className="text-sm font-medium">
-            {error ? '❌ Error' : isListening ? '🎤 Listening...' : '⏳ Starting...'}
+          <span className="text-sm font-semibold text-white">
+            {error ? '❌ Error' : 
+             isBuffering ? '⏳ Processing...' :
+             isListening ? '🎤 Listening...' : 
+             '⏳ Starting...'}
           </span>
-          {currentModel && (
-            <span className="text-xs text-white/80">
-              {currentModel.replace('nova-', '').replace('-', ' ')}
+          {isBuffering ? (
+            <span className="text-xs text-yellow-300 font-medium">
+              Finishing transcription
+            </span>
+          ) : currentModel && (
+            <span className="text-xs text-gray-300 font-medium">
+              {currentModel.replace('stt-rt-', '').replace('-', ' ')}
             </span>
           )}
         </div>
@@ -440,8 +537,8 @@ export function GlobalDictation() {
       
       
       {error && (
-        <div className="mt-2 bg-red-900 text-red-100 text-sm px-3 py-2 rounded-lg max-w-xs shadow-lg border border-red-700">
-          {error}
+        <div className="mt-3 bg-red-900/95 backdrop-blur-sm text-red-100 text-sm px-4 py-3 rounded-xl max-w-xs shadow-2xl border border-red-600/50">
+          <span className="font-medium">{error}</span>
         </div>
       )}
     </div>

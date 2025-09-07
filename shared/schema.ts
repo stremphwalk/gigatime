@@ -419,3 +419,107 @@ export type InsertUserLabSetting = z.infer<typeof insertUserLabSettingSchema>;
 
 export type AutocompleteItem = typeof autocompleteItems.$inferSelect;
 export type InsertAutocompleteItem = z.infer<typeof insertAutocompleteItemSchema>;
+
+// Run List feature tables
+export const runLists = pgTable("run_lists", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  // Day identifier for daily list (store start-of-day timestamp in user's local tz)
+  day: timestamp("day").notNull(),
+  // Workflow mode: 'prepost' | 'full'
+  mode: varchar("mode", { length: 20 }).default("prepost"),
+  // Per-list carry-forward defaults
+  carryForwardDefaults: jsonb("carry_forward_defaults").$type<Record<string, any>>().default(sql`'{}'::jsonb`),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const listPatients = pgTable("list_patients", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  runListId: uuid("run_list_id").notNull().references(() => runLists.id, { onDelete: 'cascade' }),
+  position: integer("position").notNull().default(0),
+  alias: varchar("alias", { length: 32 }), // PHI-safe alias, optional
+  active: boolean("active").default(true),
+  archivedAt: timestamp("archived_at"),
+  carryForwardOverrides: jsonb("carry_forward_overrides").$type<Record<string, any>>(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const runListNotes = pgTable("run_list_notes", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  listPatientId: uuid("list_patient_id").notNull().references(() => listPatients.id, { onDelete: 'cascade' }).unique(), // one note per patient per day
+  rawText: text("raw_text").notNull().default(""),
+  structuredSections: jsonb("structured_sections").$type<Record<string, any>>().default(sql`'{}'::jsonb`),
+  status: varchar("status", { length: 20 }).default("draft"), // draft | preround | postround | complete
+  versionHeadId: uuid("version_head_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  expiresAt: timestamp("expires_at"),
+});
+
+export const runListNoteVersions = pgTable("run_list_note_versions", {
+  id: uuid("id").primaryKey().default(sql`gen_random_uuid()`),
+  noteId: uuid("note_id").notNull().references(() => runListNotes.id, { onDelete: 'cascade' }),
+  rawText: text("raw_text").notNull().default(""),
+  structuredSections: jsonb("structured_sections").$type<Record<string, any>>().default(sql`'{}'::jsonb`),
+  source: varchar("source", { length: 20 }).default("user_edit"), // user_edit | ai_merge | carry_forward
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Relations for Run List
+export const runListsRelations = relations(runLists, ({ one, many }) => ({
+  user: one(users, { fields: [runLists.userId], references: [users.id] }),
+  patients: many(listPatients),
+}));
+
+export const listPatientsRelations = relations(listPatients, ({ one, many }) => ({
+  runList: one(runLists, { fields: [listPatients.runListId], references: [runLists.id] }),
+  note: one(runListNotes, { fields: [listPatients.id], references: [runListNotes.listPatientId] }),
+}));
+
+export const runListNotesRelations = relations(runListNotes, ({ one, many }) => ({
+  patient: one(listPatients, { fields: [runListNotes.listPatientId], references: [listPatients.id] }),
+  versions: many(runListNoteVersions),
+}));
+
+export const runListNoteVersionsRelations = relations(runListNoteVersions, ({ one }) => ({
+  note: one(runListNotes, { fields: [runListNoteVersions.noteId], references: [runListNotes.id] }),
+}));
+
+// Insert schemas for Run List
+export const insertRunListSchema = createInsertSchema(runLists).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertListPatientSchema = createInsertSchema(listPatients).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertRunListNoteSchema = createInsertSchema(runListNotes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertRunListNoteVersionSchema = createInsertSchema(runListNoteVersions).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Types for Run List
+export type RunList = typeof runLists.$inferSelect;
+export type InsertRunList = z.infer<typeof insertRunListSchema>;
+
+export type ListPatient = typeof listPatients.$inferSelect;
+export type InsertListPatient = z.infer<typeof insertListPatientSchema>;
+
+export type RunListNote = typeof runListNotes.$inferSelect;
+export type InsertRunListNote = z.infer<typeof insertRunListNoteSchema>;
+
+export type RunListNoteVersion = typeof runListNoteVersions.$inferSelect;
+export type InsertRunListNoteVersion = z.infer<typeof insertRunListNoteVersionSchema>;

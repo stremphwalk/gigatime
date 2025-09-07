@@ -12,7 +12,6 @@ import {
   Zap,
   Users,
   ChevronDown,
-  ClipboardList,
   User
 } from "lucide-react";
 import { useNoteTemplates } from "../hooks/use-notes";
@@ -21,6 +20,7 @@ import { useSimpleAuth as useAuth } from "../hooks/useSimpleAuth";
 import { useTranslation } from 'react-i18next';
 
 import { cn } from "@/lib/utils";
+import { ArinoteLogo } from "@/components/arinote-logo";
 import type { Note } from "@shared/schema";
 
 interface SidebarProps {
@@ -29,8 +29,8 @@ interface SidebarProps {
   selectedNote: Note | null;
   isLoading: boolean;
   notes: Note[];
-  currentView: 'notes' | 'teams' | 'smart-phrases' | 'template-builder' | 'autocomplete-builder' | 'community' | 'settings' | 'notes-library';
-  onViewChange: (view: 'notes' | 'teams' | 'smart-phrases' | 'template-builder' | 'autocomplete-builder' | 'community' | 'settings' | 'notes-library') => void;
+  currentView: 'notes' | 'teams' | 'smart-phrases' | 'template-builder' | 'autocomplete-builder' | 'community' | 'settings' | 'notes-library' | 'run-list';
+  onViewChange: (view: 'notes' | 'teams' | 'smart-phrases' | 'template-builder' | 'autocomplete-builder' | 'community' | 'settings' | 'notes-library' | 'run-list') => void;
 }
 
 export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, notes, currentView, onViewChange }: SidebarProps) {
@@ -74,18 +74,16 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
   return (
     <div className="w-80 bg-sidebar-grey dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
-        <div className="flex items-center space-x-3">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br from-[var(--brand-from)] to-[var(--brand-to)]">
-            <ClipboardList className="text-white" size={16} />
-          </div>
-          <h1 className="text-xl font-semibold text-[color:var(--brand-700)] dark:text-[color:var(--brand-600)]">Arinote</h1>
+      <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-slate-50/80 via-white to-slate-50/80 dark:bg-gray-800 dark:from-gray-800 dark:via-gray-800 dark:to-gray-800">
+        <div className="flex items-center justify-start space-x-3">
+          <ArinoteLogo size={32} className="flex-shrink-0" />
+          <h1 className="text-2xl font-bold arinote-gradient tracking-tight">Arinote</h1>
         </div>
       </div>
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto p-4 space-y-2">
         {/* Notes Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
+        <div className="bg-slate-50/50 dark:bg-gray-800 rounded-lg shadow-sm border border-slate-200/60 dark:border-gray-700">
           <Button
             variant="ghost"
             className={cn(
@@ -133,6 +131,20 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
                 </Badge>
               </Button>
               
+              {/* Run the list */}
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "w-full justify-start text-xs hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300",
+                  currentView === 'run-list' && "bg-[color:var(--brand-50)] dark:bg-blue-900/50 border border-[color:var(--brand-200)] dark:border-[color:var(--brand-600)]"
+                )}
+                onClick={() => onViewChange('run-list')}
+                data-testid="button-run-list"
+              >
+                <FileText size={12} className="mr-2" />
+                Run the list
+              </Button>
               
               <Button
                 variant="ghost"
@@ -155,7 +167,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
         </div>
 
         {/* Smart Phrases Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
+        <div className="bg-slate-50/50 dark:bg-gray-800 rounded-lg shadow-sm border border-slate-200/60 dark:border-gray-700">
           <Button
             variant="ghost"
             className={cn(
@@ -214,7 +226,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
 
         {/* Teams Section (hidden in production) */}
         {!import.meta.env.PROD && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
+          <div className="bg-slate-50/50 dark:bg-gray-800 rounded-lg shadow-sm border border-slate-200/60 dark:border-gray-700">
             <Button
               variant="ghost"
               className={cn(
@@ -231,7 +243,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
         )}
 
         {/* Community Section */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
+        <div className="bg-slate-50/50 dark:bg-gray-800 rounded-lg shadow-sm border border-slate-200/60 dark:border-gray-700">
           <Button
             variant="ghost"
             className={cn(
@@ -247,7 +259,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
         </div>
 
         {/* Recent Notes */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
+        <div className="bg-slate-50/50 dark:bg-gray-800 rounded-lg shadow-sm border border-slate-200/60 dark:border-gray-700">
           <div className="p-3 border-b border-gray-100 dark:border-gray-700">
             <h3 className="font-medium text-sm text-gray-700 dark:text-gray-300">{t('sidebar.recentNotes')}</h3>
           </div>
@@ -280,7 +292,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
         </div>
       </div>
       {/* User Profile */}
-      <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+      <div className="p-4 border-t border-slate-200/60 dark:border-gray-700 bg-gradient-to-r from-slate-50/80 via-white to-slate-50/80 dark:bg-gray-800 dark:from-gray-800 dark:via-gray-800 dark:to-gray-800">
         <div className="flex items-center space-x-3">
           <Avatar className="w-8 h-8">
             <AvatarFallback className="bg-professional-blue dark:bg-blue-600 text-white">

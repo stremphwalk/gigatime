@@ -95,7 +95,7 @@ export default function Landing() {
             Join healthcare professionals who trust our platform for efficient clinical documentation.
           </p>
           <Button 
-            onClick={handleLogin}
+            onClick={handleGetStarted}
             size="lg" 
             variant="outline"
             className="border-[color:var(--brand-700)] text-[color:var(--brand-700)] hover:bg-[color:var(--brand-700)] hover:text-white px-8 py-3 text-lg"

@@ -275,7 +275,7 @@ export function AutocompleteBuilder() {
   return (
     <TooltipProvider>
     <div className="h-full flex flex-col">
-      <div className="border-b border-gray-200 p-4 bg-white">
+      <div className="border-b border-gray-200 dark:border-gray-700 p-4 bg-white dark:bg-gray-800">
         <div className="mb-3 flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Autocomplete</h1>
@@ -373,7 +373,7 @@ export function AutocompleteBuilder() {
                 <Textarea
                   id="description"
                   value={formData.description}
-                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                   placeholder="Optional description or notes about this item"
                   className="resize-none"
                   rows={2}
@@ -639,7 +639,7 @@ export function AutocompleteBuilder() {
         )}
       </div>
       {exportCodes && (
-        <div className="mt-3 p-4 border rounded-md bg-white">
+        <div className="mt-3 p-4 border rounded-md bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700">
           <Label>Share these codes</Label>
           <Textarea readOnly value={exportCodes.join(' ')} className="mt-1" />
           <div className="mt-2 flex gap-2">

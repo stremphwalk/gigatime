@@ -456,7 +456,7 @@ export function TemplateBuilderManager() {
                   <Textarea
                     id="description"
                     value={formData.description}
-                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                     placeholder="Describe when and how to use this template..."
                     className="h-20"
                     data-testid="textarea-template-description"
@@ -590,7 +590,7 @@ export function TemplateBuilderManager() {
                                 <Textarea
                                   id={`section-content-${section.id}`}
                                   value={section.content}
-                                  onChange={(e) => handleUpdateSection(section.id, { content: e.target.value })}
+                                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleUpdateSection(section.id, { content: e.target.value })}
                                   placeholder="Default content for this section..."
                                   className="h-24 mt-1"
                                   data-testid={`textarea-section-content-${section.id}`}

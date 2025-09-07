@@ -126,7 +126,7 @@ export default function NoteWelcome({ onSelectTemplate }: NoteWelcomeProps) {
           </div>
         </div>
 
-        <Card className="border-muted/60">
+        <Card className="border-slate-200/60 bg-white/90 backdrop-blur-sm dark:border-gray-700 dark:bg-gray-800 dark:backdrop-blur-none">
           <CardContent className="p-3 flex flex-wrap items-center gap-2">
             <SearchField value={search} onChange={setSearch} placeholder="Search templates…" />
             <FilterDropdown label="Type" options={types.map(t=>({ value: t, label: t }))} value={typeFilter} onChange={setTypeFilter} menuLabel="Filter by type" />
@@ -146,7 +146,7 @@ export default function NoteWelcome({ onSelectTemplate }: NoteWelcomeProps) {
         {layout === 'grid' ? (
           <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
             {filtered.map(t => (
-              <Card key={t.id} className="group overflow-hidden border-muted/60 transition-shadow hover:shadow-sm cursor-pointer" onClick={() => handleChoose(t)}>
+              <Card key={t.id} className="group overflow-hidden border-slate-200/60 bg-white/90 backdrop-blur-sm dark:border-gray-700 dark:bg-gray-800 dark:backdrop-blur-none transition-shadow hover:shadow-sm cursor-pointer" onClick={() => handleChoose(t)}>
                 <CardHeader className="px-3 pt-3 pb-1 flex flex-row items-start justify-between">
                   <div className="flex items-center gap-2 min-w-0">
                     <div className="w-8 h-8 rounded-md bg-medical-teal/10 dark:bg-blue-500/10 grid place-items-center">
@@ -168,7 +168,7 @@ export default function NoteWelcome({ onSelectTemplate }: NoteWelcomeProps) {
             ))}
           </div>
         ) : (
-          <div className="mt-3 divide-y rounded-xl border bg-background/40">
+          <div className="mt-3 divide-y rounded-xl border border-slate-200/60 bg-white/90 backdrop-blur-sm dark:border-gray-700 dark:bg-gray-800 dark:backdrop-blur-none">
             {filtered.map(t => (
               <div key={t.id} className="grid grid-cols-12 items-center p-2 gap-2 hover:bg-muted/40 cursor-pointer" onClick={()=>handleChoose(t)}>
                 <div className="col-span-7 min-w-0 flex items-center gap-2">

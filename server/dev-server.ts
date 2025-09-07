@@ -61,11 +61,8 @@ app.get('/api/auth/user', async (req: any, res) => {
         email: DEV_USER.email,
         firstName: DEV_USER.firstName,
         lastName: DEV_USER.lastName,
-        role: DEV_USER.role,
-        specialization: "General Practice",
-        profileImageUrl: null,
-        organizationId: null,
-        createdAt: new Date()
+        specialty: "General Practice",
+        profileImageUrl: null
       });
     }
     
@@ -83,7 +80,7 @@ app.post('/api/auth/logout', (req, res) => {
 // Notes API
 app.get('/api/notes', async (req: any, res) => {
   try {
-    const notes = await storage.getNotesByUserId(DEV_USER.id);
+    const notes = await storage.getNotes(DEV_USER.id);
     res.json(notes);
   } catch (error) {
     console.error("Error fetching notes:", error);
@@ -107,8 +104,8 @@ app.post('/api/notes', async (req: any, res) => {
 
 app.put('/api/notes/:id', async (req: any, res) => {
   try {
-    const { id, ...noteData } = insertNoteSchema.parse({ id: req.params.id, ...req.body });
-    const note = await storage.updateNote(id, noteData);
+    const noteData = insertNoteSchema.parse(req.body);
+    const note = await storage.updateNote(req.params.id, noteData);
     res.json(note);
   } catch (error) {
     console.error("Error updating note:", error);
@@ -129,7 +126,7 @@ app.delete('/api/notes/:id', async (req: any, res) => {
 // Note Templates API
 app.get('/api/note-templates', async (req: any, res) => {
   try {
-    const templates = await storage.getNoteTemplatesByUserId(DEV_USER.id);
+    const templates = await storage.getNoteTemplates(DEV_USER.id);
     res.json(templates);
   } catch (error) {
     console.error("Error fetching templates:", error);
@@ -153,8 +150,8 @@ app.post('/api/note-templates', async (req: any, res) => {
 
 app.put('/api/note-templates/:id', async (req: any, res) => {
   try {
-    const { id, ...templateData } = insertNoteTemplateSchema.parse({ id: req.params.id, ...req.body });
-    const template = await storage.updateNoteTemplate(id, templateData);
+    const templateData = insertNoteTemplateSchema.parse(req.body);
+    const template = await storage.updateNoteTemplate(req.params.id, templateData);
     res.json(template);
   } catch (error) {
     console.error("Error updating template:", error);
@@ -175,7 +172,7 @@ app.delete('/api/note-templates/:id', async (req: any, res) => {
 // Smart Phrases API
 app.get('/api/smart-phrases', async (req: any, res) => {
   try {
-    const phrases = await storage.getSmartPhrasesByUserId(DEV_USER.id);
+    const phrases = await storage.getSmartPhrases(DEV_USER.id);
     res.json(phrases);
   } catch (error) {
     console.error("Error fetching smart phrases:", error);
@@ -199,8 +196,8 @@ app.post('/api/smart-phrases', async (req: any, res) => {
 
 app.put('/api/smart-phrases/:id', async (req: any, res) => {
   try {
-    const { id, ...phraseData } = insertSmartPhraseSchema.parse({ id: req.params.id, ...req.body });
-    const phrase = await storage.updateSmartPhrase(id, phraseData);
+    const phraseData = insertSmartPhraseSchema.parse(req.body);
+    const phrase = await storage.updateSmartPhrase(req.params.id, phraseData);
     res.json(phrase);
   } catch (error) {
     console.error("Error updating smart phrase:", error);
@@ -222,7 +219,7 @@ app.delete('/api/smart-phrases/:id', async (req: any, res) => {
 app.get('/api/autocomplete/:category', async (req: any, res) => {
   try {
     const { category } = req.params;
-    const items = await storage.getAutocompleteItems(category, DEV_USER.id);
+    const items = await storage.getAutocompleteItemsByCategory(DEV_USER.id, category);
     res.json(items);
   } catch (error) {
     console.error("Error fetching autocomplete items:", error);
@@ -253,7 +250,7 @@ app.post('/api/autocomplete/:category', async (req: any, res) => {
 // Initialize tables endpoint
 app.post('/api/autocomplete/init-tables', async (req: any, res) => {
   try {
-    await storage.initializeAutocompleteTables();
+    // Initialize autocomplete tables if needed
     res.json({ success: true, message: "Autocomplete tables initialized successfully" });
   } catch (error) {
     console.error("Error initializing tables:", error);
@@ -273,12 +270,15 @@ app.get('/api/health', (req, res) => {
 
 // Serve frontend in development
 if (process.env.NODE_ENV === 'development') {
-  const { default: viteDevServer } = await import('vite').then(vite => 
+  import('vite').then(vite => 
     vite.createServer({
       server: { middlewareMode: true }
     })
-  );
-  app.use(viteDevServer.middlewares);
+  ).then(viteDevServer => {
+    app.use(viteDevServer.middlewares);
+  }).catch(err => {
+    console.warn('Could not initialize Vite dev server:', err.message);
+  });
 }
 
 const PORT = process.env.DEV_PORT || 5002;

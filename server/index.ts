@@ -39,7 +39,13 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  const server = await registerRoutes(app);
+const server = await registerRoutes(app);
+
+// Schedule periodic cleanup for expired run list data (every 6 hours)
+try {
+  const { storage } = await import('./storage.js');
+  setInterval(async () => { try { await (storage as any).cleanupExpiredRunListData?.(); } catch {} }, 6 * 60 * 60 * 1000);
+} catch {}
   // Periodic cleanup of expired notes (every hour)
   setInterval(async () => {
     try {

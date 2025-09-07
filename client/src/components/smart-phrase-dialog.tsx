@@ -100,7 +100,7 @@ export function SmartPhraseDialog({ phrase, onClose }: SmartPhraseDialogProps) {
             <Textarea
               id="content"
               value={formData.content}
-              onChange={(e) => setFormData(prev => ({ ...prev, content: e.target.value }))}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData(prev => ({ ...prev, content: e.target.value }))}
               placeholder="Enter the text content that will be inserted..."
               className="min-h-[100px]"
               required

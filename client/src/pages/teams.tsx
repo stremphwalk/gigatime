@@ -8,7 +8,7 @@ import type { Note } from "@shared/schema";
 export function Teams() {
   const [selectedNote, setSelectedNote] = useState<Note | null>(null);
   const [isCreatingNote, setIsCreatingNote] = useState(false);
-  const [currentView, setCurrentView] = useState<'notes' | 'teams' | 'smart-phrases' | 'template-builder'>('teams');
+  const [currentView, setCurrentView] = useState<'notes' | 'teams' | 'smart-phrases' | 'template-builder' | 'autocomplete-builder' | 'community' | 'settings' | 'notes-library'>('teams');
   const { notes, isLoading } = useNotes();
 
   // Initialize default templates and phrases on first load
@@ -36,7 +36,7 @@ export function Teams() {
     setCurrentView('notes');
   };
 
-  const handleViewChange = (view: 'notes' | 'teams' | 'smart-phrases' | 'template-builder') => {
+  const handleViewChange = (view: 'notes' | 'teams' | 'smart-phrases' | 'template-builder' | 'autocomplete-builder' | 'community' | 'settings' | 'notes-library') => {
     setCurrentView(view);
   };
 

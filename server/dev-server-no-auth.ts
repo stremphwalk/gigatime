@@ -1,8 +1,10 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
+import session from "express-session";
 import { storage } from "./storage.ts";
 import { setupVite, serveStatic, log } from "./vite.ts";
+import { applyDevelopmentSecurity } from "./security.js";
 import { 
   insertNoteSchema, 
   insertNoteTemplateSchema, 
@@ -10,31 +12,74 @@ import {
   insertTeamTodoSchema,
   insertTeamCalendarEventSchema,
   insertUserSchema,
-  insertUserLabSettingSchema
+  insertUserLabSettingSchema,
+  runLists, 
+  listPatients, 
+  runListNotes, 
+  runListNoteVersions
 } from "../shared/schema.ts";
 import { z } from "zod";
+import { eq, and, lt, desc } from 'drizzle-orm';
 import { MEDICATIONS_SYSTEM_PROMPT, LABS_SYSTEM_PROMPT, PMH_SYSTEM_PROMPT } from "./ai/prompts.ts";
+import { callNovaMicro, isNovaConfigured } from "./ai/nova.ts";
+
+// Generate consistent development user for this server session
+const DEV_SESSION_ID = `dev-session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+const DEV_USER_ID = `dev-user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+// Development user configuration
+const DEV_USER = {
+  id: DEV_USER_ID,
+  email: process.env.DEV_USER_EMAIL || "dev-doctor@gigatime-test.local",
+  firstName: process.env.DEV_USER_FIRST_NAME || "Dr. Test",
+  lastName: process.env.DEV_USER_LAST_NAME || "Developer",
+  specialty: process.env.DEV_USER_SPECIALTY || "Internal Medicine"
+};
 
 // Mock authentication middleware that always passes
 const mockAuth = (req: any, res: any, next: any) => {
-  // Always set a mock user
+  // Always set the development user
   req.user = {
     claims: {
-      sub: "123e4567-e89b-12d3-a456-426614174000",
-      email: "doctor@hospital.com",
-      first_name: "Dr. Sarah",
-      last_name: "Mitchell"
+      sub: DEV_USER.id,
+      email: DEV_USER.email,
+      first_name: DEV_USER.firstName,
+      last_name: DEV_USER.lastName
     }
   };
+  
+  // Also set session for consistency
+  if (req.session) {
+    req.session.devUserId = DEV_USER.id;
+    req.session.authenticated = true;
+  }
+  
   next();
 };
 
 // Mock user ID getter
-const getMockUserId = () => "123e4567-e89b-12d3-a456-426614174000";
+const getMockUserId = () => DEV_USER.id;
 
 const app = express();
+
+// Apply development security middleware (very lenient for Vite)
+applyDevelopmentSecurity(app);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Set up session middleware for consistency
+app.use(session({
+  secret: process.env.SESSION_SECRET || `dev-secret-${DEV_SESSION_ID}`,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure: false, // Development over HTTP
+    maxAge: 24 * 60 * 60 * 1000, // 24 hours
+    sameSite: 'lax'
+  }
+}));
 
 // Logging middleware
 app.use((req, res, next) => {
@@ -109,10 +154,10 @@ app.post("/api/init-user", async (req, res) => {
     if (!user) {
       user = await storage.createUser({
         id: userId,
-        email: "doctor@hospital.com",
-        firstName: "Dr. Sarah",
-        lastName: "Mitchell",
-        specialty: "Emergency Medicine"
+        email: DEV_USER.email,
+        firstName: DEV_USER.firstName,
+        lastName: DEV_USER.lastName,
+        specialty: DEV_USER.specialty
       });
     }
     res.json({ message: "User initialized", user });
@@ -320,12 +365,12 @@ app.delete("/api/notes/:id", async (req, res) => {
   }
 });
 
-// Deepgram API key endpoint
-app.get("/api/deepgram-key", (req, res) => {
-  res.json({ apiKey: process.env.DEEPGRAM_API_KEY });
+// Soniox API key endpoint
+app.get("/api/soniox-key", (req, res) => {
+  res.json({ apiKey: process.env.SONIOX_API_KEY });
 });
 
-// AI: Parse medications from dictation via OpenAI (no auth in dev)
+// AI: Parse medications from dictation via Amazon Nova Micro (no auth in dev)
 app.post("/api/ai/medications", async (req, res) => {
   try {
     const dictation = (req.body?.dictation ?? '').toString();
@@ -333,39 +378,17 @@ app.post("/api/ai/medications", async (req, res) => {
       return res.status(400).json({ message: "Missing dictation" });
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ message: "OPENAI_API_KEY not configured" });
+    if (!isNovaConfigured()) {
+      return res.status(500).json({ message: "Amazon Nova Micro not configured. Please check AWS credentials and region." });
     }
 
     const systemPrompt = MEDICATIONS_SYSTEM_PROMPT;
 
-    const body = {
-      model: "gpt-4o-mini",
-      temperature: 0,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: dictation }
-      ]
-    } as const;
-
-    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(body)
+    const response = await callNovaMicro({
+      systemPrompt,
+      userMessage: dictation,
+      temperature: 0
     });
-
-    if (!resp.ok) {
-      const errTxt = await resp.text().catch(() => "");
-      console.error("[dev] /api/ai/medications upstream error:", resp.status, errTxt);
-      return res.status(502).json({ message: "AI service error" });
-    }
-
-    const data: any = await resp.json();
-    const raw = data?.choices?.[0]?.message?.content || "";
 
     const sanitize = (t: string) => (
       t
@@ -378,7 +401,7 @@ app.post("/api/ai/medications", async (req, res) => {
         .join("\n")
     );
 
-    const text = sanitize(raw);
+    const text = sanitize(response.text);
     return res.json({ text });
   } catch (error: any) {
     console.error("[dev] Error in /api/ai/medications:", error);
@@ -387,7 +410,7 @@ app.post("/api/ai/medications", async (req, res) => {
   }
 });
 
-// AI: Parse labs from dictation via OpenAI (no auth in dev)
+// AI: Parse labs from dictation via Amazon Nova Micro (no auth in dev)
 app.post("/api/ai/labs", async (req, res) => {
   try {
     const dictation = (req.body?.dictation ?? '').toString();
@@ -395,39 +418,17 @@ app.post("/api/ai/labs", async (req, res) => {
       return res.status(400).json({ message: "Missing dictation" });
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ message: "OPENAI_API_KEY not configured" });
+    if (!isNovaConfigured()) {
+      return res.status(500).json({ message: "Amazon Nova Micro not configured. Please check AWS credentials and region." });
     }
 
     const systemPrompt = LABS_SYSTEM_PROMPT;
 
-    const body = {
-      model: "gpt-4o-mini",
-      temperature: 0,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: dictation }
-      ]
-    } as const;
-
-    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(body)
+    const response = await callNovaMicro({
+      systemPrompt,
+      userMessage: dictation,
+      temperature: 0
     });
-
-    if (!resp.ok) {
-      const errTxt = await resp.text().catch(() => "");
-      console.error("[dev] /api/ai/labs upstream error:", resp.status, errTxt);
-      return res.status(502).json({ message: "AI service error" });
-    }
-
-    const data: any = await resp.json();
-    const raw = data?.choices?.[0]?.message?.content || "";
 
     const sanitize = (t: string) => (
       t
@@ -437,7 +438,7 @@ app.post("/api/ai/labs", async (req, res) => {
         .join("\n")
     );
 
-    const text = sanitize(raw);
+    const text = sanitize(response.text);
     return res.json({ text });
   } catch (error: any) {
     console.error("[dev] Error in /api/ai/labs:", error);
@@ -446,7 +447,7 @@ app.post("/api/ai/labs", async (req, res) => {
   }
 });
 
-// AI: Parse PMH from dictation via OpenAI (no auth in dev)
+// AI: Parse PMH from dictation via Amazon Nova Micro (no auth in dev)
 app.post("/api/ai/pmh", async (req, res) => {
   try {
     const dictation = (req.body?.dictation ?? '').toString();
@@ -454,39 +455,17 @@ app.post("/api/ai/pmh", async (req, res) => {
       return res.status(400).json({ message: "Missing dictation" });
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ message: "OPENAI_API_KEY not configured" });
+    if (!isNovaConfigured()) {
+      return res.status(500).json({ message: "Amazon Nova Micro not configured. Please check AWS credentials and region." });
     }
 
     const systemPrompt = PMH_SYSTEM_PROMPT;
 
-    const body = {
-      model: "gpt-4o-mini",
-      temperature: 0,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: dictation }
-      ]
-    } as const;
-
-    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(body)
+    const response = await callNovaMicro({
+      systemPrompt,
+      userMessage: dictation,
+      temperature: 0
     });
-
-    if (!resp.ok) {
-      const errTxt = await resp.text().catch(() => "");
-      console.error("[dev] /api/ai/pmh upstream error:", resp.status, errTxt);
-      return res.status(502).json({ message: "AI service error" });
-    }
-
-    const data: any = await resp.json();
-    const raw = data?.choices?.[0]?.message?.content || "";
 
     const sanitize = (t: string) => (
       t
@@ -496,7 +475,7 @@ app.post("/api/ai/pmh", async (req, res) => {
         .join("\n")
     );
 
-    const text = sanitize(raw);
+    const text = sanitize(response.text);
     return res.json({ text });
   } catch (error: any) {
     console.error("[dev] Error in /api/ai/pmh:", error);
@@ -1311,6 +1290,336 @@ app.delete("/api/user-lab-settings", async (req, res) => {
   }
 });
 
+// User preferences routes
+app.get('/api/user-preferences', async (req, res) => {
+  try {
+    const userId = getMockUserId();
+    const prefs = await storage.getUserPreferences(userId);
+    res.json(prefs || { userId, data: {} });
+  } catch (error) {
+    console.error('Error fetching user preferences:', error);
+    res.status(500).json({ message: 'Failed to fetch preferences' });
+  }
+});
+
+app.put('/api/user-preferences', async (req, res) => {
+  try {
+    const userId = getMockUserId();
+    const data = req.body?.data ?? {};
+    const saved = await storage.upsertUserPreferences(userId, data);
+    res.json(saved);
+  } catch (error) {
+    console.error('Error updating user preferences:', error);
+    res.status(500).json({ message: 'Failed to update preferences' });
+  }
+});
+
+// =============================
+// Run List Endpoints (no auth dev server)
+// =============================
+
+const FORTY_EIGHT_HOURS_MS = 48 * 60 * 60 * 1000;
+
+// Helper: get start-of-day Date (server local) from query param or now
+function getStartOfDayFromQuery(req: any): Date {
+  const q = (req.query?.day as string) || '';
+  let d: Date;
+  if (q) {
+    const parsed = new Date(q);
+    if (!isNaN(parsed.getTime())) {
+      d = parsed;
+    } else {
+      d = new Date();
+    }
+  } else {
+    d = new Date();
+  }
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+// Shape of the run list response
+async function fetchRunListPayload(db: any, runListId: string) {
+  const rows = await db
+    .select({
+      patient: listPatients,
+      note: runListNotes,
+    })
+    .from(listPatients)
+    .leftJoin(runListNotes, eq(runListNotes.listPatientId, listPatients.id))
+    .where(eq(listPatients.runListId, runListId))
+    .orderBy(listPatients.position);
+
+  return rows.map((r: any) => ({
+    id: r.patient.id,
+    position: r.patient.position,
+    alias: r.patient.alias,
+    active: r.patient.active,
+    archivedAt: r.patient.archivedAt,
+    carryForwardOverrides: (r.patient as any).carryForwardOverrides || null,
+    note: r.note ? {
+      id: r.note.id,
+      listPatientId: r.note.listPatientId,
+      rawText: r.note.rawText,
+      structuredSections: r.note.structuredSections,
+      status: r.note.status,
+      updatedAt: r.note.updatedAt,
+      expiresAt: r.note.expiresAt,
+    } : null,
+  }));
+}
+
+// GET /api/run-list/today
+app.get('/api/run-list/today', async (req: any, res) => {
+  try {
+    const userId = getMockUserId();
+    const db = storage.db;
+    const day = getStartOfDayFromQuery(req);
+    const carryForward = String(req.query?.carryForward || 'false') === 'true';
+    const autoclone = String(req.query?.autoclone || 'true') === 'true';
+
+    // Try to get today's list
+    const [existing] = await db.select().from(runLists)
+      .where(and(eq(runLists.userId, userId), eq(runLists.day, day)));
+
+    if (existing) {
+      const patients = await fetchRunListPayload(db, existing.id);
+      return res.json({ runList: existing, patients });
+    }
+
+    // Find most recent previous list
+    const previous = await db
+      .select()
+      .from(runLists)
+      .where(and(eq(runLists.userId, userId), lt(runLists.day, day)))
+      .orderBy(desc(runLists.day))
+      .limit(1);
+
+    const prev = previous[0] || null;
+
+    // Create new run list
+    const [created] = await db.insert(runLists).values({
+      userId,
+      day,
+      mode: prev?.mode || 'prepost',
+      carryForwardDefaults: prev?.carryForwardDefaults || {},
+    }).returning();
+
+    // Clone patients from previous if any
+    if (autoclone && prev) {
+      const prevRows = await db
+        .select({
+          patient: listPatients,
+          note: runListNotes,
+        })
+        .from(listPatients)
+        .leftJoin(runListNotes, eq(runListNotes.listPatientId, listPatients.id))
+        .where(eq(listPatients.runListId, prev.id))
+        .orderBy(listPatients.position);
+
+      for (const r of prevRows) {
+        const [p] = await db.insert(listPatients).values({
+          runListId: created.id,
+          position: r.patient.position,
+          alias: r.patient.alias,
+          active: true,
+        }).returning();
+
+        const newNote = {
+          listPatientId: p.id,
+          rawText: carryForward && r.note ? (r.note.rawText || '') : '',
+          structuredSections: carryForward && r.note ? (r.note.structuredSections || {}) : {},
+          status: 'draft',
+          expiresAt: new Date(Date.now() + FORTY_EIGHT_HOURS_MS),
+        } as any;
+        await db.insert(runListNotes).values(newNote);
+      }
+    }
+
+    const patients = await fetchRunListPayload(db, created.id);
+    return res.json({ runList: created, patients });
+  } catch (error) {
+    console.error('Error in GET /api/run-list/today:', error);
+    return res.status(500).json({ message: 'Failed to get or create today\'s run list' });
+  }
+});
+
+// POST /api/run-list/:id/patients
+app.post('/api/run-list/:id/patients', async (req: any, res) => {
+  try {
+    const userId = getMockUserId();
+    const db = storage.db;
+    const runListId = req.params.id;
+
+    // Ensure run list belongs to user
+    const [rl] = await db.select().from(runLists).where(and(eq(runLists.id, runListId), eq(runLists.userId, userId)));
+    if (!rl) return res.status(404).json({ message: 'Run list not found' });
+
+    const aliasRaw = (req.body?.alias || '').toString();
+    const alias = aliasRaw ? aliasRaw.substring(0, 32) : null;
+
+    // Next position
+    const rows = await db.select().from(listPatients).where(eq(listPatients.runListId, runListId)).orderBy(desc(listPatients.position)).limit(1);
+    const nextPos = rows.length > 0 ? (rows[0].position + 1) : 0;
+
+    const [patient] = await db.insert(listPatients).values({ runListId, position: nextPos, alias, active: true }).returning();
+
+    const [note] = await db.insert(runListNotes).values({
+      listPatientId: patient.id,
+      rawText: '',
+      structuredSections: {},
+      status: 'draft',
+      expiresAt: new Date(Date.now() + FORTY_EIGHT_HOURS_MS),
+    } as any).returning();
+
+    return res.json({ patient: { ...patient }, note });
+  } catch (error) {
+    console.error('Error in POST /api/run-list/:id/patients:', error);
+    return res.status(500).json({ message: 'Failed to add patient' });
+  }
+});
+
+// PUT /api/run-list/:id/patients/reorder
+app.put('/api/run-list/:id/patients/reorder', async (req: any, res) => {
+  try {
+    const userId = getMockUserId();
+    const db = storage.db;
+    const runListId = req.params.id;
+    const { order } = req.body || {};
+    if (!Array.isArray(order) || order.length === 0) {
+      return res.status(400).json({ message: 'Order array required' });
+    }
+
+    const [rl] = await db.select().from(runLists).where(and(eq(runLists.id, runListId), eq(runLists.userId, userId)));
+    if (!rl) return res.status(404).json({ message: 'Run list not found' });
+
+    // Update positions in sequence
+    for (let i = 0; i < order.length; i++) {
+      const id = order[i];
+      await db.update(listPatients).set({ position: i, updatedAt: new Date() }).where(and(eq(listPatients.id, id), eq(listPatients.runListId, runListId)));
+    }
+
+    const patients = await fetchRunListPayload(db, runListId);
+    return res.json({ message: 'Reordered', patients });
+  } catch (error) {
+    console.error('Error in PUT /api/run-list/:id/patients/reorder:', error);
+    return res.status(500).json({ message: 'Failed to reorder patients' });
+  }
+});
+
+// PUT /api/run-list/patients/:id
+app.put('/api/run-list/patients/:id', async (req: any, res) => {
+  try {
+    const userId = getMockUserId();
+    const db = storage.db;
+    const patientId = req.params.id;
+
+    // Verify ownership via join
+    const rows = await db
+      .select({ rl: runLists, p: listPatients })
+      .from(listPatients)
+      .innerJoin(runLists, eq(runLists.id, listPatients.runListId))
+      .where(eq(listPatients.id, patientId));
+    const row = rows[0];
+    if (!row || row.rl.userId !== userId) return res.status(404).json({ message: 'Patient not found' });
+
+    const data: any = {};
+    if (typeof req.body?.alias === 'string') data.alias = req.body.alias.substring(0, 32);
+    if (typeof req.body?.active === 'boolean') data.active = req.body.active;
+    if (req.body && typeof req.body.carryForwardOverrides === 'object' && req.body.carryForwardOverrides) {
+      const allowed = ['assessment','active_orders','allergies','labs','medications','objective','subjective','imaging','plan','physical_exam'];
+      const out: Record<string, boolean> = {};
+      for (const k of allowed) if (k in req.body.carryForwardOverrides) out[k] = Boolean(req.body.carryForwardOverrides[k]);
+      data.carryForwardOverrides = out;
+    }
+    if (Object.keys(data).length === 0) return res.status(400).json({ message: 'No fields to update' });
+
+    const [updated] = await db.update(listPatients).set({ ...data, updatedAt: new Date() }).where(eq(listPatients.id, patientId)).returning();
+    return res.json({ patient: updated });
+  } catch (error) {
+    console.error('Error in PUT /api/run-list/patients/:id:', error);
+    return res.status(500).json({ message: 'Failed to update patient' });
+  }
+});
+
+// DELETE /api/run-list/patients/:id
+app.delete('/api/run-list/patients/:id', async (req: any, res) => {
+  try {
+    const userId = getMockUserId();
+    const db = storage.db;
+    const patientId = req.params.id;
+
+    const rows = await db
+      .select({ rl: runLists, p: listPatients })
+      .from(listPatients)
+      .innerJoin(runLists, eq(runLists.id, listPatients.runListId))
+      .where(eq(listPatients.id, patientId));
+    const row = rows[0];
+    if (!row || row.rl.userId !== userId) return res.status(404).json({ message: 'Patient not found' });
+
+    const [updated] = await db.update(listPatients).set({ active: false, archivedAt: new Date(), updatedAt: new Date() }).where(eq(listPatients.id, patientId)).returning();
+    return res.json({ patient: updated });
+  } catch (error) {
+    console.error('Error in DELETE /api/run-list/patients/:id:', error);
+    return res.status(500).json({ message: 'Failed to archive patient' });
+  }
+});
+
+// PUT /api/run-list/notes/:listPatientId
+app.put('/api/run-list/notes/:listPatientId', async (req: any, res) => {
+  try {
+    const userId = getMockUserId();
+    const db = storage.db;
+    const listPatientId = req.params.listPatientId;
+    const expectedUpdatedAtRaw = req.body?.expectedUpdatedAt ? new Date(req.body.expectedUpdatedAt) : null;
+
+    // Verify ownership via join
+    const rows = await db
+      .select({ rl: runLists, p: listPatients, n: runListNotes })
+      .from(listPatients)
+      .leftJoin(runListNotes, eq(runListNotes.listPatientId, listPatients.id))
+      .innerJoin(runLists, eq(runLists.id, listPatients.runListId))
+      .where(eq(listPatients.id, listPatientId));
+    const row = rows[0];
+    if (!row || row.rl.userId !== userId) return res.status(404).json({ message: 'List patient not found' });
+
+    const allowedStatus = new Set(['draft', 'preround', 'postround', 'complete']);
+    const payload: any = {};
+    if (typeof req.body?.rawText === 'string') payload.rawText = req.body.rawText;
+    if (typeof req.body?.structuredSections === 'object' && req.body.structuredSections) payload.structuredSections = req.body.structuredSections;
+    if (typeof req.body?.status === 'string' && allowedStatus.has(req.body.status)) payload.status = req.body.status;
+    payload.updatedAt = new Date();
+    payload.expiresAt = new Date(Date.now() + FORTY_EIGHT_HOURS_MS);
+
+    let noteRow;
+    if (row.n) {
+      // Optimistic locking: when provided, ensure no concurrent update
+      if (expectedUpdatedAtRaw && new Date(row.n.updatedAt).getTime() !== expectedUpdatedAtRaw.getTime()) {
+        return res.status(409).json({ message: 'Conflict: note was updated by another source' });
+      }
+      const [updated] = await db.update(runListNotes).set(payload).where(eq(runListNotes.id, row.n.id)).returning();
+      noteRow = updated;
+    } else {
+      const [created] = await db.insert(runListNotes).values({ listPatientId, rawText: payload.rawText || '', structuredSections: payload.structuredSections || {}, status: payload.status || 'draft', updatedAt: new Date(), createdAt: new Date(), expiresAt: payload.expiresAt } as any).returning();
+      noteRow = created;
+    }
+
+    // Record a version entry
+    try {
+      await db.insert(runListNoteVersions).values({
+        noteId: noteRow.id,
+        rawText: noteRow.rawText,
+        structuredSections: noteRow.structuredSections,
+        source: 'user_edit',
+      } as any);
+    } catch {}
+
+    return res.json({ note: noteRow });
+  } catch (error) {
+    console.error('Error in PUT /api/run-list/notes/:listPatientId:', error);
+    return res.status(500).json({ message: 'Failed to update note' });
+  }
+});
+
 // Error handling middleware
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   const status = err.status || err.statusCode || 500;
@@ -1343,13 +1652,32 @@ const server = createServer(app);
   };
 
   // Use environment PORT or find available port starting from 5002
-  const defaultPort = parseInt(process.env.PORT || '5002', 10);
+  const defaultPort = Math.max(parseInt(process.env.PORT || '0', 10), 5002);
   const port = await findAvailablePort(defaultPort);
   const host = '0.0.0.0';
   
-  server.listen(port, host, () => {
+  server.listen(port, host, async () => {
     log(`🚀 DEV SERVER (NO AUTH) running on http://${host}:${port}`);
     log(`📝 Authentication is completely bypassed for testing`);
-    log(`👤 Mock user: Dr. Sarah Mitchell (doctor@hospital.com)`);
+    log(`👤 Mock user: ${DEV_USER.firstName} ${DEV_USER.lastName} (${DEV_USER.email})`);
+    log(`🔐 User ID: ${DEV_USER.id}`);
+    log(`🏥 Specialty: ${DEV_USER.specialty}`);
+    log(`\n🌐 Open http://localhost:${port} to start testing!`);
+    log(`📊 All API endpoints available without authentication`);
+    log(`💡 Use CTRL+C to stop the server`);
+    log(`\n--- Development Server Ready ---`);
+    
+    // Initialize user in database on startup
+    try {
+      let user = await storage.getUser(DEV_USER.id);
+      if (!user) {
+        user = await storage.createUser(DEV_USER);
+        log(`✅ Created development user in database`);
+      } else {
+        log(`✅ Development user found in database`);
+      }
+    } catch (error) {
+      log(`⚠️ Warning: Could not initialize user in database: ${error}`);
+    }
   });
 })();

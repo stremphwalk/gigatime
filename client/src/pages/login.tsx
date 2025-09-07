@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
-import { ClipboardList, User, Shield } from "lucide-react";
+import { User, Shield } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth0";
 import BrandSpinner from "@/components/brand-spinner";
 import { useTranslation } from 'react-i18next';
@@ -33,9 +33,8 @@ export function LoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-medical-teal/10 to-professional-blue/10 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center space-y-4">
-          <div className="mx-auto w-16 h-16 rounded-xl flex items-center justify-center overflow-hidden bg-medical-teal">
-            <img src="/brand/arinote_full_256px.png" alt="Arinote" className="h-12 w-12 object-contain" onError={(e)=>{(e.currentTarget.style.display='none')}} />
-            <ClipboardList className="text-white" size={32} />
+          <div className="mx-auto w-16 h-16 rounded-xl flex items-center justify-center overflow-hidden bg-white shadow-sm">
+            <img src="/brand/arinote_full_256px.png" alt="Arinote" className="h-14 w-14 object-contain" />
           </div>
           <div>
             <h1 className="text-2xl font-bold text-medical-teal">Arinote</h1>

@@ -13,7 +13,6 @@ import {
   Plus, 
   MessageSquare, 
   Calendar,
-  ClipboardList,
   User,
   Send,
   Clock
@@ -176,7 +175,7 @@ export function TeamCollaboration() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm font-medium flex items-center">
-              <ClipboardList size={14} className="mr-2" />
+              <Calendar size={14} className="mr-2" />
               Team Tasks
             </CardTitle>
             <Dialog>
