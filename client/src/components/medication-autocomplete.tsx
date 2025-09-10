@@ -14,10 +14,11 @@ import {
 
 interface MedicationAutocompleteProps {
   query: string;
-  position: { top: number; left: number };
+  position: { top: number; left: number; width?: number };
   onSelect: (medication: string) => void;
   onClose: () => void;
   sectionId: string;
+  textareaRef?: React.RefObject<HTMLTextAreaElement>;
 }
 
 interface DosageFrequencyPopupProps {
@@ -260,7 +261,8 @@ export function MedicationAutocomplete({
   position,
   onSelect,
   onClose,
-  sectionId
+  sectionId,
+  textareaRef
 }: MedicationAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<MedicationInfo[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -292,50 +294,87 @@ export function MedicationAutocomplete({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!suggestions.length) return;
 
-      switch (e.key) {
-        case "ArrowDown":
+      // Only handle these keys when autocomplete is visible and specifically for our container
+      if (['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes(e.key)) {
+        // Check if the event is happening within our autocomplete context
+        const target = e.target as Element;
+        const isInAutocomplete = target && (
+          containerRef.current?.contains(target) ||
+          target.closest('[data-testid*="medication-autocomplete"]') ||
+          target.closest('[data-testid*="medication-dosage-popup"]') ||
+          target.closest('[data-testid*="custom-medication-picker"]') ||
+          (textareaRef?.current && textareaRef.current.contains(target))
+        );
+
+        if (isInAutocomplete) {
           e.preventDefault();
-          setSelectedIndex(prev => (prev + 1) % suggestions.length);
-          break;
-        case "ArrowUp":
-          e.preventDefault();
-          setSelectedIndex(prev => (prev - 1 + suggestions.length) % suggestions.length);
-          break;
-        case "Enter":
-        case "Tab":
-          e.preventDefault();
-          if (suggestions[selectedIndex]) {
-            handleMedicationSelect(suggestions[selectedIndex]);
+          e.stopPropagation();
+          e.stopImmediatePropagation(); // Stop other listeners from executing
+          
+          switch (e.key) {
+            case "ArrowDown":
+              setSelectedIndex(prev => (prev + 1) % suggestions.length);
+              break;
+            case "ArrowUp":
+              setSelectedIndex(prev => (prev - 1 + suggestions.length) % suggestions.length);
+              break;
+            case "Enter":
+            case "Tab":
+              if (suggestions[selectedIndex]) {
+                handleMedicationSelect(suggestions[selectedIndex]);
+              }
+              break;
+            case "Escape":
+              onClose();
+              break;
           }
-          break;
-        case "Escape":
-          onClose();
-          break;
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [suggestions, selectedIndex, onSelect, onClose]);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (containerRef.current && !containerRef.current.contains(target)) {
-        // Allow interactions inside dosage popup OR custom picker popup without closing
-        const dosagePopup = document.querySelector('[data-testid="medication-dosage-popup"]');
-        const customPickerEl = document.querySelector('[data-testid="custom-medication-picker"]');
-        const clickedInDosage = !!(dosagePopup && dosagePopup.contains(target));
-        const clickedInCustomPicker = !!(customPickerEl && customPickerEl.contains(target));
-        if (!clickedInDosage && !clickedInCustomPicker) {
-          onClose();
         }
       }
     };
 
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [onClose]);
+    // Use document level for better reliability with higher priority
+    document.addEventListener("keydown", handleKeyDown, { capture: true, passive: false });
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown, { capture: true } as any);
+    };
+  }, [suggestions, selectedIndex, onClose, textareaRef]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      
+      // Don't close if clicking within our autocomplete container
+      if (containerRef.current && containerRef.current.contains(target)) {
+        return;
+      }
+      
+      // Don't close if clicking on the textarea
+      const textarea = textareaRef?.current;
+      if (textarea && textarea.contains(target)) {
+        return;
+      }
+      
+      // Don't close if clicking in related popups
+      const dosagePopup = document.querySelector('[data-testid="medication-dosage-popup"]');
+      const customPickerEl = document.querySelector('[data-testid="custom-medication-picker"]');
+      const clickedInDosage = !!(dosagePopup && dosagePopup.contains(target));
+      const clickedInCustomPicker = !!(customPickerEl && customPickerEl.contains(target));
+      
+      if (!clickedInDosage && !clickedInCustomPicker) {
+        onClose();
+      }
+    };
+
+    // Small delay to prevent immediate closure when popup appears
+    const timeoutId = setTimeout(() => {
+      document.addEventListener("mousedown", handleClickOutside, true); // Use capture
+    }, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener("mousedown", handleClickOutside, true);
+    };
+  }, [onClose, textareaRef]);
 
   const handleMedicationSelect = (medication: MedicationInfo, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -361,18 +400,18 @@ export function MedicationAutocomplete({
     <>
       <div
         ref={containerRef}
-        className="fixed z-50"
+        className="absolute z-50"
         style={{
           top: `${position.top}px`,
           left: `${position.left}px`,
-          maxWidth: "320px",
-          minWidth: "280px"
+          width: position.width ? `${position.width}px` : undefined,
+          maxHeight: '240px'
         }}
         data-testid={`medication-autocomplete-${sectionId}`}
       >
         <Card className="shadow-lg border border-gray-200">
           <CardContent className="p-0">
-            <div className="max-h-64 overflow-y-auto">
+            <div className="overflow-y-auto" style={{ maxHeight: 240 }} role="listbox" aria-label="Medication suggestions">
               {customSuggestions.length > 0 && (
                 <>
                   <div className="p-2 bg-purple-50 border-b flex items-center gap-2">
@@ -389,7 +428,9 @@ export function MedicationAutocomplete({
                         index === selectedIndex && "bg-purple-50 text-purple-900"
                       )}
                       onClick={(e) => {
+                        e.preventDefault();
                         e.stopPropagation();
+                        e.stopImmediatePropagation();
                         if (item.dosageOptions?.length || item.frequencyOptions?.length) {
                           setCustomPicker({ text: item.text, dosages: item.dosageOptions, freqs: item.frequencyOptions });
                         } else {
@@ -397,6 +438,9 @@ export function MedicationAutocomplete({
                         }
                       }}
                       data-testid={`custom-medication-suggestion-${index}`}
+                      role="option"
+                      aria-selected={index === selectedIndex}
+                      id={`custom-medication-option-${index}`}
                     >
                       <div className="flex items-center gap-2 w-full">
                         <Pill size={16} className="text-purple-600 flex-shrink-0" />
@@ -424,7 +468,7 @@ export function MedicationAutocomplete({
                 <span className="text-xs font-medium text-purple-700">Common Medications</span>
               </div>
               {suggestions.map((medication, index) => (
-                <Button
+                  <Button
                   key={medication.name}
                   variant="ghost"
                   size="sm"
@@ -432,8 +476,16 @@ export function MedicationAutocomplete({
                     "w-full justify-start text-left h-auto py-2 px-3 rounded-none border-b border-gray-50 last:border-b-0",
                     index === selectedIndex && "bg-purple-50 text-purple-900"
                   )}
-                  onClick={(e) => handleMedicationSelect(medication, e)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                    handleMedicationSelect(medication, e);
+                  }}
                   data-testid={`medication-suggestion-${index}`}
+                  role="option"
+                  aria-selected={index === selectedIndex}
+                  id={`medication-option-${index}`}
                 >
                   <div className="flex items-center gap-2 w-full">
                     <Pill size={16} className="text-purple-600 flex-shrink-0" />

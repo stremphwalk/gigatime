@@ -869,6 +869,50 @@ app.delete("/api/todos/:id", async (req, res) => {
   }
 });
 
+// =============================
+// Autocomplete items (dev stub)
+// =============================
+app.get('/api/autocomplete-items', async (req, res) => {
+  try {
+    const category = (req.query?.category || '').toString();
+    const canned: any[] = [];
+    if (category === 'consultation-reasons') {
+      canned.push(
+        { id: 'c1', text: 'Chest pain evaluation', category, isPriority: true, userId: 'dev', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 'c2', text: 'Shortness of breath', category, isPriority: false, userId: 'dev', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      );
+    } else if (category === 'imaging') {
+      canned.push(
+        { id: 'i1', text: 'CXR PA/LAT', category, isPriority: false, userId: 'dev', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      );
+    } else if (category === 'medications') {
+      canned.push(
+        { id: 'm1', text: 'Acetaminophen 650 mg q6h PRN', category, isPriority: false, userId: 'dev', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      );
+    }
+    res.json(canned);
+  } catch (e) {
+    res.json([]);
+  }
+});
+
+app.post('/api/autocomplete-items', async (req, res) => {
+  const body = req.body || {};
+  const out = { id: String(Date.now()), text: body.text || '', category: body.category || 'general', isPriority: !!body.isPriority, userId: 'dev', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+  res.json(out);
+});
+
+app.put('/api/autocomplete-items/:id', async (req, res) => {
+  const id = req.params.id;
+  const body = req.body || {};
+  const out = { id, text: body.text || '', category: body.category || 'general', isPriority: !!body.isPriority, userId: 'dev', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+  res.json(out);
+});
+
+app.delete('/api/autocomplete-items/:id', async (req, res) => {
+  res.json({ ok: true });
+});
+
 // Team calendar routes
 app.get("/api/teams/:teamId/calendar", async (req, res) => {
   try {
@@ -1570,7 +1614,7 @@ app.put('/api/run-list/notes/:listPatientId', async (req: any, res) => {
     const userId = getMockUserId();
     const db = storage.db;
     const listPatientId = req.params.listPatientId;
-    const expectedUpdatedAtRaw = req.body?.expectedUpdatedAt ? new Date(req.body.expectedUpdatedAt) : null;
+    const expectedUpdatedAtRaw: Date | undefined = req.body?.expectedUpdatedAt ? new Date(req.body.expectedUpdatedAt as string) : undefined;
 
     // Verify ownership via join
     const rows = await db
@@ -1593,7 +1637,7 @@ app.put('/api/run-list/notes/:listPatientId', async (req: any, res) => {
     let noteRow;
     if (row.n) {
       // Optimistic locking: when provided, ensure no concurrent update
-      if (expectedUpdatedAtRaw && new Date(row.n.updatedAt).getTime() !== expectedUpdatedAtRaw.getTime()) {
+      if (expectedUpdatedAtRaw && new Date(row.n.updatedAt as any).getTime() !== expectedUpdatedAtRaw.getTime()) {
         return res.status(409).json({ message: 'Conflict: note was updated by another source' });
       }
       const [updated] = await db.update(runListNotes).set(payload).where(eq(runListNotes.id, row.n.id)).returning();

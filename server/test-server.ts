@@ -1,11 +1,9 @@
 import express from "express";
 import { createServer } from "http";
 import session from "express-session";
-import { createServer as createViteServer } from 'vite';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { setupVite } from './vite.ts';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
+// Vite setup will be attached via setupVite
 
 const app = express();
 app.use(express.json());
@@ -267,18 +265,11 @@ app.get('/api/health', (req, res) => {
 });
 
 async function createTestServer() {
-  // Create Vite server in middleware mode
-  const vite = await createViteServer({
-    server: { middlewareMode: true },
-    appType: 'spa',
-    root: path.join(__dirname, '..')
-  });
-  
-  // Use vite's connect instance as middleware
-  app.use(vite.middlewares);
-
   const PORT = process.env.DEV_PORT || 5002;
   const server = createServer(app);
+
+  // Attach Vite middleware using shared helper
+  await setupVite(app as any, server as any);
 
   server.listen(PORT, () => {
     console.log(`🚀 Test server running on http://localhost:${PORT}`);

@@ -9,10 +9,11 @@ import { useAutocompleteItems } from "@/hooks/use-autocomplete-items";
 
 interface PhysicalExamAutocompleteProps {
   query: string;
-  position: { top: number; left: number };
+  position: { top: number; left: number; width?: number };
   onSelect: (finding: string) => void;
   onClose: () => void;
   sectionId: string;
+  textareaRef?: React.RefObject<HTMLTextAreaElement>;
 }
 
 const getCategoryIcon = (category: string) => {
@@ -35,7 +36,8 @@ export function PhysicalExamAutocomplete({
   position, 
   onSelect, 
   onClose, 
-  sectionId 
+  sectionId,
+  textareaRef 
 }: PhysicalExamAutocompleteProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showCategories, setShowCategories] = useState(false);
@@ -56,53 +58,87 @@ export function PhysicalExamAutocomplete({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setSelectedIndex(prev => 
-          prev < (showCategories ? categoryResults.reduce((acc, cat) => acc + cat.findings.length, 0) - 1 : suggestions.length - 1) ? prev + 1 : 0
+      // Only handle these keys when autocomplete is visible and specifically for our container
+      if (['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes(e.key)) {
+        // Check if the event is happening within our autocomplete context
+        const target = e.target as Element;
+        const isInAutocomplete = target && (
+          target.closest('[data-physical-exam-autocomplete]') ||
+          target.closest('[data-testid="physical-exam-autocomplete"]') ||
+          (textareaRef?.current && textareaRef.current.contains(target))
         );
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setSelectedIndex(prev => 
-          prev > 0 ? prev - 1 : (showCategories ? categoryResults.reduce((acc, cat) => acc + cat.findings.length, 0) - 1 : suggestions.length - 1)
-        );
-      } else if (e.key === 'Escape') {
-        onClose();
-      } else if (e.key === 'Tab') {
-        e.preventDefault();
-        if (showCategories) {
-          let currentIndex = 0;
-          for (const category of categoryResults) {
-            for (const finding of category.findings) {
-              if (currentIndex === selectedIndex) {
-                onSelect(finding);
-                return;
+
+        if (isInAutocomplete) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation(); // Stop other listeners from executing
+          
+          if (e.key === 'ArrowDown') {
+            setSelectedIndex(prev => 
+              prev < (showCategories ? categoryResults.reduce((acc, cat) => acc + cat.findings.length, 0) - 1 : suggestions.length - 1) ? prev + 1 : 0
+            );
+          } else if (e.key === 'ArrowUp') {
+            setSelectedIndex(prev => 
+              prev > 0 ? prev - 1 : (showCategories ? categoryResults.reduce((acc, cat) => acc + cat.findings.length, 0) - 1 : suggestions.length - 1)
+            );
+          } else if (e.key === 'Enter' || e.key === 'Tab') {
+            if (showCategories) {
+              let currentIndex = 0;
+              for (const category of categoryResults) {
+                for (const finding of category.findings) {
+                  if (currentIndex === selectedIndex) {
+                    onSelect(finding);
+                    return;
+                  }
+                  currentIndex++;
+                }
               }
-              currentIndex++;
+            } else if (suggestions[selectedIndex]) {
+              onSelect(suggestions[selectedIndex]);
             }
+          } else if (e.key === 'Escape') {
+            onClose();
           }
-        } else if (suggestions[selectedIndex]) {
-          onSelect(suggestions[selectedIndex]);
         }
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [selectedIndex, suggestions, categoryResults, showCategories, onSelect, onClose]);
+    // Use document level for better reliability with higher priority
+    document.addEventListener('keydown', handleKeyDown, { capture: true, passive: false });
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown, { capture: true } as any);
+    };
+  }, [selectedIndex, suggestions, categoryResults, showCategories, onSelect, onClose, textareaRef]);
 
-  // Close on click outside
+  // Close on click outside - with delay to prevent premature closing
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Element;
-      if (!target.closest('[data-physical-exam-autocomplete]')) {
-        onClose();
+      
+      // Don't close if clicking within our autocomplete container
+      if (target.closest('[data-physical-exam-autocomplete]')) {
+        return;
       }
+      
+      // Don't close if clicking on the textarea
+      const textarea = textareaRef?.current;
+      if (textarea && textarea.contains(target as Node)) {
+        return;
+      }
+      
+      onClose();
     };
 
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
-  }, [onClose]);
+    // Small delay to prevent immediate closure when popup appears
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside, true); // Use capture
+    }, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('mousedown', handleClickOutside, true);
+    };
+  }, [onClose, textareaRef]);
 
   if (suggestions.length === 0 && categoryResults.length === 0) {
     return null;
@@ -111,11 +147,12 @@ export function PhysicalExamAutocomplete({
   return (
     <div
       data-physical-exam-autocomplete
-      className="fixed z-50 bg-white border border-gray-300 rounded-lg shadow-lg max-w-lg max-h-96 overflow-hidden"
+      className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg max-w-lg max-h-96 overflow-hidden"
       style={{
         top: position.top,
         left: position.left,
-        minWidth: '320px'
+        width: position.width ? `${position.width}px` : undefined,
+        maxHeight: '240px'
       }}
       data-testid="physical-exam-autocomplete"
     >
@@ -141,12 +178,12 @@ export function PhysicalExamAutocomplete({
         </div>
       </div>
 
-      <div className="max-h-80 overflow-y-auto">
+      <div className="overflow-y-auto" style={{ maxHeight: 240 }}>
         {!showCategories ? (
           /* Quick Suggestions View */
           <div className="p-2">
             {suggestions.length > 0 ? (
-              <div className="space-y-1">
+              <div className="space-y-1" role="listbox" aria-label="Physical exam suggestions">
                 {suggestions.map((suggestion, index) => (
                   <div
                     key={index}
@@ -156,8 +193,16 @@ export function PhysicalExamAutocomplete({
                         ? "bg-[color:var(--brand-50)] border-[color:var(--brand-200)] text-slate-900" 
                         : "bg-gray-50 border-gray-200 hover:bg-gray-100"
                     )}
-                    onClick={() => onSelect(suggestion)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      e.stopImmediatePropagation();
+                      onSelect(suggestion);
+                    }}
                     data-testid={`physical-exam-suggestion-${index}`}
+                    role="option"
+                    aria-selected={selectedIndex === index}
+                    id={`physical-exam-option-${index}`}
                   >
                     <div className="flex items-center gap-2">
                       <Stethoscope size={12} className="text-gray-400 flex-shrink-0" />
@@ -230,7 +275,7 @@ export function PhysicalExamAutocomplete({
                   </Badge>
                 </div>
                 
-                <div className="ml-6 space-y-1">
+                <div className="ml-6 space-y-1" role="listbox" aria-label={`Physical exam ${category.category} findings`}>
                   {category.findings.map((finding, findingIndex) => {
                     const globalIndex = categoryResults
                       .slice(0, categoryIndex)
@@ -245,8 +290,16 @@ export function PhysicalExamAutocomplete({
                             ? "bg-[color:var(--brand-50)] border-[color:var(--brand-200)] text-slate-900" 
                             : "bg-gray-50 border-gray-200 hover:bg-gray-100"
                         )}
-                        onClick={() => onSelect(finding)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          e.stopImmediatePropagation();
+                          onSelect(finding);
+                        }}
                         data-testid={`category-finding-${categoryIndex}-${findingIndex}`}
+                        role="option"
+                        aria-selected={selectedIndex === globalIndex}
+                        id={`physical-exam-option-${globalIndex}`}
                       >
                         <div className="flex items-center gap-2">
                           <span className="w-2 h-2 bg-gray-300 rounded-full flex-shrink-0"></span>

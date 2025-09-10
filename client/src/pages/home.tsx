@@ -225,7 +225,7 @@ export default function Home() {
         ) : currentView === 'notes-library' ? (
           <NotesLibrary onOpenNote={handleNoteSelect} />
         ) : currentView === 'run-list' ? (
-          <RunListView />
+          <RunListView onDirtyChange={setHasUnsavedChanges} />
         ) : null}
         <ConfirmLeaveModal 
           open={confirmOpen}

@@ -8,6 +8,8 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SmartPhraseAutocomplete } from "./smart-phrase-autocomplete";
 import { FlexibleSmartPhrasePicker } from "./flexible-smart-phrase-picker";
+import { SmartPhraseOverlay } from "@/components/smart-phrases";
+import { isUnifiedSmartPhraseOverlayEnabled } from "@/lib/flags";
 import { MedicalConditionAutocomplete } from "./medical-condition-autocomplete";
 import { AllergyAutocomplete } from "./allergy-autocomplete";
 import { SocialHistoryAutocomplete } from "./social-history-autocomplete";
@@ -35,6 +37,7 @@ import { useNotes, useNoteTemplates } from "../hooks/use-notes";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
 import { useToast } from "../hooks/use-toast";
 import { useImagingAutocomplete } from "../hooks/use-imaging-autocomplete";
+import { getTextareaCaretRect } from "@/lib/caret";
 import { 
   Save, 
   Check, 
@@ -68,6 +71,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useDictation } from "@/hooks/useDictation";
 import { cn } from "@/lib/utils";
 import { formatSmartPhrase, computeElementStrings } from "@/lib/smart-phrase-format";
+import { parseSmartPhraseContent, reconstructPhraseWithSelections } from "@shared/smart-phrase-parser";
 import { noteTemplates } from "../lib/note-templates";
 import { COMMON_ALLERGIES, TOP_MEDICAL_ALLERGIES } from "@/lib/medical-conditions";
 import { useTranslation } from 'react-i18next';
@@ -116,6 +120,16 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
     regionLength: number;
     regionId: string;
   } | null>(null);
+  const [activeOverlay, setActiveOverlay] = useState<{
+    sectionId: string;
+    caretRect: { top: number; left: number; bottom: number; right: number } | null;
+    content: string;
+    regionStart: number;
+    regionLength: number;
+    regionId: string;
+    phrase: any;
+    mode: 'insert' | 'edit';
+  } | null>(null);
   const [phraseRegions, setPhraseRegions] = useState<Array<{ id: string; sectionId: string; start: number; length: number; phrase: any; selections: Record<string, any> }>>([]);
   const [activePhraseHint, setActivePhraseHint] = useState<{
     regionId: string;
@@ -139,28 +153,28 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
   
   const [activeMedicalAutocomplete, setActiveMedicalAutocomplete] = useState<{
     sectionId: string;
-    position: { top: number; left: number };
+    position: { top: number; left: number; width: number };
     query: string;
     cursorPosition: number;
     wordStart: number;
   } | null>(null);
   const [activeAllergyAutocomplete, setActiveAllergyAutocomplete] = useState<{
     sectionId: string;
-    position: { top: number; left: number };
+    position: { top: number; left: number; width: number };
     query: string;
     cursorPosition: number;
     wordStart: number;
   } | null>(null);
   const [activeSocialHistoryAutocomplete, setActiveSocialHistoryAutocomplete] = useState<{
     sectionId: string;
-    position: { top: number; left: number };
+    position: { top: number; left: number; width: number };
     query: string;
     cursorPosition: number;
     wordStart: number;
   } | null>(null);
   const [activeConsultationReasonAutocomplete, setActiveConsultationReasonAutocomplete] = useState<{
     sectionId: string;
-    position: { top: number; left: number };
+    position: { top: number; left: number; width: number };
     query: string;
     cursorPosition: number;
     wordStart: number;
@@ -168,7 +182,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
   } | null>(null);
   const [activeMedicationAutocomplete, setActiveMedicationAutocomplete] = useState<{
     sectionId: string;
-    position: { top: number; left: number };
+    position: { top: number; left: number; width: number };
     query: string;
     cursorPosition: number;
     wordStart: number;
@@ -184,11 +198,72 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
   const [activeLabValuesPopup, setActiveLabValuesPopup] = useState<string | null>(null);
   const [activePhysicalExamAutocomplete, setActivePhysicalExamAutocomplete] = useState<{
     sectionId: string;
-    position: { top: number; left: number };
+    position: { top: number; left: number; width: number };
     query: string;
     cursorPosition: number;
     wordStart: number;
   } | null>(null);
+  
+  // Debounce autocomplete triggers to prevent jittery behavior
+  const autocompleteTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Ensure only one autocomplete is open globally at a time
+  const closeAllAutocompletes = () => {
+    setActiveMedicalAutocomplete(null);
+    setActiveAllergyAutocomplete(null);
+    setActiveSocialHistoryAutocomplete(null);
+    setActiveMedicationAutocomplete(null);
+    setActivePhysicalExamAutocomplete(null);
+    setActiveConsultationReasonAutocomplete(null);
+  };
+
+  // Helper: calculate position relative to textarea and clamp within viewport
+  const calculateRelativePosition = (
+    textarea: HTMLTextAreaElement,
+    caretLeft: number,
+    caretBottom: number,
+    estimatedWidth: number = 320,
+    estimatedHeight: number = 280
+  ) => {
+    const textareaRect = textarea.getBoundingClientRect();
+    const vw = window.innerWidth || document.documentElement.clientWidth || 1024;
+    const vh = window.innerHeight || document.documentElement.clientHeight || 768;
+    
+    // Calculate position relative to textarea
+    let relativeLeft = caretLeft - textareaRect.left;
+    let relativeTop = caretBottom - textareaRect.top + 5; // 5px gap below caret
+    
+    // Clamp within viewport bounds
+    const maxLeft = vw - textareaRect.left - estimatedWidth - 8;
+    const maxTop = vh - textareaRect.top - estimatedHeight - 8;
+    
+    relativeLeft = Math.min(Math.max(8, relativeLeft), Math.max(8, maxLeft));
+    
+    // Flip above if not enough space below
+    if (relativeTop + estimatedHeight > maxTop) {
+      relativeTop = (caretBottom - textareaRect.top) - estimatedHeight - 10;
+    }
+    // Final clamp within viewport
+    relativeTop = Math.min(Math.max(8, relativeTop), Math.max(8, maxTop));
+    
+    return { top: relativeTop, left: relativeLeft };
+  };
+
+  // Helper: anchored position — stick dropdown to the bottom-left of the textarea
+  const calculateAnchoredPosition = (
+    textarea: HTMLTextAreaElement,
+    verticalGap: number = 6
+  ) => {
+    const parent = textarea.parentElement as HTMLElement | null;
+    const parentRect = parent?.getBoundingClientRect();
+    const textareaRect = textarea.getBoundingClientRect();
+    if (!parentRect) {
+      return { top: textareaRect.bottom + verticalGap, left: textareaRect.left };
+    }
+    const top = (textareaRect.bottom - parentRect.top) + verticalGap;
+    const left = (textareaRect.left - parentRect.left);
+    return { top, left };
+  };
   
   // Clinical calculator popup state
   const [showClinicalCalculator, setShowClinicalCalculator] = useState(false);
@@ -394,25 +469,31 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
       return; // Don't process other triggers
     }
 
-    // Check for smart phrase trigger (excluding calc)
-    if (content.endsWith('/')) {
-      const rect = textarea.getBoundingClientRect();
-      setActiveAutocomplete({
-        sectionId,
-        position: { top: rect.bottom, left: rect.left },
-        query: ''
-      });
-    } else if (activeAutocomplete && content.includes('/')) {
-      const lastSlashIndex = content.lastIndexOf('/');
-      const query = content.slice(lastSlashIndex + 1);
-      // Don't show autocomplete for /calc command
-      if (query === 'calc') {
+    // Check for smart phrase trigger (excluding calc) - only if no other autocomplete is active
+    if (!activeMedicalAutocomplete && !activeAllergyAutocomplete && !activeSocialHistoryAutocomplete && 
+        !activeMedicationAutocomplete && !activePhysicalExamAutocomplete && !activeConsultationReasonAutocomplete) {
+      if (content.endsWith('/')) {
+        const caret = getTextareaCaretRect(textarea, cursorPosition);
+        const pos = calculateRelativePosition(textarea, caret.left, caret.bottom);
+        setActiveAutocomplete({
+          sectionId,
+          position: { top: pos.top, left: pos.left },
+          query: ''
+        });
+      } else if (activeAutocomplete && content.includes('/')) {
+        const lastSlashIndex = content.lastIndexOf('/');
+        const query = content.slice(lastSlashIndex + 1);
+        // Don't show autocomplete for /calc command
+        if (query === 'calc') {
+          setActiveAutocomplete(null);
+        } else {
+          const caret = getTextareaCaretRect(textarea, cursorPosition);
+          const pos = calculateRelativePosition(textarea, caret.left, caret.bottom);
+          setActiveAutocomplete(prev => prev ? { ...prev, query, position: { top: pos.top, left: pos.left } } : null);
+        }
+      } else if (activeAutocomplete && !content.includes('/')) {
         setActiveAutocomplete(null);
-      } else {
-        setActiveAutocomplete(prev => prev ? { ...prev, query } : null);
       }
-    } else if (activeAutocomplete && !content.includes('/')) {
-      setActiveAutocomplete(null);
     }
 
     // If a slash command is actively being typed at the caret,
@@ -469,32 +550,24 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
         const currentWord = wordStartMatch[0] + (wordEndMatch ? wordEndMatch[0] : '');
         
         if (currentWord && currentWord.length >= 2 && !currentWord.includes('/')) {
-          // Calculate precise cursor position in the textarea
-          const textBeforeCursor = content.slice(0, cursorPosition);
-          const lines = textBeforeCursor.split('\n');
-          const currentLine = lines.length - 1;
-          const charInLine = lines[lines.length - 1].length;
+          // Clear any existing timeout
+          if (autocompleteTimeoutRef.current) {
+            clearTimeout(autocompleteTimeoutRef.current);
+          }
           
-          // Get textarea position and line height
-          const rect = textarea.getBoundingClientRect();
-          const style = window.getComputedStyle(textarea);
-          const lineHeight = parseInt(style.lineHeight) || 20;
-          const paddingTop = parseInt(style.paddingTop) || 8;
-          const paddingLeft = parseInt(style.paddingLeft) || 12;
-          
-          // Approximate character width (monospace assumption)
-          const charWidth = 8;
-          
-          setActiveMedicalAutocomplete({
-            sectionId,
-            position: { 
-              top: rect.top + paddingTop + (currentLine * lineHeight) + lineHeight + 5,
-              left: rect.left + paddingLeft + (charInLine * charWidth)
-            },
-            query: currentWord,
-            cursorPosition,
-            wordStart
-          });
+          // Debounce the autocomplete trigger
+          autocompleteTimeoutRef.current = setTimeout(() => {
+            closeAllAutocompletes();
+            const anchored = calculateAnchoredPosition(textarea);
+            const width = textarea.clientWidth;
+            setActiveMedicalAutocomplete({
+              sectionId,
+              position: { top: anchored.top, left: anchored.left, width },
+              query: currentWord,
+              cursorPosition,
+              wordStart
+            });
+          }, 150); // 150ms debounce
         } else {
           setActiveMedicalAutocomplete(null);
         }
@@ -519,33 +592,25 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
         const wordStart = cursorPosition - wordStartMatch[0].length;
         const currentWord = wordStartMatch[0] + (wordEndMatch ? wordEndMatch[0] : '');
         
-        if (currentWord && currentWord.length >= 1 && !currentWord.includes('/')) {
-          // Calculate precise cursor position in the textarea
-          const textBeforeCursor = content.slice(0, cursorPosition);
-          const lines = textBeforeCursor.split('\n');
-          const currentLine = lines.length - 1;
-          const charInLine = lines[lines.length - 1].length;
+        if (currentWord && currentWord.length >= 2 && !currentWord.includes('/')) {
+          // Clear any existing timeout
+          if (autocompleteTimeoutRef.current) {
+            clearTimeout(autocompleteTimeoutRef.current);
+          }
           
-          // Get textarea position and line height
-          const rect = textarea.getBoundingClientRect();
-          const style = window.getComputedStyle(textarea);
-          const lineHeight = parseInt(style.lineHeight) || 20;
-          const paddingTop = parseInt(style.paddingTop) || 8;
-          const paddingLeft = parseInt(style.paddingLeft) || 12;
-          
-          // Approximate character width (monospace assumption)
-          const charWidth = 8;
-          
-          setActiveAllergyAutocomplete({
-            sectionId,
-            position: { 
-              top: rect.top + paddingTop + (currentLine * lineHeight) + lineHeight + 5,
-              left: rect.left + paddingLeft + (charInLine * charWidth)
-            },
-            query: currentWord,
-            cursorPosition,
-            wordStart
-          });
+          // Debounce the autocomplete trigger
+          autocompleteTimeoutRef.current = setTimeout(() => {
+            closeAllAutocompletes();
+            const anchored = calculateAnchoredPosition(textarea);
+            const width = textarea.clientWidth;
+            setActiveAllergyAutocomplete({
+              sectionId,
+              position: { top: anchored.top, left: anchored.left, width },
+              query: currentWord,
+              cursorPosition,
+              wordStart
+            });
+          }, 150); // 150ms debounce
         } else {
           setActiveAllergyAutocomplete(null);
         }
@@ -572,33 +637,25 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
         const wordStart = cursorPosition - wordStartMatch[0].length;
         const currentWord = wordStartMatch[0] + (wordEndMatch ? wordEndMatch[0] : '');
         
-        if (currentWord && currentWord.length >= 1 && !currentWord.includes('/')) {
-          // Calculate precise cursor position in the textarea
-          const textBeforeCursor = content.slice(0, cursorPosition);
-          const lines = textBeforeCursor.split('\n');
-          const currentLine = lines.length - 1;
-          const charInLine = lines[lines.length - 1].length;
+        if (currentWord && currentWord.length >= 2 && !currentWord.includes('/')) {
+          // Clear any existing timeout
+          if (autocompleteTimeoutRef.current) {
+            clearTimeout(autocompleteTimeoutRef.current);
+          }
           
-          // Get textarea position and line height
-          const rect = textarea.getBoundingClientRect();
-          const style = window.getComputedStyle(textarea);
-          const lineHeight = parseInt(style.lineHeight) || 20;
-          const paddingTop = parseInt(style.paddingTop) || 8;
-          const paddingLeft = parseInt(style.paddingLeft) || 12;
-          
-          // Approximate character width (monospace assumption)
-          const charWidth = 8;
-          
-          setActiveSocialHistoryAutocomplete({
-            sectionId,
-            position: { 
-              top: rect.top + paddingTop + (currentLine * lineHeight) + lineHeight + 5,
-              left: rect.left + paddingLeft + (charInLine * charWidth)
-            },
-            query: currentWord,
-            cursorPosition,
-            wordStart
-          });
+          // Debounce the autocomplete trigger
+          autocompleteTimeoutRef.current = setTimeout(() => {
+            closeAllAutocompletes();
+            const anchored = calculateAnchoredPosition(textarea);
+            const width = textarea.clientWidth;
+            setActiveSocialHistoryAutocomplete({
+              sectionId,
+              position: { top: anchored.top, left: anchored.left, width },
+              query: currentWord,
+              cursorPosition,
+              wordStart
+            });
+          }, 150); // 150ms debounce
         } else {
           setActiveSocialHistoryAutocomplete(null);
         }
@@ -626,32 +683,24 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
         const currentWord = wordStartMatch[0] + (wordEndMatch ? wordEndMatch[0] : '');
         
         if (currentWord && currentWord.length >= 2) {
-          // Calculate precise cursor position in the textarea
-          const textBeforeCursor = content.slice(0, cursorPosition);
-          const lines = textBeforeCursor.split('\n');
-          const currentLine = lines.length - 1;
-          const charInLine = lines[lines.length - 1].length;
+          // Clear any existing timeout
+          if (autocompleteTimeoutRef.current) {
+            clearTimeout(autocompleteTimeoutRef.current);
+          }
           
-          // Get textarea position and line height
-          const rect = textarea.getBoundingClientRect();
-          const style = window.getComputedStyle(textarea);
-          const lineHeight = parseInt(style.lineHeight) || 20;
-          const paddingTop = parseInt(style.paddingTop) || 8;
-          const paddingLeft = parseInt(style.paddingLeft) || 12;
-          
-          // Approximate character width (monospace assumption)
-          const charWidth = 8;
-          
-          setActiveMedicationAutocomplete({
-            sectionId,
-            position: { 
-              top: rect.top + paddingTop + (currentLine * lineHeight) + lineHeight + 5,
-              left: rect.left + paddingLeft + (charInLine * charWidth)
-            },
-            query: currentWord,
-            cursorPosition,
-            wordStart
-          });
+          // Debounce the autocomplete trigger
+          autocompleteTimeoutRef.current = setTimeout(() => {
+            closeAllAutocompletes();
+            const anchored = calculateAnchoredPosition(textarea);
+            const width = textarea.clientWidth;
+            setActiveMedicationAutocomplete({
+              sectionId,
+              position: { top: anchored.top, left: anchored.left, width },
+              query: currentWord,
+              cursorPosition,
+              wordStart
+            });
+          }, 150); // 150ms debounce
         } else {
           setActiveMedicationAutocomplete(null);
         }
@@ -684,32 +733,24 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
         const currentWord = wordStartMatch[0] + (wordEndMatch ? wordEndMatch[0] : '');
         
         if (currentWord && currentWord.length >= 2) {
-          // Calculate precise cursor position in the textarea
-          const textBeforeCursor = content.slice(0, cursorPosition);
-          const lines = textBeforeCursor.split('\n');
-          const currentLine = lines.length - 1;
-          const charInLine = lines[lines.length - 1].length;
+          // Clear any existing timeout
+          if (autocompleteTimeoutRef.current) {
+            clearTimeout(autocompleteTimeoutRef.current);
+          }
           
-          // Get textarea position and line height
-          const rect = textarea.getBoundingClientRect();
-          const style = window.getComputedStyle(textarea);
-          const lineHeight = parseInt(style.lineHeight) || 20;
-          const paddingTop = parseInt(style.paddingTop) || 8;
-          const paddingLeft = parseInt(style.paddingLeft) || 12;
-          
-          // Approximate character width (monospace assumption)
-          const charWidth = 8;
-          
-          setActivePhysicalExamAutocomplete({
-            sectionId,
-            position: { 
-              top: rect.top + paddingTop + (currentLine * lineHeight) + lineHeight + 5,
-              left: rect.left + paddingLeft + (charInLine * charWidth)
-            },
-            query: currentWord.trim(),
-            cursorPosition,
-            wordStart
-          });
+          // Debounce the autocomplete trigger
+          autocompleteTimeoutRef.current = setTimeout(() => {
+            closeAllAutocompletes();
+            const anchored = calculateAnchoredPosition(textarea);
+            const width = textarea.clientWidth;
+            setActivePhysicalExamAutocomplete({
+              sectionId,
+              position: { top: anchored.top, left: anchored.left, width },
+              query: currentWord.trim(),
+              cursorPosition,
+              wordStart
+            });
+          }, 150); // 150ms debounce
         } else {
           setActivePhysicalExamAutocomplete(null);
         }
@@ -742,35 +783,27 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
         const currentWord = wordStartMatch[0] + (wordEndMatch ? wordEndMatch[0] : '');
         
         if (currentWord && currentWord.length >= 2) {
-          // Calculate precise cursor position in the textarea
-          const textBeforeCursor = content.slice(0, cursorPosition);
-          const lines = textBeforeCursor.split('\n');
-          const currentLine = lines.length - 1;
-          const charInLine = lines[lines.length - 1].length;
+          // Clear any existing timeout
+          if (autocompleteTimeoutRef.current) {
+            clearTimeout(autocompleteTimeoutRef.current);
+          }
           
-          // Get textarea position and line height
-          const rect = textarea.getBoundingClientRect();
-          const style = window.getComputedStyle(textarea);
-          const lineHeight = parseInt(style.lineHeight) || 20;
-          const paddingTop = parseInt(style.paddingTop) || 8;
-          const paddingLeft = parseInt(style.paddingLeft) || 12;
-          
-          // Approximate character width (monospace assumption)
-          const charWidth = 8;
-          
-          const reasonType = section?.name.toLowerCase().includes('admission') ? 'admission' : 'consultation';
-          
-          setActiveConsultationReasonAutocomplete({
-            sectionId,
-            position: { 
-              top: rect.top + paddingTop + (currentLine * lineHeight) + lineHeight + 5,
-              left: rect.left + paddingLeft + (charInLine * charWidth)
-            },
-            query: currentWord.trim(),
-            cursorPosition,
-            wordStart,
-            type: reasonType
-          });
+          // Debounce the autocomplete trigger
+          autocompleteTimeoutRef.current = setTimeout(() => {
+            closeAllAutocompletes();
+            const anchored = calculateAnchoredPosition(textarea);
+            const width = textarea.clientWidth;
+            const reasonType = section?.name.toLowerCase().includes('admission') ? 'admission' : 'consultation';
+            
+            setActiveConsultationReasonAutocomplete({
+              sectionId,
+              position: { top: anchored.top, left: anchored.left, width },
+              query: currentWord.trim(),
+              cursorPosition,
+              wordStart,
+              type: reasonType
+            });
+          }, 150); // 150ms debounce
         } else {
           setActiveConsultationReasonAutocomplete(null);
         }
@@ -851,7 +884,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
           finalContent = phrase.content;
         } else {
           // Live insert template at the slash and open picker
-          const textarea = document.querySelector(`[data-section-id="${activeAutocomplete.sectionId}"]`) as HTMLTextAreaElement | null;
+          const textarea = document.querySelector(`[data-section-id=\"${activeAutocomplete.sectionId}\"]`) as HTMLTextAreaElement | null;
           const currentText = noteData.content[activeAutocomplete.sectionId] || '';
           const lastSlashIndex = currentText.lastIndexOf('/');
           const beforeSlash = lastSlashIndex >= 0 ? currentText.slice(0, lastSlashIndex) : currentText;
@@ -868,18 +901,35 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
 
           const rect = textarea?.getBoundingClientRect();
           const regionId = `reg_${Date.now()}_${Math.floor(Math.random()*1000)}`;
-          setActivePicker({
-            phrase,
-            sectionId: activeAutocomplete.sectionId,
-            position: rect ? { top: rect.bottom + 10, left: rect.left } : { top: 200, left: 200 },
-            regionStart: beforeSlash.length,
-            regionLength: template.length,
-            regionId,
-          });
-          setPhraseRegions(prev => ([
-            ...prev,
-            { id: regionId, sectionId: activeAutocomplete.sectionId, start: beforeSlash.length, length: template.length, phrase, selections: {} }
-          ]));
+          if (isUnifiedSmartPhraseOverlayEnabled()) {
+            setPhraseRegions(prev => ([
+              ...prev,
+              { id: regionId, sectionId: activeAutocomplete.sectionId, start: beforeSlash.length, length: template.length, phrase, selections: {} }
+            ]));
+            setActiveOverlay({
+              sectionId: activeAutocomplete.sectionId,
+              caretRect: rect ? { top: rect.top, left: rect.left, bottom: rect.bottom, right: rect.right } : null,
+              content: template,
+              regionStart: beforeSlash.length,
+              regionLength: template.length,
+              regionId,
+              phrase,
+              mode: 'insert',
+            });
+          } else {
+            setActivePicker({
+              phrase,
+              sectionId: activeAutocomplete.sectionId,
+              position: rect ? { top: rect.bottom + 10, left: rect.left } : { top: 200, left: 200 },
+              regionStart: beforeSlash.length,
+              regionLength: template.length,
+              regionId,
+            });
+            setPhraseRegions(prev => ([
+              ...prev,
+              { id: regionId, sectionId: activeAutocomplete.sectionId, start: beforeSlash.length, length: template.length, phrase, selections: {} }
+            ]));
+          }
           setActiveAutocomplete(null);
           return;
         }
@@ -1162,9 +1212,12 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
     const actualCursorPos = cursorPosition ?? activeMedicalAutocomplete.cursorPosition;
     
     // Replace the current word with the selected condition
+    const nextChar = currentContent.slice(actualCursorPos, actualCursorPos + 1);
+    const needsSpace = nextChar && !/[\s\.,;:!\?)\]]/.test(nextChar);
+    const insertion = condition + (needsSpace ? ' ' : '');
     const newContent = 
       currentContent.slice(0, wordStart) + 
-      condition + 
+      insertion + 
       currentContent.slice(actualCursorPos);
     
     setNoteData(prev => ({
@@ -1182,7 +1235,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
       const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
       if (textarea) {
         textarea.focus();
-        const newCursorPos = wordStart + condition.length;
+        const newCursorPos = wordStart + insertion.length;
         setCursorSafe(textarea, newCursorPos);
       }
     }, 0);
@@ -1195,9 +1248,12 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
     const currentContent = noteData.content[sectionId] || '';
     
     // Replace the current word with the selected allergy
+    const nextChar = currentContent.slice(cursorPosition, cursorPosition + 1);
+    const needsSpace = nextChar && !/[\s\.,;:!\?)\]]/.test(nextChar);
+    const insertion = allergy + (needsSpace ? ' ' : '');
     const newContent = 
       currentContent.slice(0, wordStart) + 
-      allergy + 
+      insertion + 
       currentContent.slice(cursorPosition);
     
     setNoteData(prev => ({
@@ -1215,7 +1271,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
       const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
       if (textarea) {
         textarea.focus();
-        const newCursorPos = wordStart + allergy.length;
+        const newCursorPos = wordStart + insertion.length;
         setCursorSafe(textarea, newCursorPos);
       }
     }, 0);
@@ -1246,9 +1302,12 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
     const currentContent = noteData.content[sectionId] || '';
     
     // Replace the current word with the formatted text
+    const nextChar = currentContent.slice(cursorPosition, cursorPosition + 1);
+    const needsSpace = nextChar && !/[\s\.,;:!\?)\]]/.test(nextChar);
+    const insertion = formatted + (needsSpace ? ' ' : '');
     const newContent = 
       currentContent.slice(0, wordStart) + 
-      formatted + 
+      insertion + 
       currentContent.slice(cursorPosition);
     
     setNoteData(prev => ({
@@ -1266,7 +1325,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
       const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
       if (textarea) {
         textarea.focus();
-        const newCursorPos = wordStart + formatted.length;
+        const newCursorPos = wordStart + insertion.length;
         setCursorSafe(textarea, newCursorPos);
       }
     }, 0);
@@ -1279,9 +1338,12 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
     const currentContent = noteData.content[sectionId] || '';
     
     // Replace the current word with the formatted medication
+    const nextChar = currentContent.slice(cursorPosition, cursorPosition + 1);
+    const needsSpace = nextChar && !/[\s\.,;:!\?)\]]/.test(nextChar);
+    const insertion = medication + (needsSpace ? ' ' : '');
     const newContent = 
       currentContent.slice(0, wordStart) + 
-      medication + 
+      insertion + 
       currentContent.slice(cursorPosition);
     
     setNoteData(prev => ({
@@ -1299,7 +1361,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
       const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
       if (textarea) {
         textarea.focus();
-        const newCursorPos = wordStart + medication.length;
+        const newCursorPos = wordStart + insertion.length;
         setCursorSafe(textarea, newCursorPos);
       }
     }, 0);
@@ -1312,9 +1374,12 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
     const currentContent = noteData.content[sectionId] || '';
     
     // Replace the current word with the selected finding
+    const nextChar = currentContent.slice(cursorPosition, cursorPosition + 1);
+    const needsSpace = nextChar && !/[\s\.,;:!\?)\]]/.test(nextChar);
+    const insertion = finding + (needsSpace ? ' ' : '');
     const newContent = 
       currentContent.slice(0, wordStart) + 
-      finding + 
+      insertion + 
       currentContent.slice(cursorPosition);
     
     setNoteData(prev => ({
@@ -1332,7 +1397,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
       const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
       if (textarea) {
         textarea.focus();
-        const newCursorPos = wordStart + finding.length;
+        const newCursorPos = wordStart + insertion.length;
         setCursorSafe(textarea, newCursorPos);
       }
     }, 0);
@@ -1345,9 +1410,12 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
     const currentContent = noteData.content[sectionId] || '';
     
     // Replace the current word with the selected reason
+    const nextChar = currentContent.slice(cursorPosition, cursorPosition + 1);
+    const needsSpace = nextChar && !/[\s\.,;:!\?)\]]/.test(nextChar);
+    const insertion = reason + (needsSpace ? ' ' : '');
     const newContent = 
       currentContent.slice(0, wordStart) + 
-      reason + 
+      insertion + 
       currentContent.slice(cursorPosition);
     
     setNoteData(prev => ({
@@ -1365,11 +1433,70 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
       const textarea = document.querySelector(`[data-section-id="${sectionId}"]`) as HTMLTextAreaElement;
       if (textarea) {
         textarea.focus();
-        const newCursorPos = wordStart + reason.length;
+        const newCursorPos = wordStart + insertion.length;
         setCursorSafe(textarea, newCursorPos);
       }
     }, 0);
   };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (autocompleteTimeoutRef.current) {
+        clearTimeout(autocompleteTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Recompute anchored autocomplete positions on scroll/resize to keep popups stuck to textarea
+  useEffect(() => {
+    const reposition = () => {
+      const update = <T extends { sectionId: string; position: { top: number; left: number; width?: number } }>(
+        active: T | null,
+        setter: React.Dispatch<React.SetStateAction<T | null>>
+      ) => {
+        if (!active) return;
+        const textarea = document.querySelector(`[data-section-id="${active.sectionId}"]`) as HTMLTextAreaElement | null;
+        if (!textarea) return;
+        const anchored = calculateAnchoredPosition(textarea);
+        setter(prev => {
+          if (!prev) return prev as any;
+          if (prev.sectionId !== active.sectionId) return prev;
+          return { ...prev, position: { top: anchored.top, left: anchored.left, width: textarea.clientWidth } } as T;
+        });
+      };
+
+      update(activeAutocomplete, setActiveAutocomplete);
+      update(activeMedicalAutocomplete, setActiveMedicalAutocomplete);
+      update(activeAllergyAutocomplete, setActiveAllergyAutocomplete);
+      update(activeSocialHistoryAutocomplete, setActiveSocialHistoryAutocomplete);
+      update(activeMedicationAutocomplete, setActiveMedicationAutocomplete);
+      update(activePhysicalExamAutocomplete, setActivePhysicalExamAutocomplete);
+      update(activeConsultationReasonAutocomplete, setActiveConsultationReasonAutocomplete);
+    };
+
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+    document.addEventListener('selectionchange', reposition);
+    window.addEventListener('keydown', reposition);
+    window.addEventListener('keyup', reposition);
+    return () => {
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
+      document.removeEventListener('selectionchange', reposition);
+      window.removeEventListener('keydown', reposition);
+      window.removeEventListener('keyup', reposition);
+    };
+  }, [
+    activeAutocomplete,
+    activeMedicalAutocomplete,
+    activeAllergyAutocomplete,
+    activeSocialHistoryAutocomplete,
+    activeMedicationAutocomplete,
+    activePhysicalExamAutocomplete,
+    activeConsultationReasonAutocomplete
+  ]);
+  
 
   const handlePertinentNegativesClick = (sectionId: string) => {
     setPertinentNegativesSection(sectionId);
@@ -2279,7 +2406,99 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
                         </span>
                       )}
                     </h4>
-                  <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2">
+                      {/* Smart options header chips when caret is inside a phrase */}
+                      {isUnifiedSmartPhraseOverlayEnabled() && (() => {
+                        if (!activePhraseHint || activePhraseHint.sectionId !== section.id) return null;
+                        const region = phraseRegions.find(r => r.id === activePhraseHint.regionId);
+                        if (!region || !region.phrase?.content) return null;
+                        const parsed = parseSmartPhraseContent(region.phrase.content);
+                        const slots = parsed.slots;
+                        if (!slots || slots.length === 0) return null;
+                        return (
+                          <div className="flex items-center gap-1 ml-3">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-xs px-2"
+                              onClick={() => {
+                                const ta = document.querySelector(`[data-section-id="${section.id}"]`) as HTMLTextAreaElement | null;
+                                const rect = ta?.getBoundingClientRect();
+                                setActiveOverlay({
+                                  sectionId: section.id,
+                                  caretRect: rect ? { top: rect.top, left: rect.left, bottom: rect.bottom, right: rect.right } : null,
+                                  content: region.phrase.content,
+                                  regionStart: region.start,
+                                  regionLength: region.length,
+                                  regionId: region.id,
+                                  phrase: region.phrase,
+                                  mode: 'edit',
+                                });
+                              }}
+                            >
+{t('smart.smartOptions')}
+                            </Button>
+                            {slots.map((slot, idx) => {
+                              const sel = region.selections?.[slot.id];
+                              const isSelected = sel != null && sel !== '';
+                              const label = isSelected ? (typeof sel === 'string' ? sel : (sel instanceof Date ? sel.toISOString().slice(0,10) : String(sel))) : (slot.label || slot.placeholder || 'option');
+                              return (
+                                <div key={slot.id} className="relative">
+                                  <Badge
+                                    variant="outline"
+                                    role="button"
+                                    tabIndex={0}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); const ta = document.querySelector(`[data-section-id=\"${section.id}\"]`) as HTMLTextAreaElement | null; const rect = ta?.getBoundingClientRect(); setActiveOverlay({ sectionId: section.id, caretRect: rect ? { top: rect.top, left: rect.left, bottom: rect.bottom, right: rect.right } : null, content: region.phrase.content, regionStart: region.start, regionLength: region.length, regionId: region.id, phrase: region.phrase, mode: 'edit' }); }}}
+                                    className={`text-xs cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--brand-600)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-neutral-900 ${isSelected ? 'border-green-300 bg-green-50' : 'border-gray-300'}`}
+                                    onClick={() => {
+                                      const ta = document.querySelector(`[data-section-id="${section.id}"]`) as HTMLTextAreaElement | null;
+                                      const rect = ta?.getBoundingClientRect();
+                                      setActiveOverlay({
+                                        sectionId: section.id,
+                                        caretRect: rect ? { top: rect.top, left: rect.left, bottom: rect.bottom, right: rect.right } : null,
+                                        content: region.phrase.content,
+                                        regionStart: region.start,
+                                        regionLength: region.length,
+                                        regionId: region.id,
+                                        phrase: region.phrase,
+                                        mode: 'edit',
+                                      });
+                                    }}
+                                  >
+                                    {label}
+                                  </Badge>
+                                  <button
+                                    aria-label="Clear selection"
+                                    className="absolute -top-2 -right-2 bg-white border rounded-full p-0.5 text-gray-500 hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--brand-600)] focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:focus-visible:ring-offset-neutral-900"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      // Clear this slot and update text/metadata
+                                      const parsed2 = parseSmartPhraseContent(region.phrase.content);
+                                      const selections = { ...(region.selections || {}) } as Record<string, any>;
+                                      delete selections[slot.id];
+                                      const records: Record<string, string> = {};
+                                      parsed2.slots.forEach(s => {
+                                        const v = selections[s.id];
+                                        records[s.id] = v == null ? '' : (typeof v === 'string' ? v : String(v));
+                                      });
+                                      const out = reconstructPhraseWithSelections(parsed2, records);
+                                      // Replace region text in section content
+                                      const currentContent = noteData.content[section.id] || '';
+                                      const start = region.start;
+                                      const end = start + region.length;
+                                      const newContent = currentContent.slice(0, start) + out + currentContent.slice(end);
+                                      setNoteData(prev => ({ ...prev, content: { ...prev.content, [section.id]: newContent } }));
+                                      setPhraseRegions(prev => prev.map(r => r.id === region.id ? { ...r, length: out.length, selections } : r));
+                                    }}
+                                  >
+                                    <X size={10} />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                     {/* Imaging Autocomplete Button - Show for imaging or radiology sections */}
                     {(section.type === 'imaging' || 
                       section.type === 'radiology' ||
@@ -2716,6 +2935,45 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
                       autoShow={true}
                     />
                   )}
+
+                    {activeOverlay && activeOverlay.sectionId === section.id && (
+                    <SmartPhraseOverlay
+                      open={true}
+                      caretRect={activeOverlay.caretRect ? new DOMRect(activeOverlay.caretRect.left, activeOverlay.caretRect.top, 1, 1) : null}
+                      content={activeOverlay.content}
+                      initialSelections={phraseRegions.find(r => r.id === activeOverlay.regionId)?.selections || {}}
+                      // Focus first slot by default when opened from header button
+                      initialActiveSlotId={undefined}
+                      onAssemble={(output, selections) => {
+                        const currentContent = noteData.content[activeOverlay.sectionId] || '';
+                        const start = activeOverlay.regionStart;
+                        const end = start + activeOverlay.regionLength;
+                        const adjusted = applyConditionalLeadingSpace(activeOverlay.sectionId, start, output);
+                        const newContent = currentContent.slice(0, start) + adjusted + currentContent.slice(end);
+                        setNoteData(prev => ({
+                          ...prev,
+                          content: { ...prev.content, [activeOverlay.sectionId]: newContent }
+                        }));
+                        setPhraseRegions(prev => prev.map(r => r.id === activeOverlay.regionId ? { ...r, length: adjusted.length, selections } : r));
+                      }}
+                      onClose={(reason) => {
+                        if (!activeOverlay) return;
+                        if ((reason === 'clickOutside' || reason === 'escape' || reason === 'cancel') && activeOverlay.mode === 'insert') {
+                          // Remove the pre-inserted template and metadata only when in insert mode
+                          const currentContent = noteData.content[activeOverlay.sectionId] || '';
+                          const start = activeOverlay.regionStart;
+                          const end = start + activeOverlay.regionLength;
+                          const newContent = currentContent.slice(0, start) + currentContent.slice(end);
+                          setNoteData(prev => ({
+                            ...prev,
+                            content: { ...prev.content, [activeOverlay.sectionId]: newContent }
+                          }));
+                          setPhraseRegions(prev => prev.filter(r => r.id !== activeOverlay.regionId));
+                        }
+                        setActiveOverlay(null);
+                      }}
+                    />
+                  )}
                   
                   {activeMedicalAutocomplete && activeMedicalAutocomplete.sectionId === section.id && (
                     <MedicalConditionAutocomplete
@@ -2736,6 +2994,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
                       onSelect={handleAllergySelect}
                       onClose={() => setActiveAllergyAutocomplete(null)}
                       sectionId={section.id}
+                      textareaRef={{ current: document.querySelector(`[data-section-id="${section.id}"]`) as HTMLTextAreaElement }}
                     />
                   )}
                   
@@ -2746,6 +3005,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
                       onSelect={handleSocialHistorySelect}
                       onClose={() => setActiveSocialHistoryAutocomplete(null)}
                       sectionId={section.id}
+                      textareaRef={{ current: document.querySelector(`[data-section-id="${section.id}"]`) as HTMLTextAreaElement }}
                     />
                   )}
                   
@@ -2756,6 +3016,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
                       onSelect={handleMedicationSelect}
                       onClose={() => setActiveMedicationAutocomplete(null)}
                       sectionId={section.id}
+                      textareaRef={{ current: document.querySelector(`[data-section-id="${section.id}"]`) as HTMLTextAreaElement }}
                     />
                   )}
 
@@ -2766,6 +3027,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
                       onSelect={handlePhysicalExamSelect}
                       onClose={() => setActivePhysicalExamAutocomplete(null)}
                       sectionId={section.id}
+                      textareaRef={{ current: document.querySelector(`[data-section-id="${section.id}"]`) as HTMLTextAreaElement }}
                     />
                   )}
 
@@ -2777,6 +3039,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
                       onClose={() => setActiveConsultationReasonAutocomplete(null)}
                       type={activeConsultationReasonAutocomplete.type}
                       sectionId={section.id}
+                      textareaRef={{ current: document.querySelector(`[data-section-id="${section.id}"]`) as HTMLTextAreaElement }}
                     />
                   )}
                 </div>

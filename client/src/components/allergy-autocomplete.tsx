@@ -8,10 +8,11 @@ import { cn } from "@/lib/utils";
 
 interface AllergyAutocompleteProps {
   query: string;
-  position: { top: number; left: number };
+  position: { top: number; left: number; width?: number };
   onSelect: (allergy: string) => void;
   onClose: () => void;
   sectionId: string;
+  textareaRef?: React.RefObject<HTMLTextAreaElement>;
 }
 
 export function AllergyAutocomplete({
@@ -19,7 +20,8 @@ export function AllergyAutocomplete({
   position,
   onSelect,
   onClose,
-  sectionId
+  sectionId,
+  textareaRef
 }: AllergyAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -50,43 +52,78 @@ export function AllergyAutocomplete({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!suggestions.length) return;
 
-      switch (e.key) {
-        case "ArrowDown":
+      // Only handle these keys when autocomplete is visible and specifically for our container
+      if (['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes(e.key)) {
+        // Check if the event is happening within our autocomplete context
+        const target = e.target as Element;
+        const isInAutocomplete = target && (
+          containerRef.current?.contains(target) ||
+          target.closest('[data-testid*="allergy-autocomplete"]') ||
+          (textareaRef?.current && textareaRef.current.contains(target))
+        );
+
+        if (isInAutocomplete) {
           e.preventDefault();
-          setSelectedIndex(prev => (prev + 1) % suggestions.length);
-          break;
-        case "ArrowUp":
-          e.preventDefault();
-          setSelectedIndex(prev => (prev - 1 + suggestions.length) % suggestions.length);
-          break;
-        case "Enter":
-        case "Tab":
-          e.preventDefault();
-          if (suggestions[selectedIndex]) {
-            onSelect(suggestions[selectedIndex]);
+          e.stopPropagation();
+          e.stopImmediatePropagation(); // Stop other listeners from executing
+          
+          switch (e.key) {
+            case "ArrowDown":
+              setSelectedIndex(prev => (prev + 1) % suggestions.length);
+              break;
+            case "ArrowUp":
+              setSelectedIndex(prev => (prev - 1 + suggestions.length) % suggestions.length);
+              break;
+            case "Enter":
+            case "Tab":
+              if (suggestions[selectedIndex]) {
+                onSelect(suggestions[selectedIndex]);
+              }
+              break;
+            case "Escape":
+              onClose();
+              break;
           }
-          break;
-        case "Escape":
-          onClose();
-          break;
+        }
       }
     };
 
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [suggestions, selectedIndex, onSelect, onClose]);
+    // Use document level for better reliability with higher priority
+    document.addEventListener("keydown", handleKeyDown, { capture: true, passive: false });
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown, { capture: true } as any);
+    };
+  }, [suggestions, selectedIndex, onSelect, onClose, textareaRef]);
 
-  // Click outside to close
+  // Click outside to close - with delay to prevent premature closing
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        onClose();
+      const target = event.target as Node;
+      
+      // Don't close if clicking within our autocomplete container
+      if (containerRef.current && containerRef.current.contains(target)) {
+        return;
       }
+      
+      // Don't close if clicking on the textarea
+      const textarea = textareaRef?.current;
+      if (textarea && textarea.contains(target)) {
+        return;
+      }
+      
+      onClose();
     };
 
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [onClose]);
+    // Small delay to prevent immediate closure when popup appears
+    const timeoutId = setTimeout(() => {
+      document.addEventListener("mousedown", handleClickOutside, true); // Use capture
+    }, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener("mousedown", handleClickOutside, true);
+    };
+  }, [onClose, textareaRef]);
 
   if (suggestions.length === 0) {
     return null;
@@ -95,18 +132,18 @@ export function AllergyAutocomplete({
   return (
     <div
       ref={containerRef}
-      className="fixed z-50"
+      className="absolute z-50"
       style={{
         top: `${position.top}px`,
         left: `${position.left}px`,
-        maxWidth: "320px",
-        minWidth: "280px"
+        width: position.width ? `${position.width}px` : undefined,
+        maxHeight: '240px'
       }}
       data-testid={`allergy-autocomplete-${sectionId}`}
     >
       <Card className="shadow-lg border border-gray-200">
         <CardContent className="p-0">
-          <div className="max-h-64 overflow-y-auto">
+          <div className="overflow-y-auto" style={{ maxHeight: 240 }} role="listbox" aria-label="Allergy suggestions">
             <div className="p-2 bg-orange-50 border-b flex items-center gap-2">
               <AlertTriangle size={14} className="text-orange-600" />
               <span className="text-xs font-medium text-orange-700">Common Allergies</span>
@@ -120,8 +157,16 @@ export function AllergyAutocomplete({
                   "w-full justify-start text-left h-auto py-2 px-3 rounded-none border-b border-gray-50 last:border-b-0",
                   index === selectedIndex && "bg-orange-50 text-orange-900"
                 )}
-                onClick={() => onSelect(allergy)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  e.stopImmediatePropagation();
+                  onSelect(allergy);
+                }}
                 data-testid={`allergy-suggestion-${index}`}
+                role="option"
+                aria-selected={index === selectedIndex}
+                id={`allergy-option-${index}`}
               >
                 <div className="flex flex-col items-start gap-0.5">
                   <span className="font-medium text-sm">{allergy}</span>

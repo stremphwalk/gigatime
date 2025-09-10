@@ -20,7 +20,6 @@ import { useSimpleAuth as useAuth } from "../hooks/useSimpleAuth";
 import { useTranslation } from 'react-i18next';
 
 import { cn } from "@/lib/utils";
-import { ArinoteLogo } from "@/components/arinote-logo";
 import type { Note } from "@shared/schema";
 
 interface SidebarProps {
@@ -75,8 +74,7 @@ export function Sidebar({ onCreateNote, onNoteSelect, selectedNote, isLoading, n
     <div className="w-80 bg-sidebar-grey dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col">
       {/* Header */}
       <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-slate-50/80 via-white to-slate-50/80 dark:bg-gray-800 dark:from-gray-800 dark:via-gray-800 dark:to-gray-800">
-        <div className="flex items-center justify-start space-x-3">
-          <ArinoteLogo size={32} className="flex-shrink-0" />
+        <div className="flex items-center justify-start">
           <h1 className="text-2xl font-bold arinote-gradient tracking-tight">Arinote</h1>
         </div>
       </div>

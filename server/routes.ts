@@ -26,7 +26,7 @@ import session from "express-session";
 } from "../shared/schema.js";
 import { z } from "zod";
 import { eq, or, and, lt, desc } from "drizzle-orm";
-import { MEDICATIONS_SYSTEM_PROMPT, LABS_SYSTEM_PROMPT, PMH_SYSTEM_PROMPT, RUNLIST_SOAP_SYSTEM_PROMPT } from "./ai/prompts.js";
+import { MEDICATIONS_SYSTEM_PROMPT, LABS_SYSTEM_PROMPT, PMH_SYSTEM_PROMPT, RUNLIST_SOAP_SYSTEM_PROMPT, RUNLIST_PREROUND_SYSTEM_PROMPT, RUNLIST_POSTROUND_SYSTEM_PROMPT, RUNLIST_PROGRESS_SYSTEM_PROMPT } from "./ai/prompts.js";
 import { canonicalizeLab, canonicalizeVital, canonicalizeImagingType } from "./ai/canonical.js";
 import { callNovaMicro, isNovaConfigured } from "./ai/nova.js";
 
@@ -2483,7 +2483,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let noteRow;
       if (row.n) {
         // Optimistic locking: when provided, ensure no concurrent update
-        if (expectedUpdatedAtRaw && new Date(row.n.updatedAt).getTime() !== expectedUpdatedAtRaw.getTime()) {
+        if (expectedUpdatedAtRaw && new Date(row.n.updatedAt as any).getTime() !== expectedUpdatedAtRaw.getTime()) {
           return res.status(409).json({ message: 'Conflict: note was updated by another source' });
         }
         const [updated] = await db.update(runListNotes).set(payload).where(eq(runListNotes.id, row.n.id)).returning();
@@ -2763,13 +2763,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/run-list/ai/generate { listPatientId, transcript, mode?: 'prepost'|'full' }
+  // POST /api/run-list/ai/generate { listPatientId, transcript, mode?: 'prepost'|'full'|'preround'|'postround'|'progress' }
   app.post('/api/run-list/ai/generate', requireAuth, async (req: any, res) => {
     try {
       const schema = z.object({
         listPatientId: z.string().uuid(),
         transcript: z.string().min(1),
-        mode: z.enum(['prepost','full']).optional()
+        mode: z.enum(['prepost','full','preround','postround','progress']).optional()
       });
       const { listPatientId, transcript, mode } = schema.parse(req.body || {});
 
@@ -2808,8 +2808,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         `\nReturn strict JSON with {"merged_note": string, "sections": {"Subjective"?: string, "Objective"?: string, "Assessment"?: string, "Plan"?: string}, "structured"?: {"vitals"?: any, "labs"?: any, "imaging"?: any}}`
       ].join('\n');
 
+      // Select specialized system prompt (treat 'full' like complete progress note)
+      const systemPrompt = (
+        workflow === 'preround' ? RUNLIST_PREROUND_SYSTEM_PROMPT :
+        workflow === 'postround' ? RUNLIST_POSTROUND_SYSTEM_PROMPT :
+        (workflow === 'progress' || workflow === 'full') ? RUNLIST_PROGRESS_SYSTEM_PROMPT :
+        RUNLIST_SOAP_SYSTEM_PROMPT
+      );
+
       const { text } = await callNovaMicro({
-        systemPrompt: RUNLIST_SOAP_SYSTEM_PROMPT,
+        systemPrompt,
         userMessage,
         temperature: 0
       });
@@ -2990,7 +2998,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const payload: any = {
         rawText: merged_note,
         structuredSections: { sections, structured: mergedStructured },
-        status: workflow === 'prepost' ? (row.n?.status === 'preround' ? 'postround' : 'preround') : 'complete',
+        status: (
+          workflow === 'prepost' ? (row.n?.status === 'preround' ? 'postround' : 'preround') :
+          workflow === 'preround' ? 'preround' :
+          workflow === 'postround' ? 'postround' :
+          'complete'
+        ),
         updatedAt: new Date(),
         expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000)
       };

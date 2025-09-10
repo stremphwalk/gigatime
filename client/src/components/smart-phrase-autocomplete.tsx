@@ -43,31 +43,47 @@ export function SmartPhraseAutocomplete({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setSelectedIndex(prev => Math.min(prev + 1, filteredPhrases.length - 1));
-      } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setSelectedIndex(prev => Math.max(prev - 1, 0));
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        if (filteredPhrases[selectedIndex]) {
-          const phrase = filteredPhrases[selectedIndex];
-          if (phrase.elements && phrase.elements.length > 0) {
-            // For advanced phrases, pass the phrase object
-            onSelect(phrase);
-          } else {
-            // For text phrases, pass just the content
-            onSelect(phrase.content);
+      if (!filteredPhrases.length) return;
+
+      // Only handle these keys when autocomplete is visible and specifically for our container
+      if (['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes(e.key)) {
+        // Check if the event is happening within our autocomplete context
+        const target = e.target as Element;
+        const isInAutocomplete = target && (
+          target.closest('[data-testid="smart-phrase-autocomplete"]') ||
+          (target as any).dataset?.sectionId // Check if it's a textarea with section id
+        );
+
+        if (isInAutocomplete) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.stopImmediatePropagation(); // Stop other listeners from executing
+          
+          if (e.key === 'ArrowDown') {
+            setSelectedIndex(prev => Math.min(prev + 1, filteredPhrases.length - 1));
+          } else if (e.key === 'ArrowUp') {
+            setSelectedIndex(prev => Math.max(prev - 1, 0));
+          } else if (e.key === 'Enter' || e.key === 'Tab') {
+            if (filteredPhrases[selectedIndex]) {
+              const phrase = filteredPhrases[selectedIndex];
+              if (phrase.elements && phrase.elements.length > 0) {
+                // For advanced phrases, pass the phrase object
+                onSelect(phrase);
+              } else {
+                // For text phrases, pass just the content
+                onSelect(phrase.content);
+              }
+            }
+          } else if (e.key === 'Escape') {
+            onClose();
           }
         }
-      } else if (e.key === 'Escape') {
-        onClose();
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    // Use document level for better reliability with higher priority
+    document.addEventListener('keydown', handleKeyDown, { capture: true, passive: false });
+    return () => document.removeEventListener('keydown', handleKeyDown, { capture: true } as any);
   }, [filteredPhrases, selectedIndex, onSelect, onClose]);
 
   if (filteredPhrases.length === 0) {
@@ -79,8 +95,7 @@ export function SmartPhraseAutocomplete({
       className="absolute bg-white border border-gray-200 rounded-lg shadow-lg mt-1 z-50 min-w-[300px] max-w-[400px]"
       style={{ 
         top: position.top + 'px', 
-        left: position.left + 'px',
-        position: 'fixed'
+        left: position.left + 'px'
       }}
       data-testid="smart-phrase-autocomplete"
     >
@@ -94,7 +109,9 @@ export function SmartPhraseAutocomplete({
                 ? "bg-professional-blue text-white" 
                 : "hover:bg-gray-100"
             )}
-            onClick={() => {
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
               if (phrase.elements && phrase.elements.length > 0) {
                 onSelect(phrase);
               } else {

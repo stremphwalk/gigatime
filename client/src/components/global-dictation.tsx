@@ -204,16 +204,33 @@ export function GlobalDictation() {
         const before = value.substring(0, startForReplace);
         const after = value.substring(a.caretPos || 0);
         const newValue = before + text + after;
-        input.value = newValue;
+
+        // Use the native setter so React tracks the change
+        try {
+          const proto = a.type === 'textarea' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+          const valueSetter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+          if (valueSetter) {
+            valueSetter.call(input, newValue);
+          } else {
+            (input as any).value = newValue;
+          }
+        } catch {
+          (input as any).value = newValue;
+        }
         const newCaret = Math.min((before + text).length, newValue.length);
         try { input.setSelectionRange(newCaret, newCaret); } catch {}
         // Update anchor tracking for this session
         a.caretPos = newCaret;
         a.lastInterim = isInterim ? text : '';
         sessionAnchorsRef.current.set(session, a);
-        // Trigger React change
-        const event = new Event('input', { bubbles: true });
-        input.dispatchEvent(event);
+        // Trigger React change with a proper InputEvent
+        try {
+          const evt = new InputEvent('input', { bubbles: true, cancelable: true, data: text as any, inputType: isInterim ? 'insertCompositionText' : 'insertText' } as any);
+          input.dispatchEvent(evt);
+        } catch {
+          const fallbackEvt = new Event('input', { bubbles: true });
+          input.dispatchEvent(fallbackEvt);
+        }
         // Update indicator after insertion
         setTimeout(() => {
           const newPosition = getCaretPosition();
@@ -234,6 +251,14 @@ export function GlobalDictation() {
           selection.addRange(range);
           a.lastInterim = isInterim ? text : '';
           sessionAnchorsRef.current.set(session, a);
+          // Trigger React change
+          try {
+            const evt = new InputEvent('input', { bubbles: true, cancelable: true, data: text as any, inputType: isInterim ? 'insertCompositionText' : 'insertText' } as any);
+            (a.element as any)?.dispatchEvent(evt);
+          } catch {
+            const fallbackEvt = new Event('input', { bubbles: true });
+            (a.element as any)?.dispatchEvent(fallbackEvt);
+          }
           setTimeout(() => {
             const newPosition = getCaretPosition();
             if (newPosition.element) setCaretPosition(newPosition);

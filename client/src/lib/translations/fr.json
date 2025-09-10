@@ -135,8 +135,17 @@
     "invite": "Inviter des membres",
     "leave": "Quitter l'équipe",
     "manage": "Gérer l'équipe"
+  },
+  "smart": {
+    "smartOptions": "Options intelligentes",
+    "overlayAriaLabel": "Options de phrase intelligente",
+    "noOptions": "Aucune option",
+    "selectDate": "Sélectionner une date",
+    "today": "Aujourd'hui",
+    "yesterday": "Hier"
   }
 }
+
 
 
 

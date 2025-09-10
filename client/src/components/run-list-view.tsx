@@ -3,10 +3,12 @@ import { useRunList } from "@/hooks/use-run-list";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Copy, ChevronDown, ChevronUp, ArrowUp, ArrowDown, Mic, Bot, Settings as SettingsIcon } from "lucide-react";
+import { Plus, Copy, ChevronDown, ChevronUp, ArrowUp, ArrowDown, Mic, Bot, Settings as SettingsIcon, Check, Loader2 } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useDictation } from "@/hooks/useDictation";
-import { isRunListDictationV2Enabled, isRunListDictationDebugEnabled } from "@/lib/flags";
+import { isRunListDictationV2Enabled, isRunListDictationDebugEnabled, isRunListPillsEnabled } from "@/lib/flags";
 import { DndContext, PointerSensor, useSensor, useSensors, closestCenter, DragEndEvent } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -20,9 +22,10 @@ function statusBadge(status?: string) {
   return <Badge variant="outline">Draft</Badge>;
 }
 
-export function RunListView() {
+export function RunListView({ onDirtyChange }: { onDirtyChange?: (dirty: boolean) => void } = {}) {
   const RUNLIST_DICTATION_V2 = isRunListDictationV2Enabled();
   const RUNLIST_DEBUG = isRunListDictationDebugEnabled();
+  const RUNLIST_PILLS = isRunListPillsEnabled();
   const { data, isLoading, addPatient, reorderPatients, updatePatient, archivePatient, saveNote, refetch, updateRunListMode } = useRunList({ carryForward: false, autoclone: false });
   const { toast } = useToast();
   const runList = data?.runList;
@@ -36,10 +39,16 @@ export function RunListView() {
   const [dirtyMap, setDirtyMap] = useState<Record<string, boolean>>({});
   const prevLocalNotesRef = useRef<Record<string, string>>({});
 
+  // Add Patient (alias) dialog state
+  const [showAliasModal, setShowAliasModal] = useState(false);
+  const [newAlias, setNewAlias] = useState("");
+  const [isAddingPatient, setIsAddingPatient] = useState(false);
+
   // AI dictation state
   const { isListening, finalTranscript, interimTranscript, startDictation, stopDictation, sessionId, audioLevel } = useDictation();
   const [aiRecordingFor, setAiRecordingFor] = useState<string | null>(null);
   const [aiProcessingFor, setAiProcessingFor] = useState<string | null>(null);
+  const aiTargetModeRef = useRef<{ patientId: string; mode: 'preround' | 'postround' | 'full' } | null>(null);
   const [liveDictatingFor, setLiveDictatingFor] = useState<string | null>(null);
   const lastInterimRef = useRef<string>('');
   const lastSessionRef = useRef<string>('');
@@ -179,10 +188,16 @@ const insertTextAtCaret = useCallback((rawText: string, isInterim: boolean, sess
     if (!selectedPatientId && patients[0]) setSelectedPatientId(patients[0].id);
   }, [patients.length]);
 
-  // Keep a ref of latest localNotes for beforeunload persistence
+  // Keep a ref of latest localNotes for persistence
   useEffect(() => { localNotesRef.current = localNotes; }, [localNotes]);
+
+  // Propagate dirty state to parent for modern leave confirmation
+  useEffect(() => {
+    const anyDirty = Object.values(dirtyMap || {}).some(Boolean);
+    onDirtyChange?.(anyDirty);
+  }, [dirtyMap, onDirtyChange]);
   
-  // CRITICAL: Periodic backup of all textarea states to prevent any possible loss
+  // Periodic backup of all textarea states (no native prompt)
   useEffect(() => {
     const interval = setInterval(() => {
       // Capture state from all visible textareas
@@ -233,31 +248,41 @@ const insertTextAtCaret = useCallback((rawText: string, isInterim: boolean, sess
     prevLocalNotesRef.current = localNotes;
   }, [localNotes, RUNLIST_DEBUG]);
   useEffect(() => {
-    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      // Persist drafts
+    const handleBeforeUnload = (_e: BeforeUnloadEvent) => {
+      // Persist drafts only; confirmation handled by app-level modal
       const entries = Object.entries(localNotesRef.current || {});
       for (const [lid, value] of entries) {
         try { localStorage.setItem(`runlist_note_draft_${lid}`, value || ''); } catch {}
       }
-      // Warn if there are unsaved changes
-      const hasDirty = Object.values(dirtyMap).some(Boolean);
-      if (hasDirty) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [dirtyMap]);
+  }, []);
 
   const onAddPatient = async () => {
     if (!runList) return;
-    const alias = prompt("Optional alias (PHI-safe)") || undefined;
+    setNewAlias("");
+    setShowAliasModal(true);
+  };
+
+  const confirmAddPatient = async () => {
+    if (!runList || isAddingPatient) return;
+    const aliasVal = (newAlias || "").trim();
+    const warn = phiAliasWarning(aliasVal);
+    // Allow proceed even with warning; just notify
+    if (warn) {
+      toast({ title: warn, variant: 'destructive' });
+    }
     try {
-      await addPatient({ runListId: runList.id, alias });
+      setIsAddingPatient(true);
+      await addPatient({ runListId: runList.id, alias: aliasVal ? aliasVal : undefined });
+      setShowAliasModal(false);
+      setNewAlias("");
       toast({ title: "Patient added" });
     } catch {
       toast({ title: "Failed to add patient", variant: "destructive" });
+    } finally {
+      setIsAddingPatient(false);
     }
   };
 
@@ -525,7 +550,7 @@ const insertTextAtCaret = useCallback((rawText: string, isInterim: boolean, sess
     return String(finalTranscript || '').trim();
   };
 
-  const startAiRecording = async (patientId: string) => {
+  const startAiRecording = async (patientId: string, mode: 'preround' | 'postround' | 'full') => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 48000, channelCount: 1 } });
       streamRef.current = stream;
@@ -541,7 +566,6 @@ const insertTextAtCaret = useCallback((rawText: string, isInterim: boolean, sess
           const listPatientId = p.note?.listPatientId || p.id;
           setAiProcessingFor(patientId);
           const transcript = await transcribeBlob(blob);
-          const mode = (data?.runList?.mode || 'prepost') as 'prepost' | 'full';
           const res = await fetch('/api/run-list/ai/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -552,9 +576,11 @@ const insertTextAtCaret = useCallback((rawText: string, isInterim: boolean, sess
           const updatedText = json?.note?.rawText || '';
           if (updatedText) {
             setNoteValue(listPatientId, updatedText);
-            const p = patients.find(x => (x.note?.listPatientId || x.id) === listPatientId);
-            const expectedUpdatedAt = p?.note?.updatedAt;
-            await saveNote({ listPatientId, rawText: updatedText, ...(expectedUpdatedAt ? { expectedUpdatedAt } as any : {}) });
+            const p2 = patients.find(x => (x.note?.listPatientId || x.id) === listPatientId);
+            const expectedUpdatedAt = p2?.note?.updatedAt;
+            // Persist status explicitly based on mode to drive pill checks
+            const status = mode === 'preround' ? 'preround' : mode === 'postround' ? 'postround' : 'complete';
+            await saveNote({ listPatientId, rawText: updatedText, status, ...(expectedUpdatedAt ? { expectedUpdatedAt } as any : {}) });
             toast({ title: 'AI note updated' });
           }
         } catch (e) {
@@ -568,6 +594,7 @@ const insertTextAtCaret = useCallback((rawText: string, isInterim: boolean, sess
       mediaRecorderRef.current = mr;
       mr.start();
       setAiRecordingFor(patientId);
+      aiTargetModeRef.current = { patientId, mode };
     } catch (e) {
       toast({ title: 'Mic access denied', variant: 'destructive' });
     }
@@ -837,9 +864,16 @@ useEffect(() => {
         <>
       {/* Left patients sidebar */}
       <div className="w-64 border-r border-slate-200 dark:border-gray-800 p-3 space-y-2 bg-white/70 dark:bg-gray-900/70">
-        <div className="flex items-center justify-between mb-2">
-          <div className="font-medium">Run the list</div>
-          <Button size="sm" onClick={onAddPatient}><Plus className="w-4 h-4" /></Button>
+        <div className="bg-slate-50/50 dark:bg-gray-800 rounded-lg shadow-sm border border-slate-200/60 dark:border-gray-700">
+          <div className="w-full p-3 text-left flex items-center justify-between rounded-t-lg">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="font-medium text-gray-900 dark:text-gray-100">Run the list</span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 dark:bg-gray-800 dark:text-gray-300 border border-slate-200 dark:border-gray-700">{patients.length}</span>
+            </div>
+            <Button size="sm" variant="ghost" className="h-7" onClick={onAddPatient} title="Add patient">
+              <Plus className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
         <div className="space-y-1 overflow-y-auto max-h-[calc(100vh-140px)]">
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
@@ -852,7 +886,49 @@ useEffect(() => {
                   label={patientLabel(idx, p.alias || null)}
                   status={p.note?.status}
                   selected={selectedPatientId === p.id}
-                  onSelect={() => { setSelectedPatientId(p.id); document.getElementById(`patientCard-${p.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}
+                  onSelect={() => {
+                    setSelectedPatientId(p.id);
+                    document.getElementById(`patientCard-${p.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    const listPatientId = p.note?.listPatientId || p.id;
+                    const isCollapsed = collapsed[p.id] || false;
+                    if (isCollapsed) {
+                      // Open and focus
+                      setCollapsed(prev => ({ ...prev, [p.id]: false }));
+                      setTimeout(() => {
+                        const ta = document.querySelector(`textarea[data-list-patient-id="${listPatientId}"]`) as HTMLTextAreaElement | null;
+                        if (ta) {
+                          ta.focus();
+                          const len = (ta.value || '').length;
+                          try { ta.setSelectionRange(len, len); } catch {}
+                        }
+                      }, 0);
+                    } else {
+                      // Collapse; if dictating for this patient, finalize and save before collapse
+                      if (
+                        RUNLIST_DICTATION_V2 &&
+                        isListening &&
+                        liveDictatingFor === listPatientId &&
+                        !isBufferingRef.current
+                      ) {
+                        // Capture text state before finalizing
+                        const textarea = document.querySelector(`textarea[data-list-patient-id="${listPatientId}"]`) as HTMLTextAreaElement;
+                        if (textarea) captureAndSyncTextareaState(textarea);
+                        isBufferingRef.current = true;
+                        if (bufferTimeoutRef.current) clearTimeout(bufferTimeoutRef.current);
+                        bufferTimeoutRef.current = setTimeout(async () => {
+                          try { stopDictation(); } catch {}
+                          try { await immediateSaveByListPatientId(listPatientId); } catch {}
+                          lastInterimRef.current = '';
+                          lastSessionRef.current = '';
+                          lastCaretPosRef.current = null;
+                          isBufferingRef.current = false;
+                          setCollapsed(prev => ({ ...prev, [p.id]: true }));
+                        }, 1000);
+                      } else {
+                        setCollapsed(prev => ({ ...prev, [p.id]: true }));
+                      }
+                    }
+                  }}
                 />
               ))}
             </SortableContext>
@@ -862,9 +938,44 @@ useEffect(() => {
 
       {/* Main content: all patient notes expanded */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="text-lg font-semibold">Patients ({patients.length})</div>
+        <div className="flex items-center justify-between bg-slate-50/50 dark:bg-gray-800 rounded-lg shadow-sm border border-slate-200/60 dark:border-gray-700 px-3 py-2">
+          <div className="flex items-center gap-3">
+            <span className="font-medium text-gray-900 dark:text-gray-100">Patients</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 dark:bg-gray-800 dark:text-gray-300 border border-slate-200 dark:border-gray-700">{patients.length}</span>
+          </div>
           <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              title="Collapse all notes"
+              onClick={() => {
+                const next: Record<string, boolean> = {};
+                for (const p of patients) next[p.id] = true;
+                setCollapsed(next);
+              }}
+            >Collapse all</Button>
+            <Button
+              variant="outline"
+              size="sm"
+              title="Expand all notes"
+              onClick={() => {
+                const next: Record<string, boolean> = {};
+                for (const p of patients) next[p.id] = false;
+                setCollapsed(next);
+                // Focus first visible textarea for convenience
+                setTimeout(() => {
+                  const first = patients[0];
+                  if (!first) return;
+                  const lpId = first.note?.listPatientId || first.id;
+                  const ta = document.querySelector(`textarea[data-list-patient-id="${lpId}"]`) as HTMLTextAreaElement | null;
+                  if (ta) {
+                    ta.focus();
+                    const len = (ta.value || '').length;
+                    try { ta.setSelectionRange(len, len); } catch {}
+                  }
+                }, 0);
+              }}
+            >Expand all</Button>
             <Button
               variant="default"
               size="sm"
@@ -930,6 +1041,17 @@ useEffect(() => {
                         }
                       }
                       setCollapsed(prev => ({ ...prev, [p.id]: !isCollapsed }));
+                      // If opening from collapsed, focus textarea and set caret at end
+                      if (!willCollapse) {
+                        setTimeout(() => {
+                          const ta = document.querySelector(`textarea[data-list-patient-id="${listPatientId}"]`) as HTMLTextAreaElement | null;
+                          if (ta) {
+                            ta.focus();
+                            const len = (ta.value || '').length;
+                            try { ta.setSelectionRange(len, len); } catch {}
+                          }
+                        }, 0);
+                      }
                     }}
                     className="text-gray-500 hover:text-gray-700"
                     title={isCollapsed ? 'Expand' : 'Collapse'}
@@ -937,23 +1059,81 @@ useEffect(() => {
                     {isCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
                   </button>
                   <span className="font-medium truncate">{label}</span>
+                  <div className="ml-2 flex items-center gap-2">
+                    {!RUNLIST_PILLS && (
+                      <>
+                        {/* Legacy: keep a tiny status badge for fallback */}
                   <span>{statusBadge(p.note?.status)}</span>
-                  <select
-                    value={(p.note?.status || 'draft')}
-                    onChange={async (e) => {
-                      const listPatientId = p.note?.listPatientId || p.id;
-                      try {
-                        await saveNote({ listPatientId, status: e.target.value });
-                      } catch {}
-                    }}
-                    className="ml-2 h-7 text-xs border border-slate-200 dark:border-gray-700 rounded bg-white dark:bg-gray-900 px-1"
-                    title="Set status"
-                  >
-                    <option value="draft">Draft</option>
-                    <option value="preround">Pre</option>
-                    <option value="postround">Post</option>
-                    <option value="complete">Done</option>
-                  </select>
+                      </>
+                    )}
+                    {RUNLIST_PILLS && (
+                      <>
+                    {/* Pre pill */}
+                    <TooltipProvider delayDuration={100}>
+                    <Tooltip>
+                    <TooltipTrigger asChild>
+                    <button
+                      className={`h-7 px-2 rounded-full text-xs font-medium border transition-colors ${['preround','postround','complete'].includes(String(p.note?.status||'draft')) ? 'opacity-100' : 'opacity-90'} bg-[color:var(--brand-50)] text-[color:var(--brand-700)] dark:bg-blue-900/30 dark:text-blue-200 border-[color:var(--brand-200)] dark:border-blue-700 flex items-center gap-1 ${aiProcessingFor===p.id ? 'opacity-70' : ''}`}
+                      title="Pre-rounding"
+                      type="button"
+                      onClick={async () => {
+                        if (aiProcessingFor) return;
+                        if (aiRecordingFor === p.id) { stopAiRecording(); return; }
+                        await startAiRecording(p.id, 'preround');
+                      }}
+                    >
+                      {aiRecordingFor===p.id && aiTargetModeRef.current?.mode==='preround' ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Pre'}
+                      {(String(p.note?.status||'draft') === 'preround') && <Check className="w-3 h-3 text-green-500" />}
+                    </button>
+                    </TooltipTrigger>
+                    <TooltipContent>Pre-round: capture EHR-centric updates</TooltipContent>
+                    </Tooltip>
+                    </TooltipProvider>
+                    {/* Post pill */}
+                    <TooltipProvider delayDuration={100}>
+                    <Tooltip>
+                    <TooltipTrigger asChild>
+                    <button
+                      className={`h-7 px-2 rounded-full text-xs font-medium border transition-colors ${['postround','complete'].includes(String(p.note?.status||'draft')) ? 'opacity-100' : 'opacity-90'} bg-[color:var(--brand-50)] text-[color:var(--brand-700)] dark:bg-blue-900/30 dark:text-blue-200 border-[color:var(--brand-200)] dark:border-blue-700 flex items-center gap-1 ${aiProcessingFor===p.id ? 'opacity-70' : ''}`}
+                      title="Post-rounding"
+                      type="button"
+                      onClick={async () => {
+                        if (aiProcessingFor) return;
+                        if (aiRecordingFor === p.id) { stopAiRecording(); return; }
+                        await startAiRecording(p.id, 'postround');
+                      }}
+                    >
+                      {aiRecordingFor===p.id && aiTargetModeRef.current?.mode==='postround' ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Post'}
+                      {(String(p.note?.status||'draft') === 'postround') && <Check className="w-3 h-3 text-green-500" />}
+                    </button>
+                    </TooltipTrigger>
+                    <TooltipContent>Post-round: integrate bedside findings and plan</TooltipContent>
+                    </Tooltip>
+                    </TooltipProvider>
+                    {/* Full pill */}
+                    <TooltipProvider delayDuration={100}>
+                    <Tooltip>
+                    <TooltipTrigger asChild>
+                    <button
+                      className={`h-7 px-2 rounded-full text-xs font-medium border transition-colors ${String(p.note?.status||'draft') === 'complete' ? 'opacity-100' : 'opacity-90'} bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-200 border-violet-200 dark:border-violet-700 flex items-center gap-1 ${aiProcessingFor===p.id ? 'opacity-70' : ''}`}
+                      title="Full note"
+                      type="button"
+                      onClick={async () => {
+                        if (aiProcessingFor) return;
+                        if (aiRecordingFor === p.id) { stopAiRecording(); return; }
+                        await startAiRecording(p.id, 'full');
+                      }}
+                    >
+                      {aiRecordingFor===p.id && aiTargetModeRef.current?.mode==='full' ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Full'}
+                      {String(p.note?.status||'draft') === 'complete' && <Check className="w-3 h-3 text-green-500" />}
+                    </button>
+                    </TooltipTrigger>
+                    <TooltipContent>Full: produce a complete progress note</TooltipContent>
+                    </Tooltip>
+                    </TooltipProvider>
+                      </>
+                    )}
+                  </div>
                   <Input
                     value={editingAlias[p.id] ?? (p.alias || '')}
                     onChange={(e) => setEditingAlias(prev => ({ ...prev, [p.id]: e.target.value }))}
@@ -970,102 +1150,7 @@ useEffect(() => {
                 </div>
                 <div className="flex items-center gap-2">
                   {/* Live dictation: focus textarea and press Alt */}
-                  <Button
-variant={liveDictatingFor === listPatientId ? 'default' : 'ghost'}
-                    size="sm"
-                    title="Live dictation (Alt)"
-                    onClick={async () => {
-                      try {
-if (!RUNLIST_DICTATION_V2) {
-                          try {
-                            if (isListening) {
-                              stopDictation();
-                            } else {
-                              const ta = document.querySelector(`textarea[data-list-patient-id=\"${listPatientId}\"]`) as HTMLTextAreaElement | null;
-                              if (ta) ta.focus();
-                              await startDictation();
-                            }
-                          } catch {}
-                          return;
-                        }
-                        if (liveDictatingFor === listPatientId) {
-                          stopDictation();
-                          // Immediate save when stopping via button
-                          try { await immediateSaveByListPatientId(listPatientId); } catch {}
-                          setLiveDictatingFor(null);
-                          // Clear interim tracking
-                          lastInterimRef.current = '';
-                          lastSessionRef.current = '';
-                          lastCaretPosRef.current = null;
-                        } else {
-                          // Focus this patient's textarea and start
-                          const ta = document.querySelector(`textarea[data-list-patient-id="${listPatientId}"]`) as HTMLTextAreaElement | null;
-                          if (ta) {
-                            ta.focus();
-                            const len = (ta.value || '').length;
-                            try { ta.setSelectionRange(len, len); } catch {}
-                          }
-                          await startDictation();
-                          setLiveDictatingFor(listPatientId);
-                          lastInterimRef.current = '';
-                          lastSessionRef.current = '';
-                        }
-                      } catch {}
-                    }}
-                  >
-                    <Mic className="w-4 h-4 mr-1" />Live
-                  </Button>
-                  {/* AI dictation: start/stop recording then AI-merge */}
-                  <Button
-                    variant={aiRecordingFor === p.id ? 'default' : 'outline'}
-                    size="sm"
-                    title={aiRecordingFor === p.id ? 'Stop AI recording' : 'AI dictation (record, then generate)'}
-                    onClick={async () => {
-                      if (aiProcessingFor) return; // busy
-                      if (aiRecordingFor === p.id) {
-                        stopAiRecording();
-                      } else if (!aiRecordingFor) {
-                        await startAiRecording(p.id);
-                      }
-                    }}
-                    disabled={!!aiProcessingFor && aiProcessingFor !== p.id}
-                  >
-                    <Bot className={`w-4 h-4 mr-1 ${aiProcessingFor === p.id ? 'animate-spin' : ''}`} />
-                    {aiRecordingFor === p.id ? 'Stop' : aiProcessingFor === p.id ? 'Processing' : 'AI'}
-                  </Button>
-                  {/* Generate Full SOAP from current content */}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    title="Generate full SOAP"
-                    onClick={async () => {
-                      const listPatientId = p.note?.listPatientId || p.id;
-                      try {
-                        setAiProcessingFor(p.id);
-                        const transcript = (localNotes[listPatientId] ?? p.note?.rawText ?? '').trim();
-                        if (!transcript) { toast({ title: 'Nothing to generate from', variant: 'destructive' }); setAiProcessingFor(null); return; }
-                        const res = await fetch('/api/run-list/ai/generate', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ listPatientId, transcript, mode: 'full' })
-                        });
-                        if (!res.ok) throw new Error('Generation failed');
-                        const json = await res.json();
-                        const updatedText = json?.note?.rawText || '';
-                        if (updatedText) {
-                          setNoteValue(listPatientId, updatedText);
-                          const p0 = patients.find(x => (x.note?.listPatientId || x.id) === listPatientId);
-                          const expectedUpdatedAt0 = p0?.note?.updatedAt;
-                          await saveNote({ listPatientId, rawText: updatedText, ...(expectedUpdatedAt0 ? { expectedUpdatedAt: expectedUpdatedAt0 } as any : {}) });
-                          toast({ title: 'Full SOAP updated' });
-                        }
-                      } catch {
-                        toast({ title: 'Full SOAP failed', variant: 'destructive' });
-                      } finally {
-                        setAiProcessingFor(null);
-                      }
-                    }}
-                  >Full</Button>
+                  {/* Removed Live/AI/Full buttons; pills above will drive flows in Phase 2 */}
                   <Button variant="outline" size="sm" onClick={() => onCopyNote(p.id, label)}><Copy className="w-4 h-4" /></Button>
                   <div className="flex items-center gap-1 ml-2">
                     <Button variant="ghost" size="sm" onClick={() => onReorder(idx, Math.max(0, idx - 1))} title="Move up"><ArrowUp className="w-4 h-4" /></Button>
@@ -1290,6 +1375,34 @@ if (!RUNLIST_DICTATION_V2) {
           </div>
         </div>
       )}
+
+      {/* Add Patient Alias Dialog */}
+      <Dialog open={showAliasModal} onOpenChange={(o) => { if (!isAddingPatient) setShowAliasModal(o); }}>
+        <DialogContent className="sm:max-w-[420px]">
+          <DialogHeader>
+            <DialogTitle>Add patient</DialogTitle>
+            <DialogDescription>Optionally set a PHI-safe alias. You can edit this later.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Alias (optional)</label>
+            <Input
+              autoFocus
+              value={newAlias}
+              maxLength={16}
+              placeholder="e.g., Room 3 A, Bed 12"
+              onChange={(e) => setNewAlias(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); confirmAddPatient(); } }}
+            />
+            {!!newAlias.trim() && phiAliasWarning(newAlias) && (
+              <div className="text-xs text-red-600 dark:text-red-400">{phiAliasWarning(newAlias) as string}</div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAliasModal(false)} disabled={isAddingPatient}>Cancel</Button>
+            <Button onClick={confirmAddPatient} disabled={isAddingPatient}>{isAddingPatient ? 'Adding…' : 'Add patient'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

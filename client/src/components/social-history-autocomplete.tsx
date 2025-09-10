@@ -7,10 +7,11 @@ import { useAutocompleteItems } from "@/hooks/use-autocomplete-items";
 
 interface SocialHistoryAutocompleteProps {
   query: string;
-  position: { top: number; left: number };
+  position: { top: number; left: number; width?: number };
   onSelect: (formatted: string) => void;
   onClose: () => void;
   sectionId: string;
+  textareaRef?: React.RefObject<HTMLTextAreaElement>;
 }
 
 interface SocialHistoryOption {
@@ -26,7 +27,8 @@ export function SocialHistoryAutocomplete({
   position,
   onSelect,
   onClose,
-  sectionId
+  sectionId,
+  textareaRef
 }: SocialHistoryAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<SocialHistoryOption[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -121,44 +123,79 @@ export function SocialHistoryAutocomplete({
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!suggestions.length) return;
 
-      switch (e.key) {
-        case "ArrowDown":
+      // Only handle these keys when autocomplete is visible and specifically for our container
+      if (['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes(e.key)) {
+        // Check if the event is happening within our autocomplete context
+        const target = e.target as Element;
+        const isInAutocomplete = target && (
+          containerRef.current?.contains(target) ||
+          target.closest('[data-testid*="social-history-autocomplete"]') ||
+          (textareaRef?.current && textareaRef.current.contains(target))
+        );
+
+        if (isInAutocomplete) {
           e.preventDefault();
-          setSelectedIndex(prev => (prev + 1) % suggestions.length);
-          break;
-        case "ArrowUp":
-          e.preventDefault();
-          setSelectedIndex(prev => (prev - 1 + suggestions.length) % suggestions.length);
-          break;
-        case "Enter":
-        case "Tab":
-          e.preventDefault();
-          if (suggestions[selectedIndex]) {
-            const selected = suggestions[selectedIndex];
-            onSelect(selected.format(query));
+          e.stopPropagation();
+          e.stopImmediatePropagation(); // Stop other listeners from executing
+          
+          switch (e.key) {
+            case "ArrowDown":
+              setSelectedIndex(prev => (prev + 1) % suggestions.length);
+              break;
+            case "ArrowUp":
+              setSelectedIndex(prev => (prev - 1 + suggestions.length) % suggestions.length);
+              break;
+            case "Enter":
+            case "Tab":
+              if (suggestions[selectedIndex]) {
+                const selected = suggestions[selectedIndex];
+                onSelect(selected.format(query));
+              }
+              break;
+            case "Escape":
+              onClose();
+              break;
           }
-          break;
-        case "Escape":
-          onClose();
-          break;
+        }
       }
     };
 
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [suggestions, selectedIndex, onSelect, onClose, query]);
+    // Use document level for better reliability with higher priority
+    document.addEventListener("keydown", handleKeyDown, { capture: true, passive: false });
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown, { capture: true } as any);
+    };
+  }, [suggestions, selectedIndex, onSelect, onClose, query, textareaRef]);
 
-  // Click outside to close
+  // Click outside to close - with delay to prevent premature closing
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        onClose();
+      const target = event.target as Node;
+      
+      // Don't close if clicking within our autocomplete container
+      if (containerRef.current && containerRef.current.contains(target)) {
+        return;
       }
+      
+      // Don't close if clicking on the textarea
+      const textarea = textareaRef?.current;
+      if (textarea && textarea.contains(target)) {
+        return;
+      }
+      
+      onClose();
     };
 
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [onClose]);
+    // Small delay to prevent immediate closure when popup appears
+    const timeoutId = setTimeout(() => {
+      document.addEventListener("mousedown", handleClickOutside, true); // Use capture
+    }, 100);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener("mousedown", handleClickOutside, true);
+    };
+  }, [onClose, textareaRef]);
 
   if (suggestions.length === 0) {
     return null;
@@ -167,18 +204,18 @@ export function SocialHistoryAutocomplete({
   return (
     <div
       ref={containerRef}
-      className="fixed z-50"
+      className="absolute z-50"
       style={{
         top: `${position.top}px`,
         left: `${position.left}px`,
-        maxWidth: "320px",
-        minWidth: "280px"
+        width: position.width ? `${position.width}px` : undefined,
+        maxHeight: '240px'
       }}
       data-testid={`social-history-autocomplete-${sectionId}`}
     >
       <Card className="shadow-lg border border-gray-200">
         <CardContent className="p-0">
-          <div className="max-h-64 overflow-y-auto">
+          <div className="overflow-y-auto" style={{ maxHeight: 240 }} role="listbox" aria-label="Social history suggestions">
             <div className="p-2 bg-[color:var(--brand-50)] border-b flex items-center gap-2">
               <Wine size={14} className="text-[color:var(--brand-700)]" />
               <span className="text-xs font-medium text-[color:var(--brand-700)]">Social History</span>
@@ -192,8 +229,16 @@ export function SocialHistoryAutocomplete({
                   "w-full justify-start text-left h-auto py-2 px-3 rounded-none border-b border-gray-50 last:border-b-0",
                   index === selectedIndex && "bg-[color:var(--brand-50)] text-slate-900"
                 )}
-                onClick={() => onSelect(option.format(query))}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  e.nativeEvent.stopImmediatePropagation();
+                  onSelect(option.format(query));
+                }}
                 data-testid={`social-history-suggestion-${index}`}
+                role="option"
+                aria-selected={index === selectedIndex}
+                id={`social-history-option-${index}`}
               >
                 <div className="flex items-center gap-2 w-full">
                   <option.icon size={16} className="text-[color:var(--brand-700)] flex-shrink-0" />

@@ -9,7 +9,7 @@ interface MedicalConditionAutocompleteProps {
   textareaRef: React.RefObject<HTMLTextAreaElement>;
   isVisible: boolean;
   query: string;
-  position: { top: number; left: number };
+  position: { top: number; left: number; width?: number };
   cursorPosition: number;
   onSelect: (condition: string, cursorPosition: number) => void;
   onClose: () => void;
@@ -72,46 +72,83 @@ export function MedicalConditionAutocomplete({
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (!isVisible || suggestions.length === 0) return;
 
-    switch (e.key) {
-      case 'ArrowDown':
-        e.preventDefault();
-        setSelectedIndex(prev => (prev + 1) % suggestions.length);
-        break;
-      case 'ArrowUp':
-        e.preventDefault();
-        setSelectedIndex(prev => prev === 0 ? suggestions.length - 1 : prev - 1);
-        break;
-      case 'Enter':
-        e.preventDefault();
-        if (suggestions[selectedIndex]) {
-          onSelect(suggestions[selectedIndex], cursorPosition);
-        }
-        break;
-      case 'Tab':
-        e.preventDefault();
-        if (suggestions[selectedIndex]) {
-          onSelect(suggestions[selectedIndex], cursorPosition);
-        }
-        break;
-      case 'Escape':
-        e.preventDefault();
-        onClose();
-        break;
-    }
-  }, [isVisible, suggestions, selectedIndex, onSelect, onClose]);
+    // Only handle these keys when autocomplete is visible and specifically for our container
+    if (['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes(e.key)) {
+      // Check if the event is happening within our autocomplete context
+      const target = e.target as Element;
+      const isInAutocomplete = target && (
+        containerRef.current?.contains(target) ||
+        target.closest('[data-testid*="medical-condition-autocomplete"]') ||
+        (textareaRef?.current && textareaRef.current.contains(target))
+      );
 
-  // Attach keyboard event listener
+      if (isInAutocomplete) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation(); // Stop other listeners from executing
+        
+        switch (e.key) {
+          case 'ArrowDown':
+            setSelectedIndex(prev => (prev + 1) % suggestions.length);
+            break;
+          case 'ArrowUp':
+            setSelectedIndex(prev => prev === 0 ? suggestions.length - 1 : prev - 1);
+            break;
+          case 'Enter':
+            if (suggestions[selectedIndex]) {
+              onSelect(suggestions[selectedIndex], cursorPosition);
+            }
+            break;
+          case 'Tab':
+            if (suggestions[selectedIndex]) {
+              onSelect(suggestions[selectedIndex], cursorPosition);
+            }
+            break;
+          case 'Escape':
+            onClose();
+            break;
+        }
+      }
+    }
+  }, [isVisible, suggestions, selectedIndex, onSelect, onClose, cursorPosition, textareaRef]);
+
+  // Attach keyboard event listener at document level for better reliability
   useEffect(() => {
-    if (isVisible && textareaRef.current) {
-      textareaRef.current.addEventListener('keydown', handleKeyDown);
+    if (isVisible) {
+      document.addEventListener('keydown', handleKeyDown, true); // Use capture phase
       return () => {
-        textareaRef.current?.removeEventListener('keydown', handleKeyDown);
+        document.removeEventListener('keydown', handleKeyDown, true);
       };
     }
-  }, [isVisible, handleKeyDown, textareaRef]);
+  }, [isVisible, handleKeyDown]);
+
+  // Click outside to close - with delay to prevent premature closing
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (containerRef.current && !containerRef.current.contains(target)) {
+        // Check if clicking on the textarea - if so, don't close
+        const textarea = textareaRef.current;
+        if (textarea && textarea.contains(target)) {
+          return; // Don't close if clicking on textarea
+        }
+        // Small delay to prevent closing when clicking on the textarea
+        setTimeout(() => {
+          onClose();
+        }, 100);
+      }
+    };
+
+    if (isVisible) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isVisible, onClose, textareaRef]);
 
   // Handle mouse selection
-  const handleMouseSelect = (condition: string, index: number) => {
+  const handleMouseSelect = (condition: string, index: number, e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
     setSelectedIndex(index);
     onSelect(condition, cursorPosition);
   };
@@ -123,15 +160,15 @@ export function MedicalConditionAutocomplete({
   return (
     <div
       ref={containerRef}
-      className="fixed z-50"
+      className="absolute z-50"
       style={{
         top: position.top,
         left: position.left,
-        maxWidth: '300px',
-        minWidth: '250px'
+        width: position.width ? `${position.width}px` : undefined,
+        maxHeight: '240px'
       }}
     >
-      <Card className="border border-gray-200 shadow-lg max-h-64 overflow-y-auto bg-white">
+      <Card className="border border-gray-200 shadow-lg overflow-y-auto bg-white" style={{ maxHeight: 240 }}>
         <div className="p-2">
           <div className="text-xs text-gray-500 mb-2 px-2">
             Medical Conditions (Press Tab to select, Enter for new line)
@@ -146,7 +183,7 @@ export function MedicalConditionAutocomplete({
                   : "hover:bg-gray-50"
               )}
               onMouseEnter={() => setSelectedIndex(index)}
-              onClick={() => handleMouseSelect(condition, index)}
+              onClick={(e) => handleMouseSelect(condition, index, e)}
               data-testid={`suggestion-${index}`}
             >
               <span className="font-medium">{condition}</span>
