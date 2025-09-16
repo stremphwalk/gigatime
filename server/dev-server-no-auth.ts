@@ -249,7 +249,27 @@ app.get("/api/note-templates", async (req, res) => {
 app.post("/api/note-templates", async (req, res) => {
   try {
     const userId = getMockUserId();
-    const templateData = insertNoteTemplateSchema.parse({ ...req.body, userId });
+    const body: any = { ...req.body };
+    let payload: any = { userId };
+    if (typeof body.title === 'string' || typeof body.category === 'string' || body?.content) {
+      payload.name = body.title || body.name || 'Untitled Template';
+      payload.type = body.category || body.type || 'general';
+      payload.description = body.description ?? null;
+      if (body?.content && typeof body.content.text === 'string') {
+        payload.sections = [
+          { id: 'main', name: 'Main', type: 'text', text: body.content.text }
+        ];
+      } else if (Array.isArray(body.sections)) {
+        payload.sections = body.sections;
+      } else {
+        payload.sections = [];
+      }
+      payload.isDefault = false;
+      payload.isPublic = false;
+    } else {
+      payload = { ...body, userId };
+    }
+    const templateData = insertNoteTemplateSchema.parse(payload);
     const template = await storage.createNoteTemplate(templateData);
     res.json(template);
   } catch (error) {
@@ -261,7 +281,17 @@ app.post("/api/note-templates", async (req, res) => {
 app.put("/api/note-templates/:id", async (req, res) => {
   try {
     const { id } = req.params;
-    const templateData = insertNoteTemplateSchema.partial().parse(req.body);
+    const body: any = { ...req.body };
+    const mapped: any = {};
+    if (typeof body.title === 'string') mapped.name = body.title;
+    if (typeof body.category === 'string') mapped.type = body.category;
+    if (body?.content && typeof body.content.text === 'string') {
+      mapped.sections = [
+        { id: 'main', name: 'Main', type: 'text', text: body.content.text }
+      ];
+    }
+    if (typeof body.description === 'string') mapped.description = body.description;
+    const templateData = insertNoteTemplateSchema.partial().parse({ ...mapped });
     const template = await storage.updateNoteTemplate(id, templateData);
     res.json(template);
   } catch (error) {
@@ -333,7 +363,11 @@ app.get("/api/notes/:id", async (req, res) => {
 app.post("/api/notes", async (req, res) => {
   try {
     const userId = getMockUserId();
-    const noteData = insertNoteSchema.parse({ ...req.body, userId });
+    const body: any = { ...req.body };
+    if (!Array.isArray(body.tags)) {
+      body.tags = body.tags ? (Array.isArray(body.tags) ? body.tags : [body.tags]) : [];
+    }
+    const noteData = insertNoteSchema.parse({ ...body, userId });
     const note = await storage.createNote(noteData);
     res.json(note);
   } catch (error) {
@@ -557,6 +591,11 @@ app.post("/api/smart-phrases", async (req, res) => {
     
     // Accept client payload with type/options and convert to elements
     const body = { ...req.body } as any;
+    if (!body.trigger && typeof body.name === 'string') {
+      const slug = body.name.toString().toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'phrase';
+      body.trigger = slug;
+      delete body.name;
+    }
     if (!body.elements && body.type) {
       if (body.type === 'text') {
         body.elements = [];
@@ -623,6 +662,11 @@ app.put("/api/smart-phrases/:id", async (req, res) => {
     const { id } = req.params;
     // Accept client payload with type/options and convert to elements when present
     const body = { ...req.body } as any;
+    if (!body.trigger && typeof body.name === 'string') {
+      const slug = body.name.toString().toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 50) || 'phrase';
+      body.trigger = slug;
+      delete body.name;
+    }
     if (!body.elements && (body.type || body.options)) {
       if (body.type === 'text') {
         body.elements = [];
@@ -744,6 +788,18 @@ app.get("/api/teams", async (req, res) => {
 app.post("/api/teams/create", async (req, res) => {
   try {
     const userId = getMockUserId();
+    try {
+      let user = await storage.getUser(userId);
+      if (!user) {
+        await storage.createUser({
+          id: userId,
+          email: DEV_USER.email,
+          firstName: DEV_USER.firstName,
+          lastName: DEV_USER.lastName,
+          specialty: DEV_USER.specialty
+        } as any);
+      }
+    } catch {}
     const { name, description } = req.body;
 
     if (!name || !name.trim()) {
@@ -870,47 +926,61 @@ app.delete("/api/todos/:id", async (req, res) => {
 });
 
 // =============================
-// Autocomplete items (dev stub)
+// Autocomplete items (storage-backed)
 // =============================
 app.get('/api/autocomplete-items', async (req, res) => {
   try {
+    const userId = getMockUserId();
     const category = (req.query?.category || '').toString();
-    const canned: any[] = [];
-    if (category === 'consultation-reasons') {
-      canned.push(
-        { id: 'c1', text: 'Chest pain evaluation', category, isPriority: true, userId: 'dev', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-        { id: 'c2', text: 'Shortness of breath', category, isPriority: false, userId: 'dev', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-      );
-    } else if (category === 'imaging') {
-      canned.push(
-        { id: 'i1', text: 'CXR PA/LAT', category, isPriority: false, userId: 'dev', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-      );
-    } else if (category === 'medications') {
-      canned.push(
-        { id: 'm1', text: 'Acetaminophen 650 mg q6h PRN', category, isPriority: false, userId: 'dev', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-      );
-    }
-    res.json(canned);
+    const items = category
+      ? await storage.getAutocompleteItemsByCategory(userId, category)
+      : await storage.getAutocompleteItems(userId);
+    const mapped = (items || []).map((it: any) => ({ id: it.id, term: it.text, category: it.category }));
+    res.json(mapped);
   } catch (e) {
     res.json([]);
   }
 });
 
 app.post('/api/autocomplete-items', async (req, res) => {
-  const body = req.body || {};
-  const out = { id: String(Date.now()), text: body.text || '', category: body.category || 'general', isPriority: !!body.isPriority, userId: 'dev', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-  res.json(out);
+  try {
+    const userId = getMockUserId();
+    try {
+      let user = await storage.getUser(userId);
+      if (!user) await storage.createUser({ id: userId } as any);
+    } catch {}
+    const body = req.body || {};
+    const text = body.term || body.text || '';
+    const category = body.category || 'general';
+    const created = await storage.createAutocompleteItem({ userId, text, category } as any);
+    res.json({ id: created.id, term: created.text, category: created.category });
+  } catch (e) {
+    res.status(500).json({ message: 'Failed to create autocomplete item' });
+  }
 });
 
 app.put('/api/autocomplete-items/:id', async (req, res) => {
-  const id = req.params.id;
-  const body = req.body || {};
-  const out = { id, text: body.text || '', category: body.category || 'general', isPriority: !!body.isPriority, userId: 'dev', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-  res.json(out);
+  try {
+    const id = req.params.id;
+    const body = req.body || {};
+    const updates: any = {};
+    if (typeof body.term === 'string') updates.text = body.term;
+    if (typeof body.text === 'string') updates.text = body.text;
+    if (typeof body.category === 'string') updates.category = body.category;
+    const updated = await storage.updateAutocompleteItem(id, updates);
+    res.json({ id: updated.id, term: (updated as any).text, category: updated.category });
+  } catch (e) {
+    res.status(500).json({ message: 'Failed to update autocomplete item' });
+  }
 });
 
 app.delete('/api/autocomplete-items/:id', async (req, res) => {
-  res.json({ ok: true });
+  try {
+    await storage.deleteAutocompleteItem(req.params.id);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ message: 'Failed to delete autocomplete item' });
+  }
 });
 
 // Team calendar routes
@@ -1256,7 +1326,7 @@ app.get("/api/user-lab-settings", async (req, res) => {
   try {
     const userId = getMockUserId();
     const settings = await storage.getUserLabSettings(userId);
-    res.json(settings);
+    res.json({ items: settings });
   } catch (error) {
     console.error("Error fetching user lab settings:", error);
     res.status(500).json({ message: "Failed to fetch lab settings" });
@@ -1278,7 +1348,12 @@ app.get("/api/lab-presets", async (req, res) => {
 app.post("/api/lab-presets", async (req, res) => {
   try {
     const userId = 'default-user';
-    const { name, settings } = req.body || {};
+    const body = req.body || {};
+    const name = body.name;
+    let settings = body.settings;
+    if (!settings && Array.isArray(body.labs)) {
+      settings = { labs: body.labs };
+    }
     if (!name || !settings) return res.status(400).json({ message: 'name and settings required' });
     const created = await storage.createLabPreset({ userId, name, settings });
     res.json(created);
@@ -1313,7 +1388,11 @@ app.delete("/api/lab-presets/:id", async (req, res) => {
 app.post("/api/user-lab-settings", async (req, res) => {
   try {
     const userId = getMockUserId();
-    const setting = { ...req.body, userId };
+    const body = req.body || {};
+    if (typeof body.presetId === 'string') {
+      return res.json({ presetId: body.presetId, customSettings: body.customSettings || {}, saved: true });
+    }
+    const setting = { ...body, userId };
     const created = await storage.upsertUserLabSetting(setting);
     res.json(created);
   } catch (error) {
@@ -1671,6 +1750,23 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
 
   res.status(status).json({ message });
   throw err;
+});
+
+// Testsprite-specific test endpoint
+app.get('/api/testsprite/status', (req, res) => {
+  res.json({
+    status: 'ready',
+    message: 'Testsprite can connect to this server',
+    server: 'dev-server-no-auth',
+    user: DEV_USER,
+    endpoints: {
+      notes: '/api/notes',
+      smartPhrases: '/api/smart-phrases',
+      auth: '/api/auth/user',
+      health: '/api/health'
+    },
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Setup Vite for development

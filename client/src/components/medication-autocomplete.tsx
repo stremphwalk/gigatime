@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
+import { useFloatingAnchor } from "@/hooks/use-floating-caret";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -44,23 +46,7 @@ function DosageFrequencyPopup({ medication, position, onSelect, onClose }: Dosag
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
-        onClose();
-      }
-    };
-
-    // Add delay to prevent immediate closure when popup appears
-    const timeoutId = setTimeout(() => {
-      document.addEventListener("mousedown", handleClickOutside);
-    }, 100);
-
-    return () => {
-      clearTimeout(timeoutId);
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [onClose]);
+  // Stable behavior: do not close on outside click to keep popup until selection or ESC
 
   const handleComplete = () => {
     if (selectedDosage && selectedFrequency) {
@@ -201,16 +187,7 @@ function CustomItemPicker({ medText, position, dosageOptions = [], frequencyOpti
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) onClose();
-    };
-    const timeoutId = setTimeout(() => document.addEventListener("mousedown", handleClickOutside), 100);
-    return () => {
-      clearTimeout(timeoutId);
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, [onClose]);
+  // Stable behavior: do not close on outside click to keep picker until selection or ESC
 
   const commit = (d?: string, f?: string) => {
     const full = [medText, d, f].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
@@ -264,17 +241,21 @@ export function MedicationAutocomplete({
   sectionId,
   textareaRef
 }: MedicationAutocompleteProps) {
+  // Caret-anchored, body‑portaled positioning using Floating UI
+  // Anchor the dropdown to the entire textarea element so it appears below the typing field
+  const { floatingRef, x, y, ready } = useFloatingAnchor(textareaRef as any, { placement: "bottom-start", gutter: 6 });
   const [suggestions, setSuggestions] = useState<MedicationInfo[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showDosagePopup, setShowDosagePopup] = useState<MedicationInfo | null>(null);
   const [customPicker, setCustomPicker] = useState<{ text: string; dosages?: string[]; freqs?: string[] } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const { items: customItems } = useAutocompleteItems('medications');
 
   useEffect(() => {
     const results = searchMedications(query, 8);
     setSuggestions(results);
-    setSelectedIndex(0);
+    setSelectedIndex(prev => Math.min(prev, Math.max(0, results.length - 1)));
   }, [query]);
 
   const customSuggestions = customItems
@@ -285,6 +266,18 @@ export function MedicationAutocomplete({
     .sort((a, b) => Number(b.isPriority) - Number(a.isPriority))
     .slice(0, 5);
 
+  // Build a single merged list to align UI/UX with ConsultationReasonAutocomplete
+  const mergedItems = [
+    ...customSuggestions.map((item) => ({ type: 'custom' as const, item })),
+    ...suggestions.map((med) => ({ type: 'static' as const, med })),
+  ];
+
+  // Ensure the highlighted option stays in view when navigating
+  useEffect(() => {
+    const el = listRef.current?.querySelector('[aria-selected="true"]') as HTMLElement | null;
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }, [selectedIndex, mergedItems.length]);
+
   const handleCustomSelect = (text: string, dosage?: string, frequency?: string) => {
     const full = [text, dosage, frequency].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
     onSelect(full);
@@ -292,7 +285,8 @@ export function MedicationAutocomplete({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!suggestions.length) return;
+      const total = mergedItems.length;
+      if (total === 0) return;
 
       // Only handle these keys when autocomplete is visible and specifically for our container
       if (['ArrowDown', 'ArrowUp', 'Enter', 'Tab', 'Escape'].includes(e.key)) {
@@ -309,21 +303,39 @@ export function MedicationAutocomplete({
         if (isInAutocomplete) {
           e.preventDefault();
           e.stopPropagation();
-          e.stopImmediatePropagation(); // Stop other listeners from executing
+          (e as any).stopImmediatePropagation?.(); // Stop other listeners from executing
           
           switch (e.key) {
             case "ArrowDown":
-              setSelectedIndex(prev => (prev + 1) % suggestions.length);
+              setSelectedIndex(prev => (prev + 1) % total);
               break;
             case "ArrowUp":
-              setSelectedIndex(prev => (prev - 1 + suggestions.length) % suggestions.length);
+              setSelectedIndex(prev => (prev - 1 + total) % total);
               break;
             case "Enter":
-            case "Tab":
-              if (suggestions[selectedIndex]) {
-                handleMedicationSelect(suggestions[selectedIndex]);
+            case "Tab": {
+              const idx = selectedIndex;
+              const entry = mergedItems[idx];
+              if (entry?.type === 'custom') {
+                const item = entry.item;
+                if ((e as any).shiftKey) {
+                  // Quick insert: med name only
+                  onSelect(item.text);
+                } else if (item.dosageOptions?.length || item.frequencyOptions?.length) {
+                  setCustomPicker({ text: item.text, dosages: item.dosageOptions, freqs: item.frequencyOptions });
+                } else {
+                  handleCustomSelect(item.text, item.dosage, item.frequency);
+                }
+              } else if (entry?.type === 'static') {
+                if ((e as any).shiftKey) {
+                  // Quick insert: med name only
+                  onSelect(entry.med.name);
+                } else {
+                  handleMedicationSelect(entry.med);
+                }
               }
               break;
+            }
             case "Escape":
               onClose();
               break;
@@ -337,44 +349,9 @@ export function MedicationAutocomplete({
     return () => {
       document.removeEventListener("keydown", handleKeyDown, { capture: true } as any);
     };
-  }, [suggestions, selectedIndex, onClose, textareaRef]);
+  }, [suggestions, customSuggestions, selectedIndex, onClose, textareaRef]);
 
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      
-      // Don't close if clicking within our autocomplete container
-      if (containerRef.current && containerRef.current.contains(target)) {
-        return;
-      }
-      
-      // Don't close if clicking on the textarea
-      const textarea = textareaRef?.current;
-      if (textarea && textarea.contains(target)) {
-        return;
-      }
-      
-      // Don't close if clicking in related popups
-      const dosagePopup = document.querySelector('[data-testid="medication-dosage-popup"]');
-      const customPickerEl = document.querySelector('[data-testid="custom-medication-picker"]');
-      const clickedInDosage = !!(dosagePopup && dosagePopup.contains(target));
-      const clickedInCustomPicker = !!(customPickerEl && customPickerEl.contains(target));
-      
-      if (!clickedInDosage && !clickedInCustomPicker) {
-        onClose();
-      }
-    };
-
-    // Small delay to prevent immediate closure when popup appears
-    const timeoutId = setTimeout(() => {
-      document.addEventListener("mousedown", handleClickOutside, true); // Use capture
-    }, 100);
-
-    return () => {
-      clearTimeout(timeoutId);
-      document.removeEventListener("mousedown", handleClickOutside, true);
-    };
-  }, [onClose, textareaRef]);
+  // Stable behavior: do not close on outside click to keep popup until selection or ESC
 
   const handleMedicationSelect = (medication: MedicationInfo, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -396,151 +373,158 @@ export function MedicationAutocomplete({
     return null;
   }
 
-  return (
-    <>
+  const portal = createPortal(
       <div
-        ref={containerRef}
-        className="absolute z-50"
+        ref={floatingRef as any}
+        className="fixed z-50"
         style={{
-          top: `${position.top}px`,
-          left: `${position.left}px`,
+          top: `${ready ? y : 0}px`,
+          left: `${ready ? x : 0}px`,
           width: position.width ? `${position.width}px` : undefined,
-          maxHeight: '240px'
+          maxHeight: '240px',
+          opacity: ready ? 1 : 0,
+          pointerEvents: ready ? 'auto' : 'none'
         }}
         data-testid={`medication-autocomplete-${sectionId}`}
       >
         <Card className="shadow-lg border border-gray-200">
           <CardContent className="p-0">
-            <div className="overflow-y-auto" style={{ maxHeight: 240 }} role="listbox" aria-label="Medication suggestions">
-              {customSuggestions.length > 0 && (
-                <>
-                  <div className="p-2 bg-purple-50 border-b flex items-center gap-2">
-                    <Pill size={14} className="text-purple-600" />
-                    <span className="text-xs font-medium text-purple-700">Custom Medications</span>
-                  </div>
-                  {customSuggestions.map((item, index) => (
+            <div ref={listRef} className="overflow-y-auto overscroll-contain" style={{ maxHeight: 240 }} role="listbox" aria-label="Medication suggestions">
+              <div className="p-2 bg-[color:var(--brand-50)] border-b flex items-center gap-2">
+                <Pill size={14} className="text-[color:var(--brand-700)]" />
+                <span className="text-xs font-medium text-[color:var(--brand-700)]">Medications</span>
+              </div>
+              {mergedItems.map((entry, index) => {
+                if (entry.type === 'custom') {
+                  const item = entry.item;
+                  return (
                     <Button
-                      key={item.id}
+                      key={`custom-${item.id}`}
                       variant="ghost"
                       size="sm"
                       className={cn(
                         "w-full justify-start text-left h-auto py-2 px-3 rounded-none border-b border-gray-50 last:border-b-0",
-                        index === selectedIndex && "bg-purple-50 text-purple-900"
+                        index === selectedIndex && "bg-[color:var(--brand-50)] text-slate-900 border-l-2 border-[color:var(--brand-700)]"
                       )}
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        e.stopImmediatePropagation();
-                        if (item.dosageOptions?.length || item.frequencyOptions?.length) {
+                        (e as any).nativeEvent?.stopImmediatePropagation?.();
+                        if (e.shiftKey) {
+                          // Quick insert: med name only
+                          onSelect(item.text);
+                        } else if (item.dosageOptions?.length || item.frequencyOptions?.length) {
                           setCustomPicker({ text: item.text, dosages: item.dosageOptions, freqs: item.frequencyOptions });
                         } else {
                           handleCustomSelect(item.text, item.dosage, item.frequency);
                         }
                       }}
-                      data-testid={`custom-medication-suggestion-${index}`}
+                      data-testid={`medication-suggestion-${index}`}
                       role="option"
                       aria-selected={index === selectedIndex}
-                      id={`custom-medication-option-${index}`}
+                      id={`medication-option-${index}`}
                     >
                       <div className="flex items-center gap-2 w-full">
-                        <Pill size={16} className="text-purple-600 flex-shrink-0" />
+                        <Pill size={16} className="text-[color:var(--brand-700)] flex-shrink-0" />
                         <div className="flex flex-col items-start gap-0.5 flex-1">
                           <span className="font-medium text-sm">{item.text}</span>
                           <div className="flex items-center gap-2 text-xs text-gray-500">
                             {item.dosage && <span>Dosage: {item.dosage}</span>}
                             {item.frequency && <span>Frequency: {item.frequency}</span>}
-                            {item.dosageOptions && item.dosageOptions.length > 0 && (
-                              <span>{item.dosageOptions.length} dosage option{item.dosageOptions.length > 1 ? 's' : ''}</span>
-                            )}
-                            {item.frequencyOptions && item.frequencyOptions.length > 0 && (
-                              <span>{item.frequencyOptions.length} frequency option{item.frequencyOptions.length > 1 ? 's' : ''}</span>
-                            )}
                             {item.isPriority && <Badge variant="outline" className="text-[10px]">Priority</Badge>}
                           </div>
                         </div>
                       </div>
                     </Button>
-                  ))}
-                </>
-              )}
-              <div className="p-2 bg-purple-50 border-b flex items-center gap-2">
-                <Pill size={14} className="text-purple-600" />
-                <span className="text-xs font-medium text-purple-700">Common Medications</span>
-              </div>
-              {suggestions.map((medication, index) => (
-                  <Button
-                  key={medication.name}
-                  variant="ghost"
-                  size="sm"
-                  className={cn(
-                    "w-full justify-start text-left h-auto py-2 px-3 rounded-none border-b border-gray-50 last:border-b-0",
-                    index === selectedIndex && "bg-purple-50 text-purple-900"
-                  )}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    e.stopImmediatePropagation();
-                    handleMedicationSelect(medication, e);
-                  }}
-                  data-testid={`medication-suggestion-${index}`}
-                  role="option"
-                  aria-selected={index === selectedIndex}
-                  id={`medication-option-${index}`}
-                >
-                  <div className="flex items-center gap-2 w-full">
-                    <Pill size={16} className="text-purple-600 flex-shrink-0" />
-                    <div className="flex flex-col items-start gap-0.5 flex-1">
-                      <span className="font-medium text-sm">{medication.name}</span>
-                      {medication.genericName && (
-                        <span className="text-xs text-gray-400 italic">{medication.genericName}</span>
+                  );
+                } else {
+                  const medication = entry.med;
+                  return (
+                    <Button
+                      key={`med-${medication.name}`}
+                      variant="ghost"
+                      size="sm"
+                      className={cn(
+                        "w-full justify-start text-left h-auto py-2 px-3 rounded-none border-b border-gray-50 last:border-b-0",
+                        index === selectedIndex && "bg-[color:var(--brand-50)] text-slate-900 border-l-2 border-[color:var(--brand-700)]"
                       )}
-                      {medication.brandNames && medication.brandNames.length > 0 && (
-                        <span className="text-xs text-[color:var(--brand-700)]">
-                          Brand: {medication.brandNames.slice(0, 2).join(', ')}{medication.brandNames.length > 2 ? '...' : ''}
-                        </span>
-                      )}
-                      <div className="flex items-center gap-1 flex-wrap">
-                        <Badge variant="outline" className="text-xs px-1 py-0 bg-[color:var(--brand-50)] text-[color:var(--brand-700)] border-[color:var(--brand-200)]">
-                          {medication.subcategory || medication.category}
-                        </Badge>
-                        {medication.indication && (
-                          <span className="text-xs text-gray-500 truncate max-w-32">{medication.indication}</span>
-                        )}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        (e as any).nativeEvent?.stopImmediatePropagation?.();
+                        if (e.shiftKey) {
+                          // Quick insert: med name only
+                          onSelect(medication.name);
+                        } else {
+                          handleMedicationSelect(medication, e);
+                        }
+                      }}
+                      data-testid={`medication-suggestion-${index}`}
+                      role="option"
+                      aria-selected={index === selectedIndex}
+                      id={`medication-option-${index}`}
+                    >
+                      <div className="flex items-center gap-2 w-full">
+                        <Pill size={16} className="text-[color:var(--brand-700)] flex-shrink-0" />
+                        <div className="flex flex-col items-start gap-0.5 flex-1">
+                          <span className="font-medium text-sm">{medication.name}</span>
+                          {medication.genericName && (
+                            <span className="text-xs text-gray-400 italic">{medication.genericName}</span>
+                          )}
+                          {medication.brandNames && medication.brandNames.length > 0 && (
+                            <span className="text-xs text-[color:var(--brand-700)]">
+                              Brand: {medication.brandNames.slice(0, 2).join(', ')}{medication.brandNames.length > 2 ? '...' : ''}
+                            </span>
+                          )}
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <Badge variant="outline" className="text-xs px-1 py-0 bg-[color:var(--brand-50)] text-[color:var(--brand-700)] border-[color:var(--brand-200)]">
+                              {medication.subcategory || medication.category}
+                            </Badge>
+                            {medication.indication && (
+                              <span className="text-xs text-gray-500 truncate max-w-32">{medication.indication}</span>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary" className="text-xs px-1 py-0">
-                          {medication.commonDosages.length} dosages
-                        </Badge>
-                        <Badge variant="secondary" className="text-xs px-1 py-0">
-                          {medication.commonFrequencies.length} frequencies
-                        </Badge>
-                      </div>
-                    </div>
-                  </div>
-                </Button>
-              ))}
+                    </Button>
+                  );
+                }
+              })}
             </div>
           </CardContent>
         </Card>
-      </div>
+      </div>,
+      document.body
+    );
 
+  return (
+    <>
+      {portal}
       {showDosagePopup && (
-        <DosageFrequencyPopup
-          medication={showDosagePopup}
-          position={position}
-          onSelect={handleDosageFrequencySelect}
-          onClose={handleDosagePopupClose}
-        />
+        createPortal(
+          <DosageFrequencyPopup
+            medication={showDosagePopup}
+            position={{ top: ready ? y : 0, left: ready ? x : 0 }}
+            onSelect={handleDosageFrequencySelect}
+            onClose={handleDosagePopupClose}
+          />,
+          document.body
+        )
       )}
       {customPicker && (
-        <CustomItemPicker
-          medText={customPicker.text}
-          position={position}
-          dosageOptions={customPicker.dosages}
-          frequencyOptions={customPicker.freqs}
-          onSelect={(full) => { onSelect(full); setCustomPicker(null); }}
-          onClose={() => { setCustomPicker(null); onClose(); }}
-        />
+        createPortal(
+          <CustomItemPicker
+            medText={customPicker.text}
+            position={{ top: ready ? y : 0, left: ready ? x : 0 }}
+            dosageOptions={customPicker.dosages}
+            frequencyOptions={customPicker.freqs}
+            onSelect={(full) => { onSelect(full); setCustomPicker(null); }}
+            onClose={() => { setCustomPicker(null); onClose(); }}
+          />,
+          document.body
+        )
       )}
     </>
   );

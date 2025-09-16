@@ -1,9 +1,12 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
+import { useFloatingCaret } from "@/hooks/use-floating-caret";
+import { FileText, Star } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { searchAllergies } from "@/lib/medical-conditions";
 import { useAutocompleteItems } from "@/hooks/use-autocomplete-items";
-import { AlertTriangle } from "lucide-react";
+ 
 import { cn } from "@/lib/utils";
 
 interface AllergyAutocompleteProps {
@@ -23,29 +26,30 @@ export function AllergyAutocomplete({
   sectionId,
   textareaRef
 }: AllergyAutocompleteProps) {
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const { floatingRef, x, y, ready } = useFloatingCaret(textareaRef as any, { placement: "bottom-start", gutter: 6 });
+  const [suggestions, setSuggestions] = useState<Array<{ text: string; isCustom?: boolean; isPriority?: boolean }>>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const { items: customItems } = useAutocompleteItems('allergies');
 
   useEffect(() => {
+    const q = (query || '').toLowerCase().trim();
     const staticResults = searchAllergies(query, 8);
-
-    // Filter custom items by query
-    const filteredCustom = customItems
+    const customResults = (customItems || [])
       .filter(item =>
-        item.text.toLowerCase().includes(query.toLowerCase().trim()) ||
-        item.description?.toLowerCase().includes(query.toLowerCase().trim())
+        (item.text || '').toLowerCase().includes(q) ||
+        (item.description || '').toLowerCase().includes(q)
       )
-      .map(item => ({ text: item.text, isPriority: item.isPriority }))
-      .sort((a, b) => Number(b.isPriority) - Number(a.isPriority))
-      .map(i => i.text);
+      .map(item => ({ text: item.text, isCustom: true as const, isPriority: !!item.isPriority }));
 
-    // Merge custom first (priority first), then static; de-dupe
-    const merged = Array.from(new Set([...filteredCustom, ...staticResults])).slice(0, 10);
+    const priorityCustom = customResults.filter(i => i.isPriority);
+    const regularCustom = customResults.filter(i => !i.isPriority);
+    const staticSuggestions = staticResults.map(text => ({ text, isCustom: false as const }));
 
+    const merged = [...priorityCustom, ...regularCustom, ...staticSuggestions].slice(0, 10);
     setSuggestions(merged);
-    setSelectedIndex(0);
+    setSelectedIndex(prev => Math.min(prev, Math.max(0, merged.length - 1)));
   }, [query, customItems]);
 
   useEffect(() => {
@@ -77,7 +81,7 @@ export function AllergyAutocomplete({
             case "Enter":
             case "Tab":
               if (suggestions[selectedIndex]) {
-                onSelect(suggestions[selectedIndex]);
+                onSelect(suggestions[selectedIndex].text);
               }
               break;
             case "Escape":
@@ -95,91 +99,78 @@ export function AllergyAutocomplete({
     };
   }, [suggestions, selectedIndex, onSelect, onClose, textareaRef]);
 
-  // Click outside to close - with delay to prevent premature closing
+  // Keep highlighted item in view while navigating
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      
-      // Don't close if clicking within our autocomplete container
-      if (containerRef.current && containerRef.current.contains(target)) {
-        return;
-      }
-      
-      // Don't close if clicking on the textarea
-      const textarea = textareaRef?.current;
-      if (textarea && textarea.contains(target)) {
-        return;
-      }
-      
-      onClose();
-    };
+    const el = listRef.current?.querySelector('[aria-selected="true"]') as HTMLElement | null;
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }, [selectedIndex, suggestions.length]);
 
-    // Small delay to prevent immediate closure when popup appears
-    const timeoutId = setTimeout(() => {
-      document.addEventListener("mousedown", handleClickOutside, true); // Use capture
-    }, 100);
-
-    return () => {
-      clearTimeout(timeoutId);
-      document.removeEventListener("mousedown", handleClickOutside, true);
-    };
-  }, [onClose, textareaRef]);
+  // Stable behavior: do not close on outside click to keep popup until selection or query changes
 
   if (suggestions.length === 0) {
     return null;
   }
-
-  return (
+  return createPortal(
     <div
-      ref={containerRef}
-      className="absolute z-50"
+      ref={floatingRef as any}
+      className="fixed z-50"
       style={{
-        top: `${position.top}px`,
-        left: `${position.left}px`,
+        top: `${ready ? y : 0}px`,
+        left: `${ready ? x : 0}px`,
         width: position.width ? `${position.width}px` : undefined,
-        maxHeight: '240px'
+        maxHeight: '240px',
+        opacity: ready ? 1 : 0,
+        pointerEvents: ready ? 'auto' : 'none'
       }}
       data-testid={`allergy-autocomplete-${sectionId}`}
     >
       <Card className="shadow-lg border border-gray-200">
         <CardContent className="p-0">
-          <div className="overflow-y-auto" style={{ maxHeight: 240 }} role="listbox" aria-label="Allergy suggestions">
-            <div className="p-2 bg-orange-50 border-b flex items-center gap-2">
-              <AlertTriangle size={14} className="text-orange-600" />
-              <span className="text-xs font-medium text-orange-700">Common Allergies</span>
+          <div ref={listRef} className="overflow-y-auto overscroll-contain" style={{ maxHeight: 240 }} role="listbox" aria-label="Allergy suggestions">
+            <div className="p-2 bg-[color:var(--brand-50)] border-b flex items-center gap-2">
+              <FileText size={14} className="text-[color:var(--brand-700)]" />
+              <span className="text-xs font-medium text-[color:var(--brand-700)]">Allergies</span>
             </div>
-            {suggestions.map((allergy, index) => (
+            {suggestions.map((s, index) => (
               <Button
-                key={allergy}
+                key={`${s.text}-${index}`}
                 variant="ghost"
                 size="sm"
                 className={cn(
                   "w-full justify-start text-left h-auto py-2 px-3 rounded-none border-b border-gray-50 last:border-b-0",
-                  index === selectedIndex && "bg-orange-50 text-orange-900"
+                  index === selectedIndex && "bg-[color:var(--brand-50)] text-slate-900 border-l-2 border-[color:var(--brand-700)]",
+                  s.isPriority && "bg-yellow-50 border-yellow-200"
                 )}
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
-                  e.stopImmediatePropagation();
-                  onSelect(allergy);
+                  (e as any).nativeEvent?.stopImmediatePropagation?.();
+                  onSelect(s.text);
                 }}
                 data-testid={`allergy-suggestion-${index}`}
                 role="option"
                 aria-selected={index === selectedIndex}
                 id={`allergy-option-${index}`}
               >
-                <div className="flex flex-col items-start gap-0.5">
-                  <span className="font-medium text-sm">{allergy}</span>
-                  <span className="text-xs text-gray-500">
-                    {getAllergyCategory(allergy)}
-                  </span>
+                <div className="flex items-center gap-2 w-full">
+                  <FileText size={16} className="text-[color:var(--brand-700)] flex-shrink-0" />
+                  <div className="flex flex-col items-start gap-0.5 flex-1">
+                    <span className="font-medium text-sm">{s.text}</span>
+                    <span className="text-xs text-gray-500">
+                      {getAllergyCategory(s.text)}
+                    </span>
+                  </div>
+                  {s.isCustom && <span className="text-xs text-gray-500 font-normal">Custom</span>}
+                  {s.isPriority && <Star size={14} className="text-yellow-600 flex-shrink-0 fill-yellow-600" />}
                 </div>
               </Button>
             ))}
           </div>
         </CardContent>
       </Card>
-    </div>
+    </div>,
+    document.body
   );
 }
 

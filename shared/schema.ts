@@ -86,6 +86,7 @@ export const notes = pgTable("notes", {
   templateId: uuid("template_id").references(() => noteTemplates.id),
   templateType: varchar("template_type", { length: 50 }),
   content: jsonb("content").notNull(), // sections with their content
+  tags: jsonb("tags").$type<string[]>().default(sql`'[]'::jsonb`),
   status: varchar("status", { length: 20 }).default("draft"), // draft, finalized
   userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   teamId: uuid("team_id").references(() => teams.id, { onDelete: 'set null' }),

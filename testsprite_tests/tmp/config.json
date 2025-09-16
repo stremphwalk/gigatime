@@ -3,5 +3,15 @@
   "type": "backend",
   "scope": "codebase",
   "localEndpoint": "http://localhost:5002",
-  "backendAuthType": "public"
+  "backendAuthType": "public",
+  "executionArgs": {
+    "projectName": "gigatime",
+    "projectPath": "/Users/laurentmartel/GIGATIME/gigatime",
+    "testIds": [],
+    "additionalInstruction": "Run all generated tests. Start or reuse the dev server if necessary on port 5002. Use non-interactive defaults.",
+    "envs": {
+      "API_KEY": "sk-user-37rRplpGSeciXMANC2BeSdJ7A6i5Pvv6EqKOaoHyMLd984emBISmD9FhUjE-j9mJAX2_BItnaONZv37w0fpfIOG0lFAa9yM6xj_Wcvqt2bBqbYxyYkVXmqxmmzGsG_FIoEI"
+    }
+  },
+  "proxy": "http://104b6dfc-919f-4bfd-bb5d-ebd2e02058b6:n2AQtPHm3BXe9AiPo8aBneNC4I769HaD@tun.testsprite.com:8080"
 }

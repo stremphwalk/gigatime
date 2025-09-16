@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
+import { useFloatingCaret } from "@/hooks/use-floating-caret";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Cigarette, Wine, Pill, Star } from "lucide-react";
@@ -30,9 +32,11 @@ export function SocialHistoryAutocomplete({
   sectionId,
   textareaRef
 }: SocialHistoryAutocompleteProps) {
+  const { floatingRef, x, y, ready } = useFloatingCaret(textareaRef as any, { placement: "bottom-start", gutter: 6 });
   const [suggestions, setSuggestions] = useState<SocialHistoryOption[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const { items: customItems } = useAutocompleteItems('social-history');
 
   // Define social history options
@@ -115,8 +119,9 @@ export function SocialHistoryAutocomplete({
     // Merge custom items at the top and de-dupe by label
     const merged = [...customMatches, ...results];
     const uniqueByLabel = merged.filter((opt, index, arr) => arr.findIndex(o => o.label === opt.label) === index);
-    setSuggestions(uniqueByLabel.slice(0, 10));
-    setSelectedIndex(0);
+    const next = uniqueByLabel.slice(0, 10);
+    setSuggestions(next);
+    setSelectedIndex(prev => Math.min(prev, Math.max(0, next.length - 1)));
   }, [query, customItems]);
 
   useEffect(() => {
@@ -167,55 +172,34 @@ export function SocialHistoryAutocomplete({
     };
   }, [suggestions, selectedIndex, onSelect, onClose, query, textareaRef]);
 
-  // Click outside to close - with delay to prevent premature closing
+  // Keep highlighted item in view while navigating
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      
-      // Don't close if clicking within our autocomplete container
-      if (containerRef.current && containerRef.current.contains(target)) {
-        return;
-      }
-      
-      // Don't close if clicking on the textarea
-      const textarea = textareaRef?.current;
-      if (textarea && textarea.contains(target)) {
-        return;
-      }
-      
-      onClose();
-    };
+    const el = listRef.current?.querySelector('[aria-selected="true"]') as HTMLElement | null;
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }, [selectedIndex, suggestions.length]);
 
-    // Small delay to prevent immediate closure when popup appears
-    const timeoutId = setTimeout(() => {
-      document.addEventListener("mousedown", handleClickOutside, true); // Use capture
-    }, 100);
-
-    return () => {
-      clearTimeout(timeoutId);
-      document.removeEventListener("mousedown", handleClickOutside, true);
-    };
-  }, [onClose, textareaRef]);
+  // Stable behavior: do not close on outside click to keep popup until selection or query changes
 
   if (suggestions.length === 0) {
     return null;
   }
-
-  return (
+  return createPortal(
     <div
-      ref={containerRef}
-      className="absolute z-50"
+      ref={floatingRef as any}
+      className="fixed z-50"
       style={{
-        top: `${position.top}px`,
-        left: `${position.left}px`,
+        top: `${ready ? y : 0}px`,
+        left: `${ready ? x : 0}px`,
         width: position.width ? `${position.width}px` : undefined,
-        maxHeight: '240px'
+        maxHeight: '240px',
+        opacity: ready ? 1 : 0,
+        pointerEvents: ready ? 'auto' : 'none'
       }}
       data-testid={`social-history-autocomplete-${sectionId}`}
     >
       <Card className="shadow-lg border border-gray-200">
         <CardContent className="p-0">
-          <div className="overflow-y-auto" style={{ maxHeight: 240 }} role="listbox" aria-label="Social history suggestions">
+          <div ref={listRef} className="overflow-y-auto overscroll-contain" style={{ maxHeight: 240 }} role="listbox" aria-label="Social history suggestions">
             <div className="p-2 bg-[color:var(--brand-50)] border-b flex items-center gap-2">
               <Wine size={14} className="text-[color:var(--brand-700)]" />
               <span className="text-xs font-medium text-[color:var(--brand-700)]">Social History</span>
@@ -227,8 +211,9 @@ export function SocialHistoryAutocomplete({
                 size="sm"
                 className={cn(
                   "w-full justify-start text-left h-auto py-2 px-3 rounded-none border-b border-gray-50 last:border-b-0",
-                  index === selectedIndex && "bg-[color:var(--brand-50)] text-slate-900"
+                  index === selectedIndex && "bg-[color:var(--brand-50)] text-slate-900 border-l-2 border-[color:var(--brand-700)]"
                 )}
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -252,6 +237,7 @@ export function SocialHistoryAutocomplete({
           </div>
         </CardContent>
       </Card>
-    </div>
+    </div>,
+    document.body
   );
 }

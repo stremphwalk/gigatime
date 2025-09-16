@@ -215,9 +215,76 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
     setActiveMedicationAutocomplete(null);
     setActivePhysicalExamAutocomplete(null);
     setActiveConsultationReasonAutocomplete(null);
+    
+    // Clear stored trigger positions
+    originalTriggerPositions.current = {};
   };
 
-  // Helper: calculate position relative to textarea and clamp within viewport
+  // Debounced position update to avoid excessive re-renders
+  const positionUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (positionUpdateTimeoutRef.current) {
+        clearTimeout(positionUpdateTimeoutRef.current);
+      }
+    };
+  }, []);
+  
+  // Store original trigger positions to keep autocomplete anchored
+  const originalTriggerPositions = useRef<Record<string, { top: number; left: number; width: number }>>({});
+  
+  // Update autocomplete positions only when scrolling (not cursor movement)
+  const updateAutocompletePositionsOnScroll = useCallback(() => {
+    // Clear any existing timeout
+    if (positionUpdateTimeoutRef.current) {
+      clearTimeout(positionUpdateTimeoutRef.current);
+    }
+    
+    // Debounce position updates to avoid excessive re-renders
+    positionUpdateTimeoutRef.current = setTimeout(() => {
+      const updatePosition = <T extends { sectionId: string; position: { top: number; left: number; width?: number } }>(
+        active: T | null,
+        setter: React.Dispatch<React.SetStateAction<T | null>>
+      ) => {
+        if (!active) return;
+        const textarea = document.querySelector(`[data-section-id="${active.sectionId}"]`) as HTMLTextAreaElement | null;
+        if (!textarea) return;
+        
+        // Use the original trigger position, adjusted for scroll
+        const originalPos = originalTriggerPositions.current[active.sectionId];
+        if (!originalPos) return;
+        
+        // Calculate scroll adjustment
+        const scrollTop = textarea.scrollTop;
+        const lineHeight = 20; // Approximate line height
+        const scrollOffset = scrollTop * lineHeight;
+        
+        // Adjust the position based on scroll
+        const adjustedTop = originalPos.top - scrollOffset;
+        const width = textarea.clientWidth;
+        
+        setter(prev => {
+          if (!prev || prev.sectionId !== active.sectionId) return prev;
+          // Only update if position actually changed to avoid unnecessary re-renders
+          if (Math.abs(prev.position.top - adjustedTop) < 1 && prev.position.width === width) {
+            return prev;
+          }
+          return { ...prev, position: { top: adjustedTop, left: originalPos.left, width } } as T;
+        });
+      };
+
+      updatePosition(activeMedicalAutocomplete, setActiveMedicalAutocomplete);
+      updatePosition(activeAllergyAutocomplete, setActiveAllergyAutocomplete);
+      updatePosition(activeSocialHistoryAutocomplete, setActiveSocialHistoryAutocomplete);
+      updatePosition(activeMedicationAutocomplete, setActiveMedicationAutocomplete);
+      updatePosition(activePhysicalExamAutocomplete, setActivePhysicalExamAutocomplete);
+      updatePosition(activeConsultationReasonAutocomplete, setActiveConsultationReasonAutocomplete);
+    }, 16); // ~60fps
+  }, [activeMedicalAutocomplete, activeAllergyAutocomplete, activeSocialHistoryAutocomplete, activeMedicationAutocomplete, activePhysicalExamAutocomplete, activeConsultationReasonAutocomplete]);
+
+  // Helper: calculate position relative to textarea container (for contained autocomplete)
   const calculateRelativePosition = (
     textarea: HTMLTextAreaElement,
     caretLeft: number,
@@ -226,42 +293,67 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
     estimatedHeight: number = 280
   ) => {
     const textareaRect = textarea.getBoundingClientRect();
-    const vw = window.innerWidth || document.documentElement.clientWidth || 1024;
-    const vh = window.innerHeight || document.documentElement.clientHeight || 768;
+    const container = textarea.closest('.textarea-container') as HTMLElement;
+    const containerRect = container?.getBoundingClientRect();
     
-    // Calculate position relative to textarea
-    let relativeLeft = caretLeft - textareaRect.left;
-    let relativeTop = caretBottom - textareaRect.top + 5; // 5px gap below caret
+    if (!containerRect) {
+      // Fallback to viewport positioning if no container found
+      const vw = window.innerWidth || document.documentElement.clientWidth || 1024;
+      const vh = window.innerHeight || document.documentElement.clientHeight || 768;
+      
+      let relativeLeft = caretLeft - textareaRect.left;
+      let relativeTop = caretBottom - textareaRect.top + 5;
+      
+      const maxLeft = vw - textareaRect.left - estimatedWidth - 8;
+      const maxTop = vh - textareaRect.top - estimatedHeight - 8;
+      
+      relativeLeft = Math.min(Math.max(8, relativeLeft), Math.max(8, maxLeft));
+      
+      if (relativeTop + estimatedHeight > maxTop) {
+        relativeTop = (caretBottom - textareaRect.top) - estimatedHeight - 10;
+      }
+      relativeTop = Math.min(Math.max(8, relativeTop), Math.max(8, maxTop));
+      
+      return { top: relativeTop, left: relativeLeft };
+    }
     
-    // Clamp within viewport bounds
-    const maxLeft = vw - textareaRect.left - estimatedWidth - 8;
-    const maxTop = vh - textareaRect.top - estimatedHeight - 8;
+    // Calculate position relative to container
+    let relativeLeft = caretLeft - containerRect.left;
+    let relativeTop = caretBottom - containerRect.top + 5; // 5px gap below caret
+    
+    // Clamp within container bounds
+    const maxLeft = containerRect.width - estimatedWidth - 8;
+    const maxTop = containerRect.height - estimatedHeight - 8;
     
     relativeLeft = Math.min(Math.max(8, relativeLeft), Math.max(8, maxLeft));
     
     // Flip above if not enough space below
     if (relativeTop + estimatedHeight > maxTop) {
-      relativeTop = (caretBottom - textareaRect.top) - estimatedHeight - 10;
+      relativeTop = (caretBottom - containerRect.top) - estimatedHeight - 10;
     }
-    // Final clamp within viewport
+    // Final clamp within container
     relativeTop = Math.min(Math.max(8, relativeTop), Math.max(8, maxTop));
     
     return { top: relativeTop, left: relativeLeft };
   };
 
-  // Helper: anchored position — stick dropdown to the bottom-left of the textarea
+  // Helper: anchored position — stick dropdown to the bottom-left of the textarea within container
   const calculateAnchoredPosition = (
     textarea: HTMLTextAreaElement,
     verticalGap: number = 6
   ) => {
-    const parent = textarea.parentElement as HTMLElement | null;
-    const parentRect = parent?.getBoundingClientRect();
+    const container = textarea.closest('.textarea-container') as HTMLElement;
+    const containerRect = container?.getBoundingClientRect();
     const textareaRect = textarea.getBoundingClientRect();
-    if (!parentRect) {
+    
+    if (!containerRect) {
+      // Fallback to viewport positioning
       return { top: textareaRect.bottom + verticalGap, left: textareaRect.left };
     }
-    const top = (textareaRect.bottom - parentRect.top) + verticalGap;
-    const left = (textareaRect.left - parentRect.left);
+    
+    // Calculate position relative to container
+    const top = (textareaRect.bottom - containerRect.top) + verticalGap;
+    const left = (textareaRect.left - containerRect.left);
     return { top, left };
   };
   
@@ -439,6 +531,8 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
     }));
     if (!isDirty) { setIsDirty(true); onDirtyChange?.(true); }
 
+    // Don't update autocomplete positions on content changes - keep them anchored to trigger point
+
     // Check for calc command trigger
     const cursorPosition = textarea.selectionStart;
     const beforeCursor = content.slice(0, cursorPosition);
@@ -549,25 +643,20 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
         const wordStart = cursorPosition - wordStartMatch[0].length;
         const currentWord = wordStartMatch[0] + (wordEndMatch ? wordEndMatch[0] : '');
         
-        if (currentWord && currentWord.length >= 2 && !currentWord.includes('/')) {
-          // Clear any existing timeout
-          if (autocompleteTimeoutRef.current) {
-            clearTimeout(autocompleteTimeoutRef.current);
-          }
-          
-          // Debounce the autocomplete trigger
-          autocompleteTimeoutRef.current = setTimeout(() => {
-            closeAllAutocompletes();
-            const anchored = calculateAnchoredPosition(textarea);
-            const width = textarea.clientWidth;
-            setActiveMedicalAutocomplete({
-              sectionId,
-              position: { top: anchored.top, left: anchored.left, width },
-              query: currentWord,
-              cursorPosition,
-              wordStart
-            });
-          }, 150); // 150ms debounce
+        if (currentWord && currentWord.length >= 1 && !currentWord.includes('/')) {
+          // Open immediately for PMH to show recommendations fast
+          closeAllAutocompletes();
+          const anchored = calculateAnchoredPosition(textarea);
+          const width = textarea.clientWidth;
+          const position = { top: anchored.top, left: anchored.left, width };
+          originalTriggerPositions.current[sectionId] = position;
+          setActiveMedicalAutocomplete({
+            sectionId,
+            position,
+            query: currentWord,
+            cursorPosition,
+            wordStart
+          });
         } else {
           setActiveMedicalAutocomplete(null);
         }
@@ -592,7 +681,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
         const wordStart = cursorPosition - wordStartMatch[0].length;
         const currentWord = wordStartMatch[0] + (wordEndMatch ? wordEndMatch[0] : '');
         
-        if (currentWord && currentWord.length >= 2 && !currentWord.includes('/')) {
+        if (currentWord && currentWord.length >= 1 && !currentWord.includes('/')) {
           // Clear any existing timeout
           if (autocompleteTimeoutRef.current) {
             clearTimeout(autocompleteTimeoutRef.current);
@@ -603,9 +692,14 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
             closeAllAutocompletes();
             const anchored = calculateAnchoredPosition(textarea);
             const width = textarea.clientWidth;
+            const position = { top: anchored.top, left: anchored.left, width };
+            
+            // Store the original trigger position
+            originalTriggerPositions.current[sectionId] = position;
+            
             setActiveAllergyAutocomplete({
               sectionId,
-              position: { top: anchored.top, left: anchored.left, width },
+              position,
               query: currentWord,
               cursorPosition,
               wordStart
@@ -637,7 +731,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
         const wordStart = cursorPosition - wordStartMatch[0].length;
         const currentWord = wordStartMatch[0] + (wordEndMatch ? wordEndMatch[0] : '');
         
-        if (currentWord && currentWord.length >= 2 && !currentWord.includes('/')) {
+        if (currentWord && currentWord.length >= 1 && !currentWord.includes('/')) {
           // Clear any existing timeout
           if (autocompleteTimeoutRef.current) {
             clearTimeout(autocompleteTimeoutRef.current);
@@ -648,9 +742,14 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
             closeAllAutocompletes();
             const anchored = calculateAnchoredPosition(textarea);
             const width = textarea.clientWidth;
+            const position = { top: anchored.top, left: anchored.left, width };
+            
+            // Store the original trigger position
+            originalTriggerPositions.current[sectionId] = position;
+            
             setActiveSocialHistoryAutocomplete({
               sectionId,
-              position: { top: anchored.top, left: anchored.left, width },
+              position,
               query: currentWord,
               cursorPosition,
               wordStart
@@ -682,7 +781,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
         const wordStart = cursorPosition - wordStartMatch[0].length;
         const currentWord = wordStartMatch[0] + (wordEndMatch ? wordEndMatch[0] : '');
         
-        if (currentWord && currentWord.length >= 2) {
+        if (currentWord && currentWord.length >= 1) {
           // Clear any existing timeout
           if (autocompleteTimeoutRef.current) {
             clearTimeout(autocompleteTimeoutRef.current);
@@ -693,14 +792,19 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
             closeAllAutocompletes();
             const anchored = calculateAnchoredPosition(textarea);
             const width = textarea.clientWidth;
+            const position = { top: anchored.top, left: anchored.left, width };
+            
+            // Store the original trigger position
+            originalTriggerPositions.current[sectionId] = position;
+            
             setActiveMedicationAutocomplete({
               sectionId,
-              position: { top: anchored.top, left: anchored.left, width },
+              position,
               query: currentWord,
               cursorPosition,
               wordStart
             });
-          }, 150); // 150ms debounce
+          }, 60); // faster debounce for medications
         } else {
           setActiveMedicationAutocomplete(null);
         }
@@ -732,7 +836,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
         const wordStart = cursorPosition - wordStartMatch[0].length;
         const currentWord = wordStartMatch[0] + (wordEndMatch ? wordEndMatch[0] : '');
         
-        if (currentWord && currentWord.length >= 2) {
+        if (currentWord && currentWord.length >= 1) {
           // Clear any existing timeout
           if (autocompleteTimeoutRef.current) {
             clearTimeout(autocompleteTimeoutRef.current);
@@ -743,9 +847,14 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
             closeAllAutocompletes();
             const anchored = calculateAnchoredPosition(textarea);
             const width = textarea.clientWidth;
+            const position = { top: anchored.top, left: anchored.left, width };
+            
+            // Store the original trigger position
+            originalTriggerPositions.current[sectionId] = position;
+            
             setActivePhysicalExamAutocomplete({
               sectionId,
-              position: { top: anchored.top, left: anchored.left, width },
+              position,
               query: currentWord.trim(),
               cursorPosition,
               wordStart
@@ -782,7 +891,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
         const wordStart = cursorPosition - wordStartMatch[0].length;
         const currentWord = wordStartMatch[0] + (wordEndMatch ? wordEndMatch[0] : '');
         
-        if (currentWord && currentWord.length >= 2) {
+        if (currentWord && currentWord.length >= 1) {
           // Clear any existing timeout
           if (autocompleteTimeoutRef.current) {
             clearTimeout(autocompleteTimeoutRef.current);
@@ -793,11 +902,15 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
             closeAllAutocompletes();
             const anchored = calculateAnchoredPosition(textarea);
             const width = textarea.clientWidth;
+            const position = { top: anchored.top, left: anchored.left, width };
             const reasonType = section?.name.toLowerCase().includes('admission') ? 'admission' : 'consultation';
+            
+            // Store the original trigger position
+            originalTriggerPositions.current[sectionId] = position;
             
             setActiveConsultationReasonAutocomplete({
               sectionId,
-              position: { top: anchored.top, left: anchored.left, width },
+              position,
               query: currentWord.trim(),
               cursorPosition,
               wordStart,
@@ -1127,6 +1240,16 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
         setActiveLabOverlay(null);
       }
     }, 80);
+  };
+
+  const handleTextareaScroll = (sectionId: string) => {
+    // Update autocomplete positions when textarea is scrolled
+    updateAutocompletePositionsOnScroll();
+  };
+
+  const handleTextareaKeyDown = (sectionId: string, e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Don't update autocomplete positions on arrow key navigation - keep them anchored to trigger point
+    // The autocomplete should stay where it was originally triggered, not follow the cursor
   };
 
   // (hover-only) no multi-line overlays
@@ -2841,14 +2964,16 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
                   );
                 })()}
                 <div className="relative">
-                  <div className="relative">
+                  <div className="relative textarea-container" style={{ position: 'relative', overflow: 'visible' }}>
                   <Textarea
                     value={noteData.content[section.id] || ''}
                     onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleSectionContentChange(section.id, e.target.value, e.target)}
                     onClick={(e: React.MouseEvent<HTMLTextAreaElement>) => { tryReopenPickerAtCaret(section.id, e.currentTarget as HTMLTextAreaElement); }}
+                    onKeyDown={(e: React.KeyboardEvent<HTMLTextAreaElement>) => handleTextareaKeyDown(section.id, e)}
                     onKeyUp={(e: React.KeyboardEvent<HTMLTextAreaElement>) => { tryReopenPickerAtCaret(section.id, e.currentTarget as HTMLTextAreaElement); }}
                     onMouseMove={(e: React.MouseEvent<HTMLTextAreaElement>) => handleTextareaMouseMove(section.id, e.currentTarget as HTMLTextAreaElement, e)}
                     onMouseLeave={handleTextareaMouseLeave}
+                    onScroll={() => handleTextareaScroll(section.id)}
                     
                     placeholder={selectedTemplate?.type === 'blank' 
                       ? "Start typing your note here... (Type '/' for smart phrases, '/calc' for clinical calculators)"
@@ -2910,14 +3035,14 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
                     />
                   )}
                   {/* Smart phrase hover chip disabled per updated UX preference */}
-                  </div>
-                  
+
                   {activeAutocomplete && activeAutocomplete.sectionId === section.id && (
                     <SmartPhraseAutocomplete
                       query={activeAutocomplete.query}
                       position={activeAutocomplete.position}
                       onSelect={handleSmartPhraseSelect}
                       onClose={() => setActiveAutocomplete(null)}
+                      textareaRef={{ current: document.querySelector(`[data-section-id="${section.id}"]`) as HTMLTextAreaElement }}
                     />
                   )}
                   
@@ -3042,6 +3167,7 @@ export function NoteEditor({ note, isCreating, onNoteSaved, initialTemplateType,
                       textareaRef={{ current: document.querySelector(`[data-section-id="${section.id}"]`) as HTMLTextAreaElement }}
                     />
                   )}
+                  </div>
                 </div>
               </div>
             </div>

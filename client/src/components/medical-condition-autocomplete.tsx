@@ -1,7 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { searchMedicalConditions, getMedicalConditionAbbreviations } from "@/lib/medical-conditions";
+import { createPortal } from "react-dom";
+import { useFloatingAnchor } from "@/hooks/use-floating-caret";
+import { searchMedicalConditions, getMedicalConditionAbbreviations, MEDICAL_CONDITIONS } from "@/lib/medical-conditions";
 import { Card } from "@/components/ui/card";
-import { Check } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAutocompleteItems } from "@/hooks/use-autocomplete-items";
 
@@ -24,16 +27,25 @@ export function MedicalConditionAutocomplete({
   onSelect,
   onClose
 }: MedicalConditionAutocompleteProps) {
+  // Anchor dropdown to the textarea field (below the input), consistent with admissions UX
+  const { floatingRef, x, y, ready } = useFloatingAnchor(textareaRef as any, { placement: "bottom-start", gutter: 6 });
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const abbreviations = getMedicalConditionAbbreviations();
   const { items: customItems } = useAutocompleteItems('past-medical-history');
 
   // Update suggestions when query changes
   useEffect(() => {
-    if (!query) {
-      setSuggestions([]);
+    // When query is empty or too short, surface recommended common conditions
+    if (!query || query.length < 2) {
+      const priorityCustom = customItems
+        .filter(item => item.isPriority)
+        .map(i => i.text);
+      const recommended = Array.from(new Set([...priorityCustom, ...MEDICAL_CONDITIONS])).slice(0, 10);
+      setSuggestions(recommended);
+      setSelectedIndex(prev => Math.min(prev, Math.max(0, recommended.length - 1)));
       return;
     }
 
@@ -50,7 +62,7 @@ export function MedicalConditionAutocomplete({
         .map(i => i.text);
       const merged = Array.from(new Set([...customMatches, abbreviation])).slice(0, 10);
       setSuggestions(merged);
-      setSelectedIndex(0);
+      setSelectedIndex(prev => Math.min(prev, Math.max(0, merged.length - 1)));
       return;
     }
 
@@ -65,7 +77,7 @@ export function MedicalConditionAutocomplete({
       .map(i => i.text);
     const merged = Array.from(new Set([...customMatches, ...results])).slice(0, 10);
     setSuggestions(merged);
-    setSelectedIndex(0);
+    setSelectedIndex(prev => Math.min(prev, Math.max(0, merged.length - 1)));
   }, [query, customItems]);
 
   // Handle keyboard navigation
@@ -122,28 +134,13 @@ export function MedicalConditionAutocomplete({
     }
   }, [isVisible, handleKeyDown]);
 
-  // Click outside to close - with delay to prevent premature closing
+  // Keep highlighted item in view while navigating
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (containerRef.current && !containerRef.current.contains(target)) {
-        // Check if clicking on the textarea - if so, don't close
-        const textarea = textareaRef.current;
-        if (textarea && textarea.contains(target)) {
-          return; // Don't close if clicking on textarea
-        }
-        // Small delay to prevent closing when clicking on the textarea
-        setTimeout(() => {
-          onClose();
-        }, 100);
-      }
-    };
+    const el = (listRef.current || containerRef.current)?.querySelector('[aria-selected="true"]') as HTMLElement | null;
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }, [selectedIndex, suggestions.length]);
 
-    if (isVisible) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [isVisible, onClose, textareaRef]);
+  // Stable behavior: do not close on outside click to keep popup until selection or query changes
 
   // Handle mouse selection
   const handleMouseSelect = (condition: string, index: number, e?: React.MouseEvent) => {
@@ -157,50 +154,51 @@ export function MedicalConditionAutocomplete({
     return null;
   }
 
-  return (
+  return createPortal(
     <div
-      ref={containerRef}
-      className="absolute z-50"
+      ref={floatingRef as any}
+      className="fixed z-50"
       style={{
-        top: position.top,
-        left: position.left,
+        top: ready ? y : 0,
+        left: ready ? x : 0,
         width: position.width ? `${position.width}px` : undefined,
-        maxHeight: '240px'
+        maxHeight: '240px',
+        opacity: ready ? 1 : 0,
+        pointerEvents: ready ? 'auto' : 'none'
       }}
     >
       <Card className="border border-gray-200 shadow-lg overflow-y-auto bg-white" style={{ maxHeight: 240 }}>
-        <div className="p-2">
-          <div className="text-xs text-gray-500 mb-2 px-2">
-            Medical Conditions (Press Tab to select, Enter for new line)
+        <div ref={listRef} className="p-0 overscroll-contain" role="listbox" aria-label="Medical condition suggestions">
+          <div className="p-2 bg-[color:var(--brand-50)] border-b flex items-center gap-2">
+            <FileText size={14} className="text-[color:var(--brand-700)]" />
+            <span className="text-xs font-medium text-[color:var(--brand-700)]">Medical Conditions</span>
           </div>
           {suggestions.map((condition, index) => (
-            <div
+            <Button
               key={condition}
+              variant="ghost"
+              size="sm"
               className={cn(
-                "flex items-center justify-between p-2 rounded cursor-pointer text-sm",
-                index === selectedIndex
-                  ? "bg-[color:var(--brand-50)] border border-[color:var(--brand-200)] text-slate-900"
-                  : "hover:bg-gray-50"
+                "w-full justify-start text-left h-auto py-2 px-3 rounded-none border-b border-gray-50 last:border-b-0",
+                index === selectedIndex && "bg-[color:var(--brand-50)] text-slate-900 border-l-2 border-[color:var(--brand-700)]"
               )}
+              onMouseDown={(e) => e.preventDefault()}
               onMouseEnter={() => setSelectedIndex(index)}
               onClick={(e) => handleMouseSelect(condition, index, e)}
-              data-testid={`suggestion-${index}`}
+              data-testid={`pmh-suggestion-${index}`}
+              role="option"
+              aria-selected={index === selectedIndex}
+              id={`medical-condition-option-${index}`}
             >
-              <span className="font-medium">{condition}</span>
-              {index === selectedIndex && (
-                <Check size={14} className="text-[color:var(--brand-700)]" />
-              )}
-            </div>
-          ))}
-          {query && abbreviations[query.toLowerCase() as keyof typeof abbreviations] && (
-            <div className="border-t border-gray-100 mt-2 pt-2">
-              <div className="text-xs text-gray-500 px-2">
-                Abbreviation: <span className="font-mono font-medium">{query.toUpperCase()}</span>
+              <div className="flex items-center gap-2 w-full">
+                <FileText size={16} className="text-[color:var(--brand-700)] flex-shrink-0" />
+                <span className="font-medium text-sm">{condition}</span>
               </div>
-            </div>
-          )}
+            </Button>
+          ))}
         </div>
       </Card>
-    </div>
+    </div>,
+    document.body
   );
 }

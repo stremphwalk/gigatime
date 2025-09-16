@@ -1,0 +1,52 @@
+[
+  {
+    "id": "TC001",
+    "title": "verify_user_profile_initialization",
+    "description": "Test the /api/init-user endpoint to ensure that user profiles are initialized correctly with proper authentication and that the response confirms successful initialization."
+  },
+  {
+    "id": "TC002",
+    "title": "verify_medical_notes_crud_operations",
+    "description": "Test the /api/notes endpoint for creating, retrieving, updating, and deleting medical notes, ensuring proper authentication, data validation, and correct response handling."
+  },
+  {
+    "id": "TC003",
+    "title": "verify_note_templates_management",
+    "description": "Test the /api/note-templates endpoints for creating, retrieving, updating, deleting, and importing note templates, validating template structure and access control."
+  },
+  {
+    "id": "TC004",
+    "title": "verify_smart_phrases_system_functionality",
+    "description": "Test the /api/smart-phrases endpoints for managing smart phrases including creation, retrieval, updating, deletion, and importing by shareable ID with proper authentication."
+  },
+  {
+    "id": "TC005",
+    "title": "verify_ai_medical_processing_endpoints",
+    "description": "Test the AI processing endpoints /api/ai/medications, /api/ai/labs, and /api/ai/pmh to ensure correct processing of input text and appropriate AI-generated responses."
+  },
+  {
+    "id": "TC006",
+    "title": "verify_run_list_management_workflows",
+    "description": "Test the run list management endpoints including retrieving today's run list, adding patients, reordering patients, updating patient info, archiving patients, updating notes, and AI note generation."
+  },
+  {
+    "id": "TC007",
+    "title": "verify_team_collaboration_features",
+    "description": "Test the team collaboration endpoints for creating teams, joining by code, managing todos, and calendar events to ensure multi-user collaboration functionality."
+  },
+  {
+    "id": "TC008",
+    "title": "verify_autocomplete_system_endpoints",
+    "description": "Test the autocomplete items endpoints for creating, retrieving, updating, and deleting autocomplete entries with category and search filters."
+  },
+  {
+    "id": "TC009",
+    "title": "verify_user_preferences_and_settings_initialization",
+    "description": "Test the /api/init endpoint to ensure user preferences and settings are initialized correctly with proper authentication and default values."
+  },
+  {
+    "id": "TC010",
+    "title": "verify_lab_settings_and_presets_management",
+    "description": "Test the lab settings and presets endpoints for retrieving, updating, resetting user lab settings, and managing lab presets including creation, update, and deletion."
+  }
+]

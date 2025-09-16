@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useFloatingCaret } from "@/hooks/use-floating-caret";
 import { useSmartPhrases } from "../hooks/use-smart-phrases";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -9,17 +11,25 @@ interface SmartPhraseAutocompleteProps {
   position: { top: number; left: number };
   onSelect: (phraseOrContent: string | any) => void;
   onClose: () => void;
+  textareaRef?: React.RefObject<HTMLTextAreaElement>;
 }
 
-export function SmartPhraseAutocomplete({ 
-  query, 
-  position, 
-  onSelect, 
-  onClose 
+export function SmartPhraseAutocomplete({
+  query,
+  position,
+  onSelect,
+  onClose,
+  textareaRef,
 }: SmartPhraseAutocompleteProps) {
   const [filteredPhrases, setFilteredPhrases] = useState<any[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const listRef = useRef<HTMLDivElement>(null);
   const { phrases } = useSmartPhrases();
+  // Position using a caret-anchored, body‑portaled floating element for stability
+  const fallbackActive = (document.activeElement instanceof HTMLTextAreaElement ? (document.activeElement as HTMLTextAreaElement) : null);
+  const effectiveRef = useRef<HTMLTextAreaElement | null>(null);
+  effectiveRef.current = (textareaRef?.current || fallbackActive) as HTMLTextAreaElement | null;
+  const { floatingRef, x, y, ready } = useFloatingCaret(effectiveRef as any, { placement: "bottom-start", gutter: 6 });
 
   useEffect(() => {
     if (query.length > 0) {
@@ -86,20 +96,24 @@ export function SmartPhraseAutocomplete({
     return () => document.removeEventListener('keydown', handleKeyDown, { capture: true } as any);
   }, [filteredPhrases, selectedIndex, onSelect, onClose]);
 
+  // Keep highlighted item in view while navigating
+  useEffect(() => {
+    const el = listRef.current?.querySelector('[data-selected="true"]') as HTMLElement | null;
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }, [selectedIndex, filteredPhrases.length]);
+
   if (filteredPhrases.length === 0) {
     return null;
   }
 
-  return (
-    <div 
-      className="absolute bg-white border border-gray-200 rounded-lg shadow-lg mt-1 z-50 min-w-[300px] max-w-[400px]"
-      style={{ 
-        top: position.top + 'px', 
-        left: position.left + 'px'
-      }}
+  return createPortal(
+    <div
+      ref={floatingRef as any}
+      className="fixed bg-white border border-gray-200 rounded-lg shadow-lg mt-1 z-50 min-w-[300px] max-w-[400px]"
+      style={{ top: ready ? y : 0, left: ready ? x : 0, opacity: ready ? 1 : 0, pointerEvents: ready ? 'auto' : 'none' }}
       data-testid="smart-phrase-autocomplete"
     >
-      <div className="p-2 space-y-1 max-h-60 overflow-y-auto">
+      <div ref={listRef} className="p-2 space-y-1 max-h-60 overflow-y-auto">
         {filteredPhrases.map((phrase, index) => (
           <div
             key={phrase.trigger}
@@ -109,6 +123,8 @@ export function SmartPhraseAutocomplete({
                 ? "bg-professional-blue text-white" 
                 : "hover:bg-gray-100"
             )}
+            onMouseDown={(e) => e.preventDefault()}
+            data-selected={index === selectedIndex}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -155,6 +171,7 @@ export function SmartPhraseAutocomplete({
       <div className="px-2 py-1 text-xs text-gray-500 border-t border-gray-100">
         Use ↑↓ to navigate, Enter to select, Esc to close
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

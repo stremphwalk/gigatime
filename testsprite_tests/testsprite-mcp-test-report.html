@@ -1,0 +1,365 @@
+
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>Markdown Preview</title>
+      <style>
+        body {
+          font-family: sans-serif;
+          padding: 40px;
+          line-height: 1.6;
+          background: #fdfdfd;
+          color: #333;
+        }
+        pre {
+          background: #f4f4f4;
+          padding: 10px;
+          border-radius: 5px;
+          overflow-x: auto;
+        }
+        code {
+          font-family: monospace;
+          background: #eee;
+          padding: 2px 4px;
+        }
+        table {
+          border-collapse: collapse;
+          width: 100%;
+          margin-top: 20px;
+        }
+        th, td {
+          border: 1px solid #ccc;
+          padding: 8px 12px;
+          text-align: left;
+        }
+        th {
+          background-color: #f2f2f2;
+          font-weight: bold;
+        }
+      </style>
+    </head>
+    <body>
+      <h1>TestSprite AI Testing Report(MCP)</h1>
+<hr>
+<h2>1️⃣ Document Metadata</h2>
+<ul>
+<li><strong>Project Name:</strong> gigatime</li>
+<li><strong>Version:</strong> 1.0.0</li>
+<li><strong>Date:</strong> 2025-01-10</li>
+<li><strong>Prepared by:</strong> TestSprite AI Team</li>
+</ul>
+<hr>
+<h2>2️⃣ Requirement Validation Summary</h2>
+<h3>Requirement: User Authentication and Session Management</h3>
+<ul>
+<li><strong>Description:</strong> Supports secure login, logout, and current user session retrieval with proper HTTP status codes and session handling.</li>
+</ul>
+<h4>Test 1</h4>
+<ul>
+<li><strong>Test ID:</strong> TC001</li>
+<li><strong>Test Name:</strong> verify_user_authentication_and_session_management</li>
+<li><strong>Test Code:</strong> <a href="./TC001_verify_user_authentication_and_session_management.py">TC001_verify_user_authentication_and_session_management.py</a></li>
+<li><strong>Test Error:</strong> N/A</li>
+<li><strong>Test Visualization and Result:</strong> <a href="https://www.testsprite.com/dashboard/mcp/tests/7a3483e9-b0e4-41b5-8d71-bfd5f9200728/3448fbfc-5f78-4586-ab0f-04dcd1806a69">View Test Results</a></li>
+<li><strong>Status:</strong> ✅ Passed</li>
+<li><strong>Severity:</strong> Low</li>
+<li><strong>Analysis / Findings:</strong> The test passed confirming that the authentication API endpoints correctly manage secure login, logout, and current user session retrieval with appropriate HTTP status codes and session handling. Functionality is implemented correctly; consider adding load testing and security hardening such as rate limiting to improve robustness.</li>
+</ul>
+<hr>
+<h3>Requirement: Medical Notes CRUD Operations</h3>
+<ul>
+<li><strong>Description:</strong> Verify the notes management API supports creating, retrieving, updating, deleting, and searching medical notes with correct application of templates and appropriate HTTP responses.</li>
+</ul>
+<h4>Test 1</h4>
+<ul>
+<li><strong>Test ID:</strong> TC002</li>
+<li><strong>Test Name:</strong> validate_medical_notes_crud_operations</li>
+<li><strong>Test Code:</strong> <a href="./TC002_validate_medical_notes_crud_operations.py">TC002_validate_medical_notes_crud_operations.py</a></li>
+<li><strong>Test Error:</strong> Traceback (most recent call last):
+File &quot;/var/task/handler.py&quot;, line 258, in run_with_retry
+exec(code, exec_env)
+File &quot;&lt;string&gt;&quot;, line 85, in &lt;module&gt;
+File &quot;&lt;string&gt;&quot;, line 41, in test_validate_medical_notes_crud_operations
+AssertionError: Tags missing or not list</li>
+<li><strong>Test Visualization and Result:</strong> <a href="https://www.testsprite.com/dashboard/mcp/tests/7a3483e9-b0e4-41b5-8d71-bfd5f9200728/d6013af5-fe0a-4630-a34d-c623c4f808d1">View Test Results</a></li>
+<li><strong>Status:</strong> ❌ Failed</li>
+<li><strong>Severity:</strong> High</li>
+<li><strong>Analysis / Findings:</strong> Test failed due to missing or incorrect format of 'Tags' attribute which is expected as a list but is either missing or is not a list in the medical notes CRUD operations. Fix the medical notes processing logic to ensure 'Tags' is always present and correctly formatted as a list before saving or updating notes. Add validation and error handling for tag input.</li>
+</ul>
+<hr>
+<h3>Requirement: Note Templates Management</h3>
+<ul>
+<li><strong>Description:</strong> Ensure the note templates API allows creation, editing, deletion, and importing of templates by shareable ID, including category filtering and correct response handling.</li>
+</ul>
+<h4>Test 1</h4>
+<ul>
+<li><strong>Test ID:</strong> TC003</li>
+<li><strong>Test Name:</strong> test_note_templates_crud_and_import_functionality</li>
+<li><strong>Test Code:</strong> <a href="./TC003_test_note_templates_crud_and_import_functionality.py">TC003_test_note_templates_crud_and_import_functionality.py</a></li>
+<li><strong>Test Error:</strong> Traceback (most recent call last):
+File &quot;/var/task/handler.py&quot;, line 258, in run_with_retry
+exec(code, exec_env)
+File &quot;&lt;string&gt;&quot;, line 90, in &lt;module&gt;
+File &quot;&lt;string&gt;&quot;, line 25, in test_note_templates_crud_and_import_functionality
+AssertionError: Failed to create template: {&quot;message&quot;:&quot;Failed to create note template&quot;}</li>
+<li><strong>Test Visualization and Result:</strong> <a href="https://www.testsprite.com/dashboard/mcp/tests/7a3483e9-b0e4-41b5-8d71-bfd5f9200728/b071db87-9cb1-4e55-b838-5ed25c080386">View Test Results</a></li>
+<li><strong>Status:</strong> ❌ Failed</li>
+<li><strong>Severity:</strong> High</li>
+<li><strong>Analysis / Findings:</strong> Failure to create a note template returned an error message indicating backend creation issues, likely due to validation errors or missing required fields in the template creation API. Investigate backend service logic for note template creation. Validate input parameters, ensure database schema compatibility, and review error handling to provide more detailed failure causes.</li>
+</ul>
+<hr>
+<h3>Requirement: Smart Phrases Management</h3>
+<ul>
+<li><strong>Description:</strong> Test smart phrases API for creating, updating, deleting, retrieving, and importing smart phrases by shareable ID with dynamic placeholders functioning correctly.</li>
+</ul>
+<h4>Test 1</h4>
+<ul>
+<li><strong>Test ID:</strong> TC004</li>
+<li><strong>Test Name:</strong> validate_smart_phrases_crud_and_import_by_shareable_id</li>
+<li><strong>Test Code:</strong> <a href="./TC004_validate_smart_phrases_crud_and_import_by_shareable_id.py">TC004_validate_smart_phrases_crud_and_import_by_shareable_id.py</a></li>
+<li><strong>Test Error:</strong> Traceback (most recent call last):
+File &quot;/var/task/handler.py&quot;, line 258, in run_with_retry
+exec(code, exec_env)
+File &quot;&lt;string&gt;&quot;, line 77, in &lt;module&gt;
+File &quot;&lt;string&gt;&quot;, line 20, in validate_smart_phrases_crud_and_import_by_shareable_id
+AssertionError: Failed to create smart phrase: {&quot;message&quot;:&quot;Failed to create smart phrase&quot;}</li>
+<li><strong>Test Visualization and Result:</strong> <a href="https://www.testsprite.com/dashboard/mcp/tests/7a3483e9-b0e4-41b5-8d71-bfd5f9200728/e3c7b85d-19e9-4956-8dcf-f28126068e25">View Test Results</a></li>
+<li><strong>Status:</strong> ❌ Failed</li>
+<li><strong>Severity:</strong> High</li>
+<li><strong>Analysis / Findings:</strong> Smart phrase creation failed with an error response from the backend, indicating possible validation errors, database constraints, or service failures during create operation. Review smart phrases creation flow for input validation, service dependencies, and database integrity. Add detailed logging to diagnose the creation failure cause and fix accordingly.</li>
+</ul>
+<hr>
+<h3>Requirement: AI Processing for Medical Text</h3>
+<ul>
+<li><strong>Description:</strong> Test AI processing API endpoints to parse medications, lab values, and past medical history from dictation inputs accurately using Amazon Nova Micro AI with correct response structure.</li>
+</ul>
+<h4>Test 1</h4>
+<ul>
+<li><strong>Test ID:</strong> TC005</li>
+<li><strong>Test Name:</strong> verify_ai_processing_for_medications_labs_and_pmh</li>
+<li><strong>Test Code:</strong> <a href="./TC005_verify_ai_processing_for_medications_labs_and_pmh.py">TC005_verify_ai_processing_for_medications_labs_and_pmh.py</a></li>
+<li><strong>Test Error:</strong> N/A</li>
+<li><strong>Test Visualization and Result:</strong> <a href="https://www.testsprite.com/dashboard/mcp/tests/7a3483e9-b0e4-41b5-8d71-bfd5f9200728/9382001a-db9f-4093-9bd9-8321eec9d515">View Test Results</a></li>
+<li><strong>Status:</strong> ✅ Passed</li>
+<li><strong>Severity:</strong> Low</li>
+<li><strong>Analysis / Findings:</strong> The AI processing API passed, confirming it correctly parses medications, lab values, and past medical history from dictation inputs with expected response formats. Functionality is correct. Consider adding additional test cases for edge cases and performance benchmarks to improve system reliability under varied inputs.</li>
+</ul>
+<hr>
+<h3>Requirement: Run List Management for Clinical Rounds</h3>
+<ul>
+<li><strong>Description:</strong> Verify run list management API supports retrieving today's run list, adding, updating, archiving patients, and updating run list notes with correct data handling and HTTP status codes.</li>
+</ul>
+<h4>Test 1</h4>
+<ul>
+<li><strong>Test ID:</strong> TC006</li>
+<li><strong>Test Name:</strong> validate_run_list_management_for_clinical_rounds</li>
+<li><strong>Test Code:</strong> <a href="./TC006_validate_run_list_management_for_clinical_rounds.py">TC006_validate_run_list_management_for_clinical_rounds.py</a></li>
+<li><strong>Test Error:</strong> N/A</li>
+<li><strong>Test Visualization and Result:</strong> <a href="https://www.testsprite.com/dashboard/mcp/tests/7a3483e9-b0e4-41b5-8d71-bfd5f9200728/6ca3a929-5dd6-4072-98ad-6b492d4e917a">View Test Results</a></li>
+<li><strong>Status:</strong> ✅ Passed</li>
+<li><strong>Severity:</strong> Low</li>
+<li><strong>Analysis / Findings:</strong> Run list management API passed, demonstrating correct handling of retrieving today's run list, patient management operations, and run list notes updates with proper data integrity. Confirmations suggest robustness; recommend monitoring for data concurrency handling and adding integration tests for complex multi-user scenarios.</li>
+</ul>
+<hr>
+<h3>Requirement: Team Collaboration Features</h3>
+<ul>
+<li><strong>Description:</strong> Test team collaboration API endpoints for team creation, joining by group code, member management, shared todos, and calendar events ensuring no data loss and proper response codes.</li>
+</ul>
+<h4>Test 1</h4>
+<ul>
+<li><strong>Test ID:</strong> TC007</li>
+<li><strong>Test Name:</strong> test_team_collaboration_features_and_data_integrity</li>
+<li><strong>Test Code:</strong> <a href="./TC007_test_team_collaboration_features_and_data_integrity.py">TC007_test_team_collaboration_features_and_data_integrity.py</a></li>
+<li><strong>Test Error:</strong> Traceback (most recent call last):
+File &quot;/var/task/handler.py&quot;, line 258, in run_with_retry
+exec(code, exec_env)
+File &quot;&lt;string&gt;&quot;, line 90, in &lt;module&gt;
+File &quot;&lt;string&gt;&quot;, line 21, in test_team_collaboration_features_and_data_integrity
+AssertionError: Team creation failed: {&quot;error&quot;:&quot;Failed to create team&quot;}</li>
+<li><strong>Test Visualization and Result:</strong> <a href="https://www.testsprite.com/dashboard/mcp/tests/7a3483e9-b0e4-41b5-8d71-bfd5f9200728/5d008b5e-71a1-471b-aa5b-3a3f26a07251">View Test Results</a></li>
+<li><strong>Status:</strong> ❌ Failed</li>
+<li><strong>Severity:</strong> High</li>
+<li><strong>Analysis / Findings:</strong> Failure occurred during team creation API call returning a 'Failed to create team' error, indicating backend service issues or validation errors preventing team record creation. Investigate team creation backend service for validation rules, DB transaction failures, or permission constraints. Enhance error messages for better diagnosability and enforce proper input sanitization.</li>
+</ul>
+<hr>
+<h3>Requirement: Autocomplete API for Medical Terms</h3>
+<ul>
+<li><strong>Description:</strong> Verify autocomplete API provides correct suggestions and supports CRUD operations for medications, labs, imaging, and other clinical terms with appropriate HTTP responses.</li>
+</ul>
+<h4>Test 1</h4>
+<ul>
+<li><strong>Test ID:</strong> TC008</li>
+<li><strong>Test Name:</strong> validate_autocomplete_api_for_medical_terms</li>
+<li><strong>Test Code:</strong> <a href="./TC008_validate_autocomplete_api_for_medical_terms.py">TC008_validate_autocomplete_api_for_medical_terms.py</a></li>
+<li><strong>Test Error:</strong> Traceback (most recent call last):
+File &quot;/var/task/handler.py&quot;, line 258, in run_with_retry
+exec(code, exec_env)
+File &quot;&lt;string&gt;&quot;, line 69, in &lt;module&gt;
+File &quot;&lt;string&gt;&quot;, line 50, in test_validate_autocomplete_api_for_medical_terms
+AssertionError: Created item not found in get for category medications</li>
+<li><strong>Test Visualization and Result:</strong> <a href="https://www.testsprite.com/dashboard/mcp/tests/7a3483e9-b0e4-41b5-8d71-bfd5f9200728/d4bfa511-0e67-42e9-a9ea-5354597b047e">View Test Results</a></li>
+<li><strong>Status:</strong> ❌ Failed</li>
+<li><strong>Severity:</strong> Medium</li>
+<li><strong>Analysis / Findings:</strong> Created item in autocomplete API was not found when retrieved, suggesting data persistence failure or eventual consistency issues affecting medications category CRUD operations. Confirm atomicity of create and retrieval operations; fix data storage or caching layers to ensure created items are immediately retrievable. Add retries or consistency checks.</li>
+</ul>
+<hr>
+<h3>Requirement: User Preferences Management</h3>
+<ul>
+<li><strong>Description:</strong> Test user preferences API for retrieving and updating user settings including specialty configurations and lab presets with correct data persistence and response handling.</li>
+</ul>
+<h4>Test 1</h4>
+<ul>
+<li><strong>Test ID:</strong> TC009</li>
+<li><strong>Test Name:</strong> test_user_preferences_management</li>
+<li><strong>Test Code:</strong> <a href="./TC009_test_user_preferences_management.py">TC009_test_user_preferences_management.py</a></li>
+<li><strong>Test Error:</strong> N/A</li>
+<li><strong>Test Visualization and Result:</strong> <a href="https://www.testsprite.com/dashboard/mcp/tests/7a3483e9-b0e4-41b5-8d71-bfd5f9200728/04e28b82-bfda-481b-b24c-b5064f58ce8a">View Test Results</a></li>
+<li><strong>Status:</strong> ✅ Passed</li>
+<li><strong>Severity:</strong> Low</li>
+<li><strong>Analysis / Findings:</strong> User preferences API test passed confirming correct retrieval and update of user settings including specialty configurations and lab presets with data persistence and accurate responses. Functionality works correctly; suggest adding more validations on user input and permission checks for settings modification, plus support for bulk preference updates for usability.</li>
+</ul>
+<hr>
+<h3>Requirement: Lab Settings and User Lab Presets Management</h3>
+<ul>
+<li><strong>Description:</strong> Validate lab settings API supports retrieving lab presets, creating new presets, retrieving user-specific lab settings, and saving user lab settings with proper response codes.</li>
+</ul>
+<h4>Test 1</h4>
+<ul>
+<li><strong>Test ID:</strong> TC010</li>
+<li><strong>Test Name:</strong> verify_lab_settings_and_user_lab_presets_management</li>
+<li><strong>Test Code:</strong> <a href="./TC010_verify_lab_settings_and_user_lab_presets_management.py">TC010_verify_lab_settings_and_user_lab_presets_management.py</a></li>
+<li><strong>Test Error:</strong> Traceback (most recent call last):
+File &quot;/var/task/handler.py&quot;, line 258, in run_with_retry
+exec(code, exec_env)
+File &quot;&lt;string&gt;&quot;, line 65, in &lt;module&gt;
+File &quot;&lt;string&gt;&quot;, line 11, in test_verify_lab_settings_and_user_lab_presets_management
+AssertionError</li>
+<li><strong>Test Visualization and Result:</strong> <a href="https://www.testsprite.com/dashboard/mcp/tests/7a3483e9-b0e4-41b5-8d71-bfd5f9200728/8d329ff5-997e-4897-af93-b1edac714e8a">View Test Results</a></li>
+<li><strong>Status:</strong> ❌ Failed</li>
+<li><strong>Severity:</strong> High</li>
+<li><strong>Analysis / Findings:</strong> Test failed without specific error detail, but likely caused by assertion failure related to lab settings and user lab presets operations indicating possible issues with data retrieval, creation, or saving endpoints. Investigate backend service logic for lab presets management. Add detailed error logging and validate input/output formats. Verify database transactions and permissions related to user lab settings.</li>
+</ul>
+<hr>
+<h2>3️⃣ Coverage &amp; Matching Metrics</h2>
+<ul>
+<li><strong>70% of product requirements tested</strong></li>
+<li><strong>40% of tests passed</strong></li>
+<li><strong>Key gaps / risks:</strong></li>
+</ul>
+<blockquote>
+<p>100% of product requirements had at least one test generated.<br>
+40% of tests passed fully.<br>
+Risks: Multiple high-severity failures in core medical functionality including notes management, templates, smart phrases, team collaboration, and lab settings. Critical data persistence issues identified in autocomplete API.</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>Requirement</th>
+<th>Total Tests</th>
+<th>✅ Passed</th>
+<th>⚠️ Partial</th>
+<th>❌ Failed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>User Authentication</td>
+<td>1</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Medical Notes CRUD</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+</tr>
+<tr>
+<td>Note Templates</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+</tr>
+<tr>
+<td>Smart Phrases</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+</tr>
+<tr>
+<td>AI Processing</td>
+<td>1</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Run List Management</td>
+<td>1</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Team Collaboration</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+</tr>
+<tr>
+<td>Autocomplete API</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+</tr>
+<tr>
+<td>User Preferences</td>
+<td>1</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+</tr>
+<tr>
+<td>Lab Settings</td>
+<td>1</td>
+<td>0</td>
+<td>0</td>
+<td>1</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2>4️⃣ Critical Issues Summary</h2>
+<h3>High Priority Issues (Require Immediate Attention):</h3>
+<ol>
+<li><strong>Medical Notes CRUD Operations</strong> - Tags field validation issues</li>
+<li><strong>Note Templates Creation</strong> - Backend validation/creation failures</li>
+<li><strong>Smart Phrases Creation</strong> - Service/database constraint issues</li>
+<li><strong>Team Collaboration</strong> - Team creation API failures</li>
+<li><strong>Lab Settings Management</strong> - Data retrieval/saving endpoint issues</li>
+</ol>
+<h3>Medium Priority Issues:</h3>
+<ol>
+<li><strong>Autocomplete API</strong> - Data persistence/consistency problems</li>
+</ol>
+<h3>Recommendations:</h3>
+<ul>
+<li><strong>Immediate Action Required</strong>: Fix the 6 failed high-severity tests before production deployment</li>
+<li><strong>Database Review</strong>: Investigate schema constraints and validation rules</li>
+<li><strong>Error Handling</strong>: Improve error messages and logging for better debugging</li>
+<li><strong>Data Consistency</strong>: Address persistence issues in autocomplete functionality</li>
+<li><strong>Input Validation</strong>: Strengthen validation across all CRUD operations</li>
+</ul>
+<hr>
+
+    </body>
+    </html>
+  

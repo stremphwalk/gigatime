@@ -1,0 +1,622 @@
+[
+  {
+    "id": "TC001",
+    "title": "User Authentication Successful Login",
+    "description": "Verify that a user can log in successfully using correct credentials via Auth0 and Clerk systems.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the login page"
+      },
+      {
+        "type": "action",
+        "description": "Enter valid email and password credentials"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm that the user is authenticated and redirected to the dashboard"
+      }
+    ]
+  },
+  {
+    "id": "TC002",
+    "title": "User Authentication Failed Login",
+    "description": "Verify that login fails with invalid credentials and appropriate error messages are displayed.",
+    "category": "error handling",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to the login page"
+      },
+      {
+        "type": "action",
+        "description": "Enter invalid email or password"
+      },
+      {
+        "type": "action",
+        "description": "Submit the login form"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm that login is rejected and error message is displayed"
+      }
+    ]
+  },
+  {
+    "id": "TC003",
+    "title": "First Login Specialty and Preferences Setup",
+    "description": "Verify that on first login the user is prompted to select medical specialty and configure preferences.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Log in as a new user"
+      },
+      {
+        "type": "assertion",
+        "description": "Check that specialty selection screen is shown"
+      },
+      {
+        "type": "action",
+        "description": "Select a specialty and configure preferences"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify preferences are saved and user is navigated to main dashboard"
+      }
+    ]
+  },
+  {
+    "id": "TC004",
+    "title": "Create Medical Note with Voice-to-Text and AI Structuring",
+    "description": "Validate the ability to create a new medical note using real-time voice dictation that transcribes speech and is AI-structured into note sections.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to note creation page"
+      },
+      {
+        "type": "action",
+        "description": "Select a specialty-specific template"
+      },
+      {
+        "type": "action",
+        "description": "Start voice dictation with medical terminology"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify dictation is transcribed correctly in real-time with minimal latency"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify AI correctly structures dictation into appropriate medical note sections"
+      },
+      {
+        "type": "action",
+        "description": "Edit the note text using rich text editor"
+      },
+      {
+        "type": "assertion",
+        "description": "Check changes are saved successfully"
+      }
+    ]
+  },
+  {
+    "id": "TC005",
+    "title": "Note CRUD Operations",
+    "description": "Verify notes can be created, retrieved, updated, deleted, and searched with correct application of templates.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Create a new note with required fields"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm note creation status is successful"
+      },
+      {
+        "type": "action",
+        "description": "Retrieve the list of notes"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the created note appears in list"
+      },
+      {
+        "type": "action",
+        "description": "Update the note's contents and save"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm the updates are reflected on retrieval"
+      },
+      {
+        "type": "action",
+        "description": "Delete the note"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the note is no longer retrievable"
+      },
+      {
+        "type": "action",
+        "description": "Search notes with existing keywords"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify search results include relevant notes"
+      }
+    ]
+  },
+  {
+    "id": "TC006",
+    "title": "Note Template Management",
+    "description": "Verify that note templates can be created, edited, deleted, imported via shareable ID, and filtered by category.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Create a new note template with mandatory fields"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm template creation is successful"
+      },
+      {
+        "type": "action",
+        "description": "Edit an existing template"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify updates are correctly saved"
+      },
+      {
+        "type": "action",
+        "description": "Delete a template"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm template is removed from listings"
+      },
+      {
+        "type": "action",
+        "description": "Import template by valid shareable ID"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify imported template is present and correct"
+      },
+      {
+        "type": "action",
+        "description": "Filter templates by specialty category"
+      },
+      {
+        "type": "assertion",
+        "description": "Check displayed templates match filter selection"
+      }
+    ]
+  },
+  {
+    "id": "TC007",
+    "title": "Smart Phrases CRUD and Import",
+    "description": "Verify smart phrases can be created, updated, deleted, and imported via shareable IDs with dynamic placeholders functioning correctly.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Create a new smart phrase with dynamic placeholders"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm creation success and proper placeholder rendering"
+      },
+      {
+        "type": "action",
+        "description": "Update the smart phrase content"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify updated phrase is saved accurately"
+      },
+      {
+        "type": "action",
+        "description": "Delete the smart phrase"
+      },
+      {
+        "type": "assertion",
+        "description": "Ensure the phrase is no longer available"
+      },
+      {
+        "type": "action",
+        "description": "Import a smart phrase via valid shareable ID"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify imported phrase is correctly added with placeholders functional"
+      }
+    ]
+  },
+  {
+    "id": "TC008",
+    "title": "AI Processing for Medications Parsing",
+    "description": "Validate AI correctly parses medication information from dictation input using Amazon Nova Micro AI.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Send dictation text containing medication names and dosages to AI mediation parse endpoint"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify the parsed response accurately extracts medication names, dosages, frequency, and route"
+      },
+      {
+        "type": "action",
+        "description": "Provide malformed or ambiguous input"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify system handles input gracefully with error or partial parsing but no crashes"
+      }
+    ]
+  },
+  {
+    "id": "TC009",
+    "title": "AI Processing for Lab Values Parsing",
+    "description": "Ensure AI accurately extracts lab test names and results from dictation input using the AI processing API.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Submit sample dictation including lab tests and values"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm lab names and values are extracted correctly in the response"
+      },
+      {
+        "type": "action",
+        "description": "Test with incomplete lab value information"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify AI returns partial matches or appropriate error handling"
+      }
+    ]
+  },
+  {
+    "id": "TC010",
+    "title": "AI Processing for Past Medical History Parsing",
+    "description": "Validate AI processing accurately parses past medical history information from dictation input.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Send dictation text including past medical history details"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify that extracted PMH items are accurate and complete"
+      }
+    ]
+  },
+  {
+    "id": "TC011",
+    "title": "Run List Management Patient and Note Handling",
+    "description": "Verify run list management supports adding, updating, deleting (archiving), and note-taking for patients in daily clinical rounds.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Retrieve today's run list"
+      },
+      {
+        "type": "assertion",
+        "description": "Validate that run list contains expected patients"
+      },
+      {
+        "type": "action",
+        "description": "Add a new patient to the run list"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm patient is added successfully"
+      },
+      {
+        "type": "action",
+        "description": "Update patient details in run list"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify updates are persisted"
+      },
+      {
+        "type": "action",
+        "description": "Archive a patient from the run list"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm patient is removed from active run list"
+      },
+      {
+        "type": "action",
+        "description": "Update note attached to a run list patient"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify run list note updates are saved"
+      }
+    ]
+  },
+  {
+    "id": "TC012",
+    "title": "Team Collaboration: Team Creation and Joining",
+    "description": "Verify users can create new teams, join existing ones via group code, and receive proper confirmation.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Create a new team by providing name and description"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm team is created and visible in user's team list"
+      },
+      {
+        "type": "action",
+        "description": "Join an existing team using a valid group code"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify user is successfully added to team"
+      },
+      {
+        "type": "action",
+        "description": "Attempt to join with invalid group code"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm join request is rejected with clear error message"
+      }
+    ]
+  },
+  {
+    "id": "TC013",
+    "title": "Team Collaboration: Shared Todos and Calendar Events",
+    "description": "Validate team todos and calendar events can be created, retrieved, and listed without data loss.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Create a new todo item for a team"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm todo is added and retrievable from the team's todo list"
+      },
+      {
+        "type": "action",
+        "description": "Create a new calendar event for a team"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify event is listed under team's calendar events"
+      },
+      {
+        "type": "action",
+        "description": "Retrieve all todos and calendar events for a team"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm all created entries are present and correctly associated"
+      }
+    ]
+  },
+  {
+    "id": "TC014",
+    "title": "Autocomplete API CRUD and Suggestions",
+    "description": "Verify autocomplete suggestions for medications, labs, and imaging are accurate and CRUD operations for autocomplete items work correctly.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Request autocomplete suggestions for a valid category"
+      },
+      {
+        "type": "assertion",
+        "description": "Validate suggestions match query string and category"
+      },
+      {
+        "type": "action",
+        "description": "Create a new autocomplete item under a category"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm item creation is successful"
+      },
+      {
+        "type": "action",
+        "description": "Update an existing autocomplete item"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify update reflects in future queries"
+      },
+      {
+        "type": "action",
+        "description": "Delete an autocomplete item"
+      },
+      {
+        "type": "assertion",
+        "description": "Ensure item is removed and no longer suggested"
+      }
+    ]
+  },
+  {
+    "id": "TC015",
+    "title": "User Preferences Management",
+    "description": "Verify user preferences can be retrieved, updated, and saved correctly including specialty configurations and lab presets.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Retrieve current user preferences"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm preferences data are returned accurately"
+      },
+      {
+        "type": "action",
+        "description": "Update user preferences including specialty and lab settings"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify updates are saved and persist on retrieval"
+      }
+    ]
+  },
+  {
+    "id": "TC016",
+    "title": "Lab Settings and Presets CRUD",
+    "description": "Validate that lab presets and user-specific lab settings can be created, retrieved, and saved properly.",
+    "category": "functional",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Create a new lab preset"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm lab preset creation is successful"
+      },
+      {
+        "type": "action",
+        "description": "Retrieve list of lab presets"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify newly created presets appear in the list"
+      },
+      {
+        "type": "action",
+        "description": "Save custom user lab setting"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify custom setting is stored and retrievable"
+      }
+    ]
+  },
+  {
+    "id": "TC017",
+    "title": "Voice-to-Text Dictation Accuracy and Noise Handling",
+    "description": "Validate that real-time voice dictation transcribes medical terminology accurately, supports noise cancellation, and maintains minimal latency.",
+    "category": "functional",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Perform voice dictation with complex medical terms and normal ambient noise"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm transcription text accurately reflects spoken words with minimal errors"
+      },
+      {
+        "type": "action",
+        "description": "Perform voice dictation in a noisy environment"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify noise cancellation filters background noise and transcription remains intelligible"
+      }
+    ]
+  },
+  {
+    "id": "TC018",
+    "title": "System Health and Status Endpoint Verification",
+    "description": "Ensure system health endpoints consistently report service status and availability correctly.",
+    "category": "functional",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Invoke system health/status endpoint"
+      },
+      {
+        "type": "assertion",
+        "description": "Confirm response indicates all subsystems operational with expected status codes"
+      }
+    ]
+  },
+  {
+    "id": "TC019",
+    "title": "Security Compliance: Audit Trails and Encryption",
+    "description": "Verify that user actions are audit-logged properly and data transmissions are encrypted adhering to HIPAA compliance.",
+    "category": "security",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Perform critical user actions such as login, note creation, data update"
+      },
+      {
+        "type": "assertion",
+        "description": "Check audit logs record these actions with timestamps and user identification"
+      },
+      {
+        "type": "action",
+        "description": "Monitor network traffic during data transmission"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify data is transmitted over encrypted channels (e.g., HTTPS/TLS)"
+      }
+    ]
+  },
+  {
+    "id": "TC020",
+    "title": "Session Management and Logout",
+    "description": "Validate that users can log out properly, and their sessions are terminated securely preventing unauthorized access.",
+    "category": "security",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Log in and authenticate user session"
+      },
+      {
+        "type": "action",
+        "description": "Perform logout operation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify session is invalidated and access to protected resources is denied post logout"
+      }
+    ]
+  }
+]

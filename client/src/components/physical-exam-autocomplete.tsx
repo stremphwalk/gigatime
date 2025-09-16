@@ -1,4 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
+import { useFloatingCaret } from "@/hooks/use-floating-caret";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
@@ -39,8 +41,11 @@ export function PhysicalExamAutocomplete({
   sectionId,
   textareaRef 
 }: PhysicalExamAutocompleteProps) {
+  // Caret-anchored, body‑portaled positioning
+  const { floatingRef, x, y, ready } = useFloatingCaret(textareaRef as any, { placement: "bottom-start", gutter: 6 });
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [showCategories, setShowCategories] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
   const { items: customItems } = useAutocompleteItems('physical-exam');
 
   // Get suggestions based on query
@@ -110,49 +115,40 @@ export function PhysicalExamAutocomplete({
     };
   }, [selectedIndex, suggestions, categoryResults, showCategories, onSelect, onClose, textareaRef]);
 
-  // Close on click outside - with delay to prevent premature closing
+  // Keep highlighted item in view while navigating
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      const target = e.target as Element;
-      
-      // Don't close if clicking within our autocomplete container
-      if (target.closest('[data-physical-exam-autocomplete]')) {
-        return;
-      }
-      
-      // Don't close if clicking on the textarea
-      const textarea = textareaRef?.current;
-      if (textarea && textarea.contains(target as Node)) {
-        return;
-      }
-      
-      onClose();
-    };
+    const el = listRef.current?.querySelector('[aria-selected="true"]') as HTMLElement | null;
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }, [selectedIndex, showCategories, suggestions.length, categoryResults.length]);
 
-    // Small delay to prevent immediate closure when popup appears
-    const timeoutId = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside, true); // Use capture
-    }, 100);
+  // Keep current selection index if still in range when category toggle changes
+  useEffect(() => {
+    setSelectedIndex(prev => {
+      const total = showCategories
+        ? categoryResults.reduce((acc, cat) => acc + cat.findings.length, 0)
+        : suggestions.length;
+      return Math.min(prev, Math.max(0, total - 1));
+    });
+  }, [showCategories, categoryResults, suggestions.length]);
 
-    return () => {
-      clearTimeout(timeoutId);
-      document.removeEventListener('mousedown', handleClickOutside, true);
-    };
-  }, [onClose, textareaRef]);
+  // Stable behavior: do not close on outside click to keep popup until selection or query changes
 
   if (suggestions.length === 0 && categoryResults.length === 0) {
     return null;
   }
 
-  return (
+  return createPortal(
     <div
+      ref={floatingRef as any}
       data-physical-exam-autocomplete
-      className="absolute z-50 bg-white border border-gray-300 rounded-lg shadow-lg max-w-lg max-h-96 overflow-hidden"
+      className="fixed z-50 bg-white border border-gray-300 rounded-lg shadow-lg max-w-lg max-h-96 overflow-hidden"
       style={{
-        top: position.top,
-        left: position.left,
+        top: ready ? y : 0,
+        left: ready ? x : 0,
         width: position.width ? `${position.width}px` : undefined,
-        maxHeight: '240px'
+        maxHeight: '240px',
+        opacity: ready ? 1 : 0,
+        pointerEvents: ready ? 'auto' : 'none'
       }}
       data-testid="physical-exam-autocomplete"
     >
@@ -178,7 +174,7 @@ export function PhysicalExamAutocomplete({
         </div>
       </div>
 
-      <div className="overflow-y-auto" style={{ maxHeight: 240 }}>
+      <div ref={listRef} className="overflow-y-auto overscroll-contain" style={{ maxHeight: 240 }}>
         {!showCategories ? (
           /* Quick Suggestions View */
           <div className="p-2">
@@ -190,13 +186,14 @@ export function PhysicalExamAutocomplete({
                     className={cn(
                       "p-2 rounded cursor-pointer text-sm border transition-colors",
                       selectedIndex === index 
-                        ? "bg-[color:var(--brand-50)] border-[color:var(--brand-200)] text-slate-900" 
+                        ? "bg-[color:var(--brand-50)] border-[color:var(--brand-200)] text-slate-900 border-l-2 border-l-[color:var(--brand-700)]" 
                         : "bg-gray-50 border-gray-200 hover:bg-gray-100"
                     )}
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      e.stopImmediatePropagation();
+                      (e as any).nativeEvent?.stopImmediatePropagation?.();
                       onSelect(suggestion);
                     }}
                     data-testid={`physical-exam-suggestion-${index}`}
@@ -284,16 +281,17 @@ export function PhysicalExamAutocomplete({
                     return (
                       <div
                         key={findingIndex}
-                        className={cn(
-                          "p-2 rounded cursor-pointer text-sm border transition-colors",
-                          selectedIndex === globalIndex 
-                            ? "bg-[color:var(--brand-50)] border-[color:var(--brand-200)] text-slate-900" 
-                            : "bg-gray-50 border-gray-200 hover:bg-gray-100"
-                        )}
+                    className={cn(
+                      "p-2 rounded cursor-pointer text-sm border transition-colors",
+                      selectedIndex === globalIndex 
+                        ? "bg-[color:var(--brand-50)] border-[color:var(--brand-200)] text-slate-900 border-l-2 border-l-[color:var(--brand-700)]" 
+                        : "bg-gray-50 border-gray-200 hover:bg-gray-100"
+                    )}
+                        onMouseDown={(e) => e.preventDefault()}
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          e.stopImmediatePropagation();
+                          (e as any).nativeEvent?.stopImmediatePropagation?.();
                           onSelect(finding);
                         }}
                         data-testid={`category-finding-${categoryIndex}-${findingIndex}`}
@@ -323,6 +321,7 @@ export function PhysicalExamAutocomplete({
           <span>{showCategories ? `${categoryResults.reduce((acc, cat) => acc + cat.findings.length, 0)} findings` : `${suggestions.length} suggestions`}</span>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

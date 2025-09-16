@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
+import { useFloatingCaret } from '@/hooks/use-floating-caret';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FileText, Star } from 'lucide-react';
@@ -25,13 +27,15 @@ export function ConsultationReasonAutocomplete({
   sectionId,
   textareaRef
 }: ConsultationReasonAutocompleteProps) {
+  const { floatingRef, x, y, ready } = useFloatingCaret(textareaRef as any, { placement: 'bottom-start', gutter: 6 });
   const [selectedIndex, setSelectedIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   // Get custom autocomplete items from database
   const { items: customItems } = useAutocompleteItems('consultation-reasons');
 
-  const suggestions = useMemo(() => {
+  const suggestions = useMemo<Array<{ text: string; isCustom: boolean; isPriority?: boolean }>>(() => {
     const q = (query || '').toLowerCase().trim();
     const staticResults = searchReasons(query, type);
     const customResults = (customItems || [])
@@ -42,7 +46,7 @@ export function ConsultationReasonAutocomplete({
       .map(item => ({ text: item.text, isPriority: item.isPriority, isCustom: true }));
     const priorityCustom = customResults.filter(item => item.isPriority);
     const regularCustom = customResults.filter(item => !item.isPriority);
-    const staticSuggestions = staticResults.map(text => ({ text, isCustom: false }));
+    const staticSuggestions = staticResults.map(text => ({ text, isCustom: false as const }));
     return [...priorityCustom, ...regularCustom, ...staticSuggestions].slice(0, 10);
   }, [query, type, customItems]);
 
@@ -96,34 +100,13 @@ export function ConsultationReasonAutocomplete({
     };
   }, [suggestions, selectedIndex, onClose, textareaRef]);
 
+  // Keep highlighted item in view while navigating
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      
-      // Don't close if clicking within our autocomplete container
-      if (containerRef.current && containerRef.current.contains(target)) {
-        return;
-      }
-      
-      // Don't close if clicking on the textarea
-      const textarea = textareaRef?.current;
-      if (textarea && textarea.contains(target)) {
-        return;
-      }
-      
-      onClose();
-    };
+    const el = listRef.current?.querySelector('[aria-selected="true"]') as HTMLElement | null;
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }, [selectedIndex, suggestions.length]);
 
-    // Small delay to prevent immediate closure when popup appears
-    const timeoutId = setTimeout(() => {
-      document.addEventListener("mousedown", handleClickOutside, true); // Use capture
-    }, 100);
-
-    return () => {
-      clearTimeout(timeoutId);
-      document.removeEventListener("mousedown", handleClickOutside, true);
-    };
-  }, [onClose, textareaRef]);
+  // Stable behavior: do not close on outside click to keep popup until selection or query changes
 
   const handleReasonSelect = (reason: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -134,21 +117,23 @@ export function ConsultationReasonAutocomplete({
     return null;
   }
 
-  return (
+  return createPortal(
     <div
-      ref={containerRef}
-      className="absolute z-50"
+      ref={floatingRef as any}
+      className="fixed z-50"
       style={{
-        top: `${position.top}px`,
-        left: `${position.left}px`,
+        top: `${ready ? y : 0}px`,
+        left: `${ready ? x : 0}px`,
         width: position.width ? `${position.width}px` : undefined,
-        maxHeight: '240px'
+        maxHeight: '240px',
+        opacity: ready ? 1 : 0,
+        pointerEvents: ready ? 'auto' : 'none'
       }}
       data-testid={`consultation-reason-autocomplete-${sectionId}`}
     >
       <Card className="shadow-lg border border-gray-200">
         <CardContent className="p-0">
-          <div className="overflow-y-auto" style={{ maxHeight: 240 }} role="listbox" aria-label="Consultation/admission reasons">
+          <div ref={listRef} className="overflow-y-auto overscroll-contain" style={{ maxHeight: 240 }} role="listbox" aria-label="Consultation/admission reasons">
             <div className="p-2 bg-[color:var(--brand-50)] border-b flex items-center gap-2">
               <FileText size={14} className="text-[color:var(--brand-700)]" />
               <span className="text-xs font-medium text-[color:var(--brand-700)]">
@@ -165,9 +150,10 @@ export function ConsultationReasonAutocomplete({
                 size="sm"
                 className={cn(
                   "w-full justify-start text-left h-auto py-2 px-3 rounded-none border-b border-gray-50 last:border-b-0",
-                  index === selectedIndex && "bg-[color:var(--brand-50)] text-slate-900",
+                  index === selectedIndex && "bg-[color:var(--brand-50)] text-slate-900 border-l-2 border-[color:var(--brand-700)]",
                   suggestion.isPriority && "bg-yellow-50 border-yellow-200"
                 )}
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -200,6 +186,7 @@ export function ConsultationReasonAutocomplete({
           </div>
         </CardContent>
       </Card>
-    </div>
+    </div>,
+    document.body
   );
 }

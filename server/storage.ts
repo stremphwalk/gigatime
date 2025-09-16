@@ -418,6 +418,12 @@ export class DatabaseStorage implements IStorage {
         ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;
       CREATE INDEX IF NOT EXISTS idx_notes_expires_at ON public.notes(expires_at);
     `);
+
+    // Ensure notes has tags column for TestSprite compatibility
+    await this.db.execute(`
+      ALTER TABLE IF EXISTS notes
+        ADD COLUMN IF NOT EXISTS tags JSONB DEFAULT '[]'::jsonb;
+    `);
   }
 
   async cleanupExpiredRunListData() {
